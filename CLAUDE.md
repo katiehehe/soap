@@ -1,118 +1,67 @@
-# Claude Code Configuration
+# AGENTS.md — Speedrun (SOA Exam P)
 
-> **Note:** Every command you need — building, running, testing, linting,
-> formatting — is defined as a recipe in the project `justfile`. Run
-> `just --list` to see them. Do not invoke `./ninja`, `./run`, or scripts
-> under `./tools` directly — use the `just` recipes instead.
+> This file is the source of truth for every AI coding agent working in this repo
+> (Cursor reads it natively; `.cursor/rules/*.mdc` add file-scoped detail).
+> Read this file, then `PRD.md`, then `SPEC_CHECKLIST.md` **before writing any code.**
+> When guidance conflicts, the grading rubric in `SPEC_CHECKLIST.md` wins.
 
-## Project Overview
+## What this is
+A desktop + mobile study app **forked from Anki**, built for **one exam: SOA Exam P (Probability)**.
+It is NOT a new flashcard app. It answers three *different* questions and never blends them:
+1. **Memory** — can the student recall this fact right now? (Anki's FSRS already does this.)
+2. **Performance** — can the student answer a *new, exam-style* question that uses the fact?
+3. **Readiness** — what would they score today, and how sure are we?
 
-Anki is a spaced repetition flashcard program with a multi-layered architecture. Main components:
+Owner: Katie He. License: **AGPL-3.0-or-later**, with credit to Anki (some Anki parts are BSD-3-Clause).
 
-- Web frontend: Svelte/TypeScript in ts/
-- PyQt GUI, which embeds the web components in aqt/
-- Python library which wraps our rust Layer (pylib/, with Rust module in pylib/rsbridge)
-- Core Rust layer in rslib/
-- Protobuf definitions in proto/ that are used by the different layers to
-  talk to each other.
+## The exam (state this in the README, up front)
+SOA Exam P is NOT one of the rubric's four example exams (MCAT/LSAT/GMAT/USMLE), so be explicit about its real scale so nothing looks invented:
+- Computer-based, 3 hours, multiple choice A–E. Includes 5 unscored pilot questions.
+- **Scored 0–10. 0–5 = fail, 6–10 = pass.** (Unofficial instant pass/fail at the center; official scaled score ~8 weeks later.)
+- Section weights (May 2026 syllabus): **General Probability 23–30% · Univariate Random Variables 44–50% · Multivariate Random Variables 23–30%.**
+- Calculus (series, integration, differentiability) is assumed knowledge.
+- Historical pass rate ~43%; Jan 2026: 49.2% pass / 57.2% effective pass. Typical prep 150–300 hours.
+- **Readiness output for P** = P(pass) with a confidence band + a projected 0–10 band + % of syllabus covered. Never a single bare number.
 
-## Running Anki
+## HARD RULES — do not break these
+- **Change Anki's Rust engine, not just the Python/Svelte screens.** A JS/Swift reimplementation of the scheduler does NOT count.
+- **Two apps, one shared engine** (desktop + phone). Reviews and progress sync between them. Mobile uses the same Rust backend (Android via AnkiDroid's `Anki-Android-Backend` JNI bridge; iOS via the Rust C FFI). Do not fork the engine per platform.
+- **Three separate scores, each with a range** — never one blended number.
+- **The honesty rule:** never show a readiness score unless it also shows (a) the evidence behind it, (b) what data is missing, (c) how accurate past guesses were, (d) a range not a point, (e) the single best next thing to study.
+- **The give-up rule:** the app shows NO score when it lacks data. This is an assertion in code, not a UI suggestion. State the exact threshold (e.g. ≥200 graded reviews AND ≥50% topic coverage).
+- **Held-out testing + reproducibility:** train/test split with a seed; anyone can re-run and get the same numbers.
+- **One study feature, pre-registered hypothesis, tested by turning it off/on** against plain Anki (3 builds, equal study time).
+- **Every AI output traces to a named source,** is checked against a gold test set before a student sees it, and beats a simpler baseline (keyword/vector search).
+- **Both apps must run with AI switched OFF** and still give a score.
 
-To build and run Anki in development mode:
+## AUTOMATIC FAIL — never do these
+- Show a made-up or misleading readiness number, or dress up a guess as a measurement.
+- Let any test item (or a near-copy) leak into training data. (Run the leakage scan; keep it clean.)
+- Emit an AI claim/card with no traceable source.
 
-```
-just run
-```
+## GRADE CAPS (why the hard rules matter)
+No real Rust change → 50% max · No phone companion sharing the engine + sync → 70% max · No re-runnable test setup → 60% max · No held-out testing → 60% max · Either app fails on a clean device → 50% max · Leaked test data → that score is 0 · AI claims with no source → AI section is 0.
 
-This builds pylib and qt, then launches Anki with debugging enabled. Web
-views are served at http://localhost:40000/_anki/pages/ (e.g.,
-deckconfig.html). Use `just run-optimized` for a release-optimized build.
-For live-reloading during web development, run `just web-watch` in a
-separate terminal — it monitors ts/, sass/, and qt/aqt/data/web/ and
-auto-rebuilds on changes (`just rebuild-web` triggers a one-off rebuild).
+## The spine of this project
+One feature satisfies three requirements at once and should be built first after the core:
+**a three-tier, mastery-gated scheduler** (Spiky POV 1) — block subtopics, then interleave *within* a unit, then interleave *across* units, with a mastery gate at each level. It IS the required Rust change (topic-aware scheduling + a mastery query), it IS the study feature we ablate (the ablation removes the within-unit interleaving tier), and it is the owner's core thesis. There are **two** Spiky POVs, not three: SPOV 1 is this scheduler; SPOV 2 (chronotype-aware timing) is a bonus we do NOT build this project. See `PRD.md` §"Spiky POVs → Features".
 
-## Building/checking
+## Build & run (Anki, current `main`)
+Prereqs: Rustup (toolchain auto-pinned by `rust-toolchain.toml`), N2 (`tools/install-n2`) or Ninja 1.10+, Python 3, Node/Yarn. Repo path must contain **no spaces**.
+- Build + launch desktop from source: `./run`  (non-optimized/dev by default; `RELEASE=1` or `RELEASE=2` to optimize)
+- Run all checks/tests: `./ninja check`  (scoped example: `./ninja check:svelte`)
+- Rust-only tests for your change: `cargo test -p <crate>` (e.g. the `anki` crate in `rslib/`)
+- Build a desktop installer: `tools/build-installer` → output in `out/installer/dist`
+- Mobile: clone `Anki-Android` and `Anki-Android-Backend` **into the same parent folder**; the backend builds an `.aar` (Rust engine compiled for Android) that AnkiDroid consumes. Match `BACKEND_VERSION`.
 
-`just check` will format the code and run the main build & checks.
-Please do this as a final step before marking a task as completed.
+## Before you code (every session)
+1. Re-read `SPEC_CHECKLIST.md` and state which deadline + which checklist item you are working on.
+2. In Plan mode, propose the change and name the files you'll touch; wait for confirmation before editing.
+3. No AI/model calls, generated cards, or chatbot until the Wednesday core is done.
+4. After a change, confirm: relevant tests pass, undo still works, the collection isn't corrupted.
+5. Update `SPEC_CHECKLIST.md` checkboxes and note any new "files touched (upstream)" for the merge-difficulty log.
 
-Run `just` (or `just --list`) to see all available commands.
-
-## Quick iteration
-
-During development, you can build/check subsections of our code:
-
-- Rust: `cargo check`
-- Python: `just lint` (runs mypy/ruff), and if wheel-related, `just wheels`
-- TypeScript/Svelte: `just lint` (includes check:svelte and check:typescript)
-
-Language-specific tests are also available: `just test-rust`, `just test-py`,
-`just test-ts`. Use `just fmt` / `just fix-fmt` for formatting and
-`just fix-lint` to auto-fix lint issues.
-
-TypeScript/Svelte browser e2e tests live in `ts/tests/e2e/` and run with
-`just test-e2e`. The harness launches a temporary Anki instance and drives
-mediasrv pages with Playwright's Chromium.
-
-Be mindful that some changes (such as modifications to .proto files) may
-need a full build with `just check` first.
-
-## Build tooling
-
-`just` recipes wrap our build system (implemented in build/), which takes
-care of downloading required deps and invoking our build steps. See the
-project `justfile` for the full set of recipes.
-
-## Translations
-
-ftl/ contains our Fluent translation files. We have scripts in rslib/i18n
-to auto-generate an API for Rust, TypeScript and Python so that our code can
-access the translations in a type-safe manner. Changes should be made to
-ftl/core or ftl/qt. Except for features specific to our Qt interface, prefer
-the core module. When adding new strings, confirm the appropriate ftl file
-first, and try to match the existing style.
-
-## Protobuf and IPC
-
-Our build scripts use the .proto files to define our Rust library's
-non-Rust API. pylib/rsbridge exposes that API, and \_backend.py exposes
-snake_case methods for each protobuf RPC that call into the API.
-Similar tooling creates a @generated/backend TypeScript module for
-communicating with the Rust backend (which happens over POST requests).
-
-## Fixing errors
-
-When dealing with build errors or failing tests, invoke 'check' or one
-of the quick iteration commands regularly. This helps verify your changes
-are correct. To locate other instances of a problem, run the check again -
-don't attempt to grep the codebase.
-
-## Ignores
-
-The files in out/ are auto-generated. Mostly you should ignore that folder,
-though you may sometimes find it useful to view out/{pylib/anki,qt/\_aqt,ts/lib/generated} when dealing with cross-language communication or our other generated sourcecode.
-
-## Installer
-
-The code for our Briefcase-based installer is in qt/installer, with
-separate templates for each platform (mac-template/, linux-template/,
-windows-template/).
-
-## Rust dependencies
-
-Prefer adding to the root workspace, and using dep.workspace = true in the individual Rust project.
-
-## Rust utilities
-
-rslib/{process,io} contain some helpers for file and process operations,
-which provide better error messages/context and some ergonomics. Use them
-when possible.
-
-## Rust error handling
-
-in rslib, use error/mod.rs's AnkiError/Result and snafu. In our other Rust modules, prefer anyhow + additional context where appropriate. Unwrapping
-in build scripts/tests is fine.
-
-## Individual preferences
-
-See @.claude/user.md
+## Layout of this kit
+- `PRD.md` — full product spec, tech stack, Spiky-POV→feature map, milestones, today's plan.
+- `SPEC_CHECKLIST.md` — the living grade/compliance tracker (update it as you go).
+- `.cursor/rules/` — file-scoped rules: `core`, `rust-engine`, `scoring-honesty`, `ai-traceability`, `testing-evals`, `sync`.

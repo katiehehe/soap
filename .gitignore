@@ -24,3 +24,5 @@ ts/.svelte-kit
 docs/_build/
 docs/autoapi/
 .complexipy_cache
+# Personal, machine-local Cursor rules (keep out of version control)
+.cursor/rules/personal.mdc

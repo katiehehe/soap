@@ -35,7 +35,7 @@ Desktop:
 - [~] Give-up rule done in Rust with a range-capable score type; FSRS memory calibration + range is a Sunday item.
 - [ ] Desktop installer runs on a clean machine.
 Mobile:
-- [~] Toolchain set up (NDK 29.0.14206865, cmdline-tools, AVD `Medium_Phone`); `.aar` build via `Anki-Android-Backend/build.sh` in progress; emulator run is the user handoff.
+- [~] Shared Rust engine cross-compiles for Android (`librsdroid.so` arm64-v8a); backend `.aar` + testing `.jar` build cleanly (`BUILD SUCCESSFUL`). AnkiDroid wired to the local backend (`local_backend=true`) and builds to Kotlin compile; APK blocked on a version skew (backend `anki` submodule 26.05b1 vs AnkiDroid's expected anki25.09.2 / our fork 25.09.99). Fix recipe + emulator handoff (`Medium_Phone` AVD) in `docs/android-build.md`.
 - [ ] Loads the Exam P deck and runs a real review session on the shared engine. (Two-way sync NOT required yet.)
 Proof to capture: commit hash · clean-build recording · test results · clean-machine install recording · phone review-session recording.
 

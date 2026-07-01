@@ -1,0 +1,74 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+// SOA Exam P "Speedrun" fork. All study-readiness backend features live in this
+// self-contained service to keep merges with upstream Anki low-risk.
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+
+package anki.speedrun;
+
+import "anki/generic.proto";
+
+service SpeedrunService {
+  // Trivial end-to-end health check that proves the proto -> Rust -> Python
+  // plumbing works. Read-only: it creates no undo entry and does not modify the
+  // collection.
+  rpc SpeedrunPing(generic.Empty) returns (SpeedrunPingResponse);
+
+  // Compute exam readiness. The return type is a oneof, so a bare readiness
+  // number literally cannot be emitted: below the pre-registered data threshold
+  // (>= 200 graded reviews AND >= 50% coverage) it returns NoScore. The
+  // give-up rule is a Rust assertion, not a UI hint.
+  rpc ComputeReadiness(ComputeReadinessRequest) returns (ReadinessResult);
+}
+
+// Empty: every SpeedrunService method is collection-scoped, so codegen
+// auto-forwards it to the backend (and thus to Python and the web frontend).
+service BackendSpeedrunService {}
+
+message SpeedrunPingResponse {
+  // Stable marker of the form "speedrun-ok:<engine-version>".
+  string marker = 1;
+  // Anki engine version the backend was built from (from the repo .version).
+  string engine_version = 2;
+}
+
+message ComputeReadinessRequest {
+  // Full list of syllabus subtopic tags (e.g. "subtopic::univariate::binomial")
+  // supplied by the Python topic map, so the curriculum is not hardcoded in the
+  // engine. Used as the denominator for coverage.
+  repeated string expected_subtopics = 1;
+}
+
+// A real readiness score, only ever returned once models are calibrated. Every
+// field is required so a point estimate can never be shown without its context.
+message ReadinessScore {
+  double point = 1;
+  double low = 2;
+  double high = 3;
+  double coverage_pct = 4;
+  double confidence = 5;
+  int64 updated_at = 6;
+  repeated string reasons = 7;
+  string next_best_action = 8;
+}
+
+// The honest "not enough data yet" state. Carries the evidence and the single
+// best next action so the UI never shows a number it cannot back up.
+message NoScore {
+  string reason = 1;
+  uint32 graded_reviews = 2;
+  uint32 reviews_needed = 3;
+  double coverage_pct = 4;
+  string next_best_action = 5;
+}
+
+message ReadinessResult {
+  oneof value {
+    NoScore no_score = 1;
+    ReadinessScore score = 2;
+  }
+}

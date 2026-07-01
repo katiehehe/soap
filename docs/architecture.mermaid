@@ -1,0 +1,34 @@
+flowchart TB
+  subgraph Shared["Shared engine — Rust (the anki crate, rslib/)"]
+    FSRS["FSRS memory model"]
+    SCHED["Three-tier mastery-gated scheduler<br/>(OUR Rust change)"]
+    COLL["Collection / SQLite"]
+    PROTO["protobuf backend API (proto/)"]
+    FSRS --> PROTO
+    SCHED --> PROTO
+    COLL --> PROTO
+  end
+
+  subgraph Desktop["Desktop app (fork of Anki)"]
+    PY["Python aqt / pylib"]
+    UI["Svelte / TS frontend + dashboard"]
+    MODELS["Score models:<br/>memory / performance / readiness"]
+    AI["AI card + explanation gen<br/>(Fri; runs with AI off too)"]
+    PY --> UI
+    PY --> MODELS
+    MODELS -.-> AI
+  end
+
+  subgraph Mobile["Mobile app (AnkiDroid, Kotlin)"]
+    JNI["Anki-Android-Backend<br/>(JNI .aar — same Rust engine)"]
+    MUI["Review UI + 3 scores with ranges"]
+    JNI --> MUI
+  end
+
+  PROTO --> PY
+  PROTO --> JNI
+  Desktop <-->|"two-way sync — no lost / double reviews"| SyncSrv["Anki sync server"]
+  Mobile <-->|"offline-first, resumes on reconnect"| SyncSrv
+
+  classDef ours fill:#2563eb,stroke:#1e3a8a,color:#fff;
+  class SCHED,MODELS,MUI ours;

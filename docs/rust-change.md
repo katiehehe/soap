@@ -6,7 +6,8 @@ why it belongs in Rust (not Python/Svelte), what exists today, and how the curre
 scaffold grows into the full feature.
 
 For the concrete list of upstream files touched and their merge risk, see
-[upstream-touched.md](upstream-touched.md) and `SPEC_CHECKLIST.md`.
+[upstream-touched.md](upstream-touched.md) and `SPEC_CHECKLIST.md`. For the FSRS
+algorithm the memory model is built on, see [fsrs-reference.md](fsrs-reference.md).
 
 ## Why this must be in Rust, not Python or JS
 

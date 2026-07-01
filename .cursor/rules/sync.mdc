@@ -1,0 +1,16 @@
+---
+description: Two-way sync, conflict resolution, offline behavior, and shared-engine integrity.
+globs: **/sync/**, **/sync*, **/collection/**, **/backend/**
+alwaysApply: false
+---
+
+# Sync & shared engine (worth 10%; no shared-engine phone companion + sync caps at 70%)
+
+Desktop and phone share the SAME Rust engine and the SAME collection semantics. Do NOT rewrite scheduling or sync in JS/Swift on the phone — reuse the Rust backend (Android via `Anki-Android-Backend`; iOS via the Rust C FFI). You may use Anki's built-in sync or your own, but reviews must flow both ways without loss or double-counting.
+
+- **Two-way sync (7b):** review 10 cards offline on the phone and 10 different cards offline on the desktop; after reconnect all 20 land once — none lost, none double-counted.
+- **Conflict rule (documented + deterministic):** review the *same* card on both devices offline, then sync; the merge picks a clear, correct winner. Write the rule down (`docs/sync-conflict-rule.md`) and cover it with a test.
+- **Offline-first:** full review works offline; sync resumes cleanly when the connection returns. Handle a phone that goes offline mid-sync, or whose clock is wrong.
+- **Integrity:** a crash mid-review must recover with zero corruption on both platforms (see the crash test). Handle a 50k-card deck and decks with broken media without corrupting the collection.
+
+NEVER resolve a conflict by silently dropping or duplicating a review. If the rule can't decide, prefer the safe, documented default and log it.

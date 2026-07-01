@@ -1,0 +1,25 @@
+---
+description: Requirements for the Anki Rust engine change (the graded 20% Rust component).
+globs: rslib/**, pylib/**, proto/**, **/*.rs, **/*.proto, ftl/**
+alwaysApply: false
+---
+
+# Rust engine change (worth 20%; no real change caps the whole project at 50%)
+
+The chosen change is the **three-tier, mastery-gated scheduler** (Spiky POV 1). Implement it in Rust, in the shared `anki` crate (illustratively `rslib/src/scheduler/...` — confirm exact paths against the current tree). Because the engine is shared it ships to BOTH desktop and phone, so verify it on the mobile build too.
+
+What it does — three tiers with a mastery gate at EACH level (NOT one global "finish blocking then mix" switch):
+1. **Block subtopics** — single-subtopic practice to build *procedure* (recall the fact AND deploy it: set up the random variable, handle conditioning, pick the integral/sum). The learner pays one cognitive cost at a time.
+2. **Interleave within a unit** — once a subtopic clears its gate it joins its unit's mixed pool. This trains *recognition*, because within a unit the confusable sub-types (binomial vs. Poisson vs. geometric; needs conditioning?; MGF vs. raw moment) are exactly what students mix up. **This is the tier the ablation removes.**
+3. **Interleave across units** — once a unit's within-unit mix is mastered, the unit joins the cross-unit pool. The three units (general probability / univariate / multivariate) are easy to tell apart, so this tier is for *spacing*, not discrimination.
+
+Gate (pre-registered, applied per level): blocked-practice accuracy ≥ 80% AND FSRS retrievability ≥ 0.90 over ≥ 10 problems. Questions are **parameterized** (numbers regenerate each review), so clearing a gate means repeated correct *execution*, not a memorized answer — keep the question format templated.
+
+Hard requirements for this change (all required):
+- Expose the scheduler/mastery state via a **new protobuf message** in `proto/` and **call it from Python** (`pylib`). A per-topic **mastery query** (gate state + which pool a card is in) powers both the scheduler and the dashboard.
+- Keep **FSRS intervals valid** and keep **undo working**. NEVER corrupt the collection.
+- Ship **≥ 3 Rust unit tests** covering the tier/gate ordering logic AND **1 test that calls the change from Python**.
+- Keep it **fast**: the mastery/ordering query must power the dashboard on a 50,000-card deck (see speed targets).
+- Maintain a one-page `docs/rust-change.md` on **why this belongs in Rust, not Python**, and `docs/upstream-touched.md` listing the **upstream files touched** + **merge risk**.
+
+Style: match Anki's existing Rust conventions and error handling; extend existing scheduler/queue structures rather than building parallel ones. Reference the current file rather than pasting stale code. When unsure how Anki wires a backend method end-to-end, trace an existing protobuf-backed call first and mirror it.

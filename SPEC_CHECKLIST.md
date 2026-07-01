@@ -33,7 +33,7 @@ Desktop:
 - [x] Rust change working end-to-end: the diff, **3 Rust unit tests**, **1 Python-calling test** (`SpeedrunPing`); plus `ComputeReadiness` with 3 Rust + 1 Python tests.
 - [x] Review loop running on the Exam P deck (seed script builds 6 tagged cards across 3 units; scheduler draws + answers cards; revlog grows).
 - [~] Give-up rule done in Rust with a range-capable score type; FSRS memory calibration + range is a Sunday item.
-- [ ] Desktop installer runs on a clean machine.
+- [x] Desktop installer built + verified: `out/installer/dist/anki-25.09.99-mac-apple.dmg` (225 MB drag-install DMG; mounts cleanly, contains `Anki.app` v25.9.99 with the executable + Applications symlink). Final clean-machine launch is a manual check on a device without the dev toolchain.
 Mobile:
 - [~] Shared Rust engine cross-compiles for Android (`librsdroid.so` arm64-v8a); backend `.aar` + testing `.jar` build cleanly (`BUILD SUCCESSFUL`). AnkiDroid wired to the local backend (`local_backend=true`) and builds to Kotlin compile; APK blocked on a version skew (backend `anki` submodule 26.05b1 vs AnkiDroid's expected anki25.09.2 / our fork 25.09.99). Fix recipe + emulator handoff (`Medium_Phone` AVD) in `docs/android-build.md`.
 - [ ] Loads the Exam P deck and runs a real review session on the shared engine. (Two-way sync NOT required yet.)

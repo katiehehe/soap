@@ -23,6 +23,16 @@ service SpeedrunService {
   // (>= 200 graded reviews AND >= 50% coverage) it returns NoScore. The
   // give-up rule is a Rust assertion, not a UI hint.
   rpc ComputeReadiness(ComputeReadinessRequest) returns (ReadinessResult);
+
+  // Per-subtopic mastery state for the three-tier mastery-gated scheduler:
+  // gate state (from real revlog accuracy + FSRS retrievability) and which pool
+  // each subtopic is in. Powers both the dashboard and the new-card ordering.
+  rpc GetMasteryState(MasteryRequest) returns (MasteryState);
+
+  // The collection's new cards, ordered by mastery tier: blocked subtopics
+  // first (practised in isolation), then within-unit interleaving, then
+  // cross-unit interleaving. This is the topic-aware scheduling order.
+  rpc GetMasteryOrderedNewCards(MasteryRequest) returns (MasteryOrderedCards);
 }
 
 // Empty: every SpeedrunService method is collection-scoped, so codegen
@@ -71,4 +81,47 @@ message ReadinessResult {
     NoScore no_score = 1;
     ReadinessScore score = 2;
   }
+}
+
+message MasteryRequest {
+  // Syllabus subtopic tags, e.g. "subtopic::univariate::binomial" (unit is the
+  // middle segment). Supplied by the Python topic map.
+  repeated string expected_subtopics = 1;
+}
+
+// Which tier a subtopic is in. Blocked -> practise in isolation; WithinUnit ->
+// interleave against confusable sub-types in the same unit; CrossUnit -> the
+// unit is mastered, interleave across units for spacing.
+enum MasteryPool {
+  MASTERY_POOL_BLOCKED = 0;
+  MASTERY_POOL_WITHIN_UNIT = 1;
+  MASTERY_POOL_CROSS_UNIT = 2;
+}
+
+message SubtopicMastery {
+  string tag = 1;
+  string unit_id = 2;
+  string subtopic_id = 3;
+  uint32 reviews = 4;
+  uint32 correct = 5;
+  double accuracy = 6;
+  double mean_retrievability = 7;
+  bool gate_cleared = 8;
+  MasteryPool pool = 9;
+}
+
+message UnitMastery {
+  string unit_id = 1;
+  uint32 subtopics_total = 2;
+  uint32 subtopics_cleared = 3;
+  bool mastered = 4;
+}
+
+message MasteryState {
+  repeated SubtopicMastery subtopics = 1;
+  repeated UnitMastery units = 2;
+}
+
+message MasteryOrderedCards {
+  repeated int64 card_ids = 1;
 }

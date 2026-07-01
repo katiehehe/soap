@@ -3,13 +3,21 @@
 
 use anki_proto::speedrun::readiness_result;
 use anki_proto::speedrun::ComputeReadinessRequest;
+use anki_proto::speedrun::MasteryOrderedCards;
+use anki_proto::speedrun::MasteryRequest;
+use anki_proto::speedrun::MasteryState;
 use anki_proto::speedrun::NoScore;
 use anki_proto::speedrun::ReadinessResult;
 use anki_proto::speedrun::SpeedrunPingResponse;
+use anki_proto::speedrun::SubtopicMastery;
+use anki_proto::speedrun::UnitMastery;
 use unicase::UniCase;
 
 use crate::collection::Collection;
 use crate::error;
+use crate::speedrun::mastery::compute_pools;
+use crate::speedrun::mastery::order_new_cards;
+use crate::speedrun::mastery::Pool;
 
 /// Pre-registered give-up thresholds. Below EITHER of these, readiness returns
 /// NoScore. These are code, not a UI hint (PRD 9).
@@ -62,6 +70,83 @@ impl crate::services::SpeedrunService for Collection {
                     .into(),
             })),
         })
+    }
+
+    fn get_mastery_state(&mut self, input: MasteryRequest) -> error::Result<MasteryState> {
+        let stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
+        let pools = compute_pools(&stats);
+
+        // Per-unit rollup, in first-seen order.
+        let mut unit_order: Vec<String> = Vec::new();
+        let mut unit_total: std::collections::HashMap<String, u32> =
+            std::collections::HashMap::new();
+        let mut unit_cleared: std::collections::HashMap<String, u32> =
+            std::collections::HashMap::new();
+        for s in &stats {
+            if !unit_total.contains_key(&s.unit_id) {
+                unit_order.push(s.unit_id.clone());
+            }
+            *unit_total.entry(s.unit_id.clone()).or_default() += 1;
+            if s.gate_cleared() {
+                *unit_cleared.entry(s.unit_id.clone()).or_default() += 1;
+            }
+        }
+
+        let subtopics = stats
+            .iter()
+            .map(|s| {
+                let tag = s.tag();
+                let pool = pools.get(&tag).copied().unwrap_or(Pool::Blocked);
+                SubtopicMastery {
+                    tag,
+                    unit_id: s.unit_id.clone(),
+                    subtopic_id: s.subtopic_id.clone(),
+                    reviews: s.reviews,
+                    correct: s.correct,
+                    accuracy: s.accuracy(),
+                    mean_retrievability: s.mean_retrievability(),
+                    gate_cleared: s.gate_cleared(),
+                    pool: pool_to_proto(pool) as i32,
+                }
+            })
+            .collect();
+
+        let units = unit_order
+            .into_iter()
+            .map(|unit| {
+                let total = unit_total.get(&unit).copied().unwrap_or(0);
+                let cleared = unit_cleared.get(&unit).copied().unwrap_or(0);
+                UnitMastery {
+                    unit_id: unit,
+                    subtopics_total: total,
+                    subtopics_cleared: cleared,
+                    mastered: total > 0 && cleared == total,
+                }
+            })
+            .collect();
+
+        Ok(MasteryState { subtopics, units })
+    }
+
+    fn get_mastery_ordered_new_cards(
+        &mut self,
+        input: MasteryRequest,
+    ) -> error::Result<MasteryOrderedCards> {
+        let stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
+        let pools = compute_pools(&stats);
+        let cards = self.speedrun_new_cards_with_subtopic(&input.expected_subtopics)?;
+        let ordered = order_new_cards(&cards, &pools);
+        Ok(MasteryOrderedCards {
+            card_ids: ordered.into_iter().map(|c| c.0).collect(),
+        })
+    }
+}
+
+fn pool_to_proto(pool: Pool) -> anki_proto::speedrun::MasteryPool {
+    match pool {
+        Pool::Blocked => anki_proto::speedrun::MasteryPool::Blocked,
+        Pool::WithinUnit => anki_proto::speedrun::MasteryPool::WithinUnit,
+        Pool::CrossUnit => anki_proto::speedrun::MasteryPool::CrossUnit,
     }
 }
 

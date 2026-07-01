@@ -5,4 +5,5 @@
 //! Anki's engine. Kept in a self-contained module so the diff against upstream
 //! stays small and easy to merge.
 
+pub(crate) mod mastery;
 mod service;

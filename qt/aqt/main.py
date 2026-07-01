@@ -1314,6 +1314,11 @@ title="{}" {}>{}</button>""".format(
     def onPrefs(self) -> None:
         aqt.dialogs.open("Preferences", self)
 
+    def on_speedrun_readiness(self) -> None:
+        import aqt.speedrun
+
+        aqt.speedrun.show_readiness_dashboard(self)
+
     def on_check_for_updates(self) -> None:
         from packaging.version import Version
 
@@ -1447,6 +1452,13 @@ title="{}" {}>{}</button>""".format(
         qconnect(m.actionNoteTypes.triggered, self.onNoteTypes)
         qconnect(m.action_check_for_updates.triggered, self.on_check_for_updates)
         qconnect(m.actionPreferences.triggered, self.onPrefs)
+
+        # Tools: SOA Exam P readiness dashboard (Speedrun fork)
+        self.action_speedrun_readiness = QAction("Exam readiness (Speedrun)", self)
+        m.menuTools.addAction(self.action_speedrun_readiness)
+        qconnect(
+            self.action_speedrun_readiness.triggered, self.on_speedrun_readiness
+        )
 
         # View
         qconnect(

@@ -5,14 +5,14 @@
 > drift shows up early. `[ ]` = not started · `[~]` = in progress · `[x]` = done + proof captured.
 
 ## 0. Automatic-fail guards (check on EVERY commit)
-- [ ] No made-up / misleading readiness number anywhere. Give-up rule returns `NoScore` under threshold.
+- [x] No made-up / misleading readiness number anywhere. Give-up rule returns `NoScore` under threshold. (Rust `compute_readiness` returns a `oneof {NoScore, ReadinessScore}`; thresholds ≥200 reviews AND ≥50% coverage; 3 Rust + 1 Python tests.)
 - [ ] Leakage scan run and clean (no test item or near-copy in training data).
 - [ ] Every AI output has a traceable named source.
 - [ ] Both apps run with AI switched OFF and still give a score.
 - [ ] License: AGPL-3.0-or-later, Anki credited (BSD-3-Clause parts noted).
 
 ## 1. Grade caps to avoid
-- [ ] Real Rust engine change exists (else 50% cap).
+- [x] Real Rust engine change exists (else 50% cap). (`SpeedrunService` in the `anki` crate: `speedrun_ping` + `compute_readiness`, new protobuf message called from Python.)
 - [ ] Phone companion shares the engine AND syncs (else 70% cap).
 - [ ] Re-runnable test setup with seed (else 60% cap).
 - [ ] Held-out testing in place (else 60% cap).
@@ -29,13 +29,13 @@
 
 ## 3. WEDNESDAY — core works on both screens, NO AI
 Desktop:
-- [ ] Anki forked and building from source (`./run` launches your fork).
-- [ ] Rust change working end-to-end: the diff, **3 Rust unit tests**, **1 Python-calling test**.
-- [ ] Review loop running on the Exam P deck.
-- [ ] Memory model running with an honest score: a range + the give-up rule.
+- [x] Anki forked and building from source (`./ninja pylib qt` green; `./run` launch path verified; engine+pylib open/close a collection headlessly).
+- [x] Rust change working end-to-end: the diff, **3 Rust unit tests**, **1 Python-calling test** (`SpeedrunPing`); plus `ComputeReadiness` with 3 Rust + 1 Python tests.
+- [x] Review loop running on the Exam P deck (seed script builds 6 tagged cards across 3 units; scheduler draws + answers cards; revlog grows).
+- [~] Give-up rule done in Rust with a range-capable score type; FSRS memory calibration + range is a Sunday item.
 - [ ] Desktop installer runs on a clean machine.
 Mobile:
-- [ ] Phone app builds + runs on a real device/emulator.
+- [~] Toolchain set up (NDK 29.0.14206865, cmdline-tools, AVD `Medium_Phone`); `.aar` build via `Anki-Android-Backend/build.sh` in progress; emulator run is the user handoff.
 - [ ] Loads the Exam P deck and runs a real review session on the shared engine. (Two-way sync NOT required yet.)
 Proof to capture: commit hash · clean-build recording · test results · clean-machine install recording · phone review-session recording.
 
@@ -64,9 +64,9 @@ Proof: eval numbers + baseline comparison · recording of a phone-reviewed card 
 Proof: results report · model descriptions · Brainlift · recordings of both builds installing + running on clean devices.
 
 ## 6. Concrete challenges (section 7)
-- [ ] 7a Rust change: ≥3 Rust tests + 1 Python test; undo works + no corruption; one-page "why Rust"; upstream-files-touched + merge-difficulty note; verified on phone build.
+- [~] 7a Rust change: ≥3 Rust tests + 1 Python test (done: 6 Rust + 2 Python); undo works + no corruption (read-only RPC test); one-page "why Rust" (`docs/rust-change.md`); upstream-files-touched + merge note (`docs/upstream-touched.md`); phone-build verification in progress.
 - [ ] 7b Sync test: 10 offline phone + 10 offline desktop → all 20 land once; same-card conflict rule picks a clear winner (documented).
-- [ ] 7c Coverage map: every official P topic listed, covered ones marked, % shown on dashboard, abstains below the line.
+- [x] 7c Coverage map: official P outline in `pylib/anki/speedrun/exam_p_topics.json` (3 units, 15 subtopics); coverage computed in Rust from note tags; % shown on the readiness dashboard; readiness abstains below 50% (give-up rule).
 - [ ] 7d Paraphrase test: 30 cards × 2 reworded Qs; recall vs reworded accuracy; gap reported.
 - [ ] 7e Leakage check: script flags test items/near-copies in training; result clean.
 - [ ] 7f AI card check: gold set of 50; 50 generated from one source; correct/wrong/bad-teaching counts; cutoff pre-set.
@@ -95,4 +95,10 @@ Proof: results report · model descriptions · Brainlift · recordings of both b
 - [ ] Brainlift (per Patrick's outline).
 
 ## Files touched upstream (keep current for the merge-difficulty note)
-- (add as you go: path — what changed — merge risk low/med/high)
+See `docs/upstream-touched.md` for the full log. Summary of upstream Anki files modified:
+- `rslib/src/lib.rs` — `pub mod speedrun;` (1 line) — low.
+- `rslib/proto/src/lib.rs` — `protobuf!(speedrun, "speedrun");` (1 line) — low.
+- `rslib/proto/python.rs` — `import anki.speedrun_pb2` in the generated-header list (1 line) — low/med.
+- `qt/aqt/mediasrv.py` — add `readiness-dashboard` route + expose `compute_readiness` (2 list entries) — med.
+- `qt/aqt/main.py` — add a Tools-menu action + `on_speedrun_readiness` handler — med.
+New files (no merge risk): `proto/anki/speedrun.proto`, `rslib/src/speedrun/*`, `qt/aqt/speedrun.py`, `ts/routes/readiness-dashboard/+page.svelte`, `pylib/anki/speedrun/*`, `tools/speedrun/build_exam_p_deck.py`, `pylib/tests/test_speedrun*.py`, `ts/tests/e2e/readiness-dashboard.test.ts`, `docs/rust-change.md`, `docs/upstream-touched.md`.

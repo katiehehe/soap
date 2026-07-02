@@ -344,3 +344,32 @@ scheduler tiers a visible _daily plan_, not just an invisible reorder.
 - Verified GREEN: `cargo test -p anki speedrun::` (47 tests), `check:vitest`,
   `check:svelte`, `check:pytest:pylib`, `check:pytest:aqt`, and full
   `check:format`/`check:eslint`/`check:ruff`/`check:clippy`.
+
+### Follow-up round 7: exam pace + "study more" (GetStudyPace)
+
+Answers "what's the point of the quota / what if I need to study a lot?" — the
+quota throttles new-card intake to protect future review load; these two levers
+let the user (A) go beyond it and (B) know if they're on track.
+
+- Engine: new 7th RPC `GetStudyPace`. Counts remaining new (unstudied) syllabus
+  cards, reads the exam deck's new/day limit, and turns the user's exam date
+  (config `speedrunExamDate`, unix secs at local noon) into a coverage pace:
+  days left, recommended new/day (ceil(remaining ÷ days)), projected finish at
+  the current pace, and on-track/behind. Pure `compute_pace` (unit-tested);
+  strictly a COVERAGE pace, never the readiness score. Read-only. +5 Rust unit
+  tests + 3 integration; +3 Python (exam-date round-trip, pace with/without a
+  date, on-track vs behind).
+- UI (study map): an "Exam pace" card with a date picker (on-track / behind /
+  date-passed badge, "X new left · at Y/day you'll finish in Z days"). When
+  behind, a "Raise daily new to R" button (B: get on track) sets the exam deck's
+  steady new/day. A "Study more today (+20 new)" button on the plan (A: go
+  ahead) extends TODAY's new limit via `extend_limits` and opens the deck.
+  Pure `paceTone` helper in `lib.ts` (+3 vitest); +3 e2e assertions.
+- Plumbing: exam-date helpers in `pylib/anki/speedrun/__init__.py`
+  (`set/clear/exam_date_iso`, `exam_timestamp_for_iso`); bridge commands
+  `speedrun-set-exam-date` / `-clear-exam-date` / `-set-new-per-day` /
+  `-extend-new` in `qt/aqt/speedrun.py`; `get_study_pace` exposed in
+  `mediasrv.py`.
+- Verified GREEN: `cargo test -p anki speedrun::` (51 tests), `check:vitest`,
+  `check:svelte`, `check:pytest:pylib`, `check:pytest:aqt`, full
+  `check:format`/`check:eslint`/`check:ruff`/`check:clippy`, and study-map e2e.

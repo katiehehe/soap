@@ -105,3 +105,23 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
   syllabus cards; `build_queues` builds a valid 2-card queue with the flag on.
 - Safety gates all passed: full `./ninja check` green (no scheduler regression),
   and `make crash-test` survived 20 mid-review SIGKILLs with zero corruption.
+  Commit `368530302`.
+
+### Phase 3.2 — honest score calibration (memory calibrated; perf/readiness gated) (done)
+
+- `pylib/anki/speedrun/calibration.py`: pure, deterministic calibration metrics
+  (Brier, log loss, expected calibration error, reliability bins) + a
+  `calibration_report` with an insufficient-data gate — the honesty/give-up rule
+  applied to calibration. 8 known-value unit tests
+  (`test_speedrun_calibration.py`).
+- `tools/speedrun/evals/memory_calibration.py` + `make calibration`: the memory
+  signal IS FSRS; this reports the engine's held-out (time-series split) log loss
+  and RMSE on a real review history, and abstains honestly ("not enough data yet")
+  on a thin/seed collection (verified: seed deck -> give-up, no number).
+- `docs/score-models.md`: the method written down for all three signals + the
+  shared give-up rule + reproducibility (seed, leakage scan, commands) + an
+  explicit "what is NOT done yet" (no calibrated performance model, so readiness
+  stays `NoScore`; nothing fabricated).
+- `compute_readiness` left unchanged: still returns `NoScore` — no number is
+  invented before the performance model exists.
+- `./ninja check` green.

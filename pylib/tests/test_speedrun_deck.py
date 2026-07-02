@@ -21,12 +21,23 @@ def test_build_deck_covers_all_three_units():
         assert len(col.find_notes(f"tag:{tag}")) >= 1
 
 
-def test_coverage_is_partial_against_full_syllabus():
+def test_starter_deck_covers_full_syllabus():
     col = getEmptyCol()
     build_deck(col)
     expected = set(expected_subtopic_tags())
     covered = {subtopic_tag(c.unit_id, c.subtopic_id) for c in SEED_CARDS}
-    # covered subtopics are a real subset of the official outline
+    # every covered subtopic is a real entry in the official outline
     assert covered.issubset(expected)
-    coverage = len(covered) / len(expected)
-    assert 0.0 < coverage < 1.0
+    # the starter deck now spans the entire syllabus (full weighted coverage)
+    assert covered == expected
+    assert len(covered) / len(expected) == 1.0
+
+
+def test_deck_has_multiple_difficulties_per_syllabus():
+    # a mix of recall + applied cards means more than one card per unit
+    from collections import Counter
+
+    by_difficulty = Counter(card.difficulty for card in SEED_CARDS)
+    assert set(by_difficulty) <= {"easy", "medium", "hard"}
+    # graded difficulty is represented, not a single flat level
+    assert len(by_difficulty) >= 2

@@ -423,6 +423,7 @@ def is_sveltekit_page(path: str) -> bool:
         "import-page",
         "image-occlusion",
         "readiness-dashboard",
+        "study-map",
     ]
 
 
@@ -768,6 +769,7 @@ exposed_backend_list = [
     "get_retention_workload",
     # SpeedrunService (SOA Exam P readiness)
     "compute_readiness",
+    "get_mastery_state",
 ]
 
 

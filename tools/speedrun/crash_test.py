@@ -57,13 +57,16 @@ def run_worker(path: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--iterations", type=int, default=20)
-    args = parser.parse_args()
-
+    # The worker subprocess is spawned with `--worker <path>`; handle it before
+    # argparse so the child actually enters the write loop (otherwise it would
+    # exit on an unrecognized-argument error before writing anything).
     if "--worker" in sys.argv:
         run_worker(sys.argv[sys.argv.index("--worker") + 1])
         return
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--iterations", type=int, default=20)
+    args = parser.parse_args()
 
     path = tempfile.mktemp(suffix=".anki2")
     col = Collection(path)

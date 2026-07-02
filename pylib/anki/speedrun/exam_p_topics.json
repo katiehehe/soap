@@ -1,17 +1,18 @@
 {
     "exam": "SOA Exam P",
     "syllabus_version": "2026-05",
-    "note": "Official SOA Exam P outline. Section weights are the published ranges; the three units are also the tiers the mastery-gated scheduler gates on.",
+    "note": "Subtopics follow the official 2026-05 Exam P learning outcomes (soa.org). Section weights are the published ranges; the three units are also the tiers the mastery-gated scheduler gates on.",
     "units": [
         {
             "id": "general",
             "name": "General Probability",
             "weight_pct": [23, 30],
             "subtopics": [
-                { "id": "sample_spaces", "name": "Sample spaces and events" },
-                { "id": "combinatorics", "name": "Combinatorics and counting" },
-                { "id": "conditional", "name": "Conditional probability" },
+                { "id": "sets_axioms", "name": "Sets, sample spaces, and axioms" },
+                { "id": "combinatorics", "name": "Combinatorial probability" },
                 { "id": "independence", "name": "Independence and mutually exclusive events" },
+                { "id": "add_mult_rules", "name": "Addition and multiplication rules" },
+                { "id": "conditional", "name": "Conditional probability" },
                 { "id": "bayes", "name": "Bayes' theorem and law of total probability" }
             ]
         },
@@ -20,11 +21,12 @@
             "name": "Univariate Random Variables",
             "weight_pct": [44, 50],
             "subtopics": [
-                { "id": "discrete_common", "name": "Common discrete distributions" },
-                { "id": "continuous_common", "name": "Common continuous distributions" },
-                { "id": "expectation_variance", "name": "Expectation, variance, and moments" },
-                { "id": "mgf", "name": "Moment generating functions" },
-                { "id": "transformations", "name": "Transformations of a random variable" }
+                { "id": "rv_basics", "name": "Random variables, PDFs, and CDFs" },
+                { "id": "expectation", "name": "Expectation, moments, and percentiles" },
+                { "id": "variance", "name": "Variance, SD, and coefficient of variation" },
+                { "id": "discrete_dists", "name": "Common discrete distributions" },
+                { "id": "continuous_dists", "name": "Common continuous distributions" },
+                { "id": "insurance_apps", "name": "Insurance applications (deductibles, limits)" }
             ]
         },
         {
@@ -34,8 +36,10 @@
             "subtopics": [
                 { "id": "joint_distributions", "name": "Joint distributions" },
                 { "id": "marginal_conditional", "name": "Marginal and conditional distributions" },
+                { "id": "joint_moments", "name": "Moments of joint and conditional distributions" },
                 { "id": "covariance_correlation", "name": "Covariance and correlation" },
-                { "id": "linear_combinations", "name": "Moments of sums and linear combinations" },
+                { "id": "order_statistics", "name": "Order statistics" },
+                { "id": "linear_combinations", "name": "Linear combinations of random variables" },
                 { "id": "clt", "name": "Central limit theorem" }
             ]
         }

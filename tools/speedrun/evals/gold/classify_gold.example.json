@@ -1,0 +1,45 @@
+{
+    "note": "EXAMPLE gold set for the subtopic classifier. Original items (NOT real exam questions). Held-out gold must stay OUT of any AI training/index; run tools/speedrun/leakage_scan.py over AI inputs.",
+    "items": [
+        {
+            "question": "A committee of 3 is chosen from 8 people. In how many ways can this be done?",
+            "subtopic": "subtopic::general::combinatorics"
+        },
+        {
+            "question": "Events A and B are independent. Given P(A) and P(B), find P(A and B).",
+            "subtopic": "subtopic::general::independence"
+        },
+        {
+            "question": "A test is positive. Using Bayes' theorem and total probability, find the posterior probability of disease.",
+            "subtopic": "subtopic::general::bayes"
+        },
+        {
+            "question": "Find P(A given B) when P(A and B) and P(B) are known.",
+            "subtopic": "subtopic::general::conditional"
+        },
+        {
+            "question": "For a binomial random variable, compute the expected value and variance.",
+            "subtopic": "subtopic::univariate::discrete_dists"
+        },
+        {
+            "question": "X is exponential with a given rate. Find the probability that X exceeds a value.",
+            "subtopic": "subtopic::univariate::continuous_dists"
+        },
+        {
+            "question": "An insurance policy has an ordinary deductible. Find the expected claim payment.",
+            "subtopic": "subtopic::univariate::insurance_apps"
+        },
+        {
+            "question": "Compute the covariance and correlation between two random variables.",
+            "subtopic": "subtopic::multivariate::covariance_correlation"
+        },
+        {
+            "question": "For n iid variables, use the central limit theorem to approximate the probability the sample mean exceeds a value.",
+            "subtopic": "subtopic::multivariate::clt"
+        },
+        {
+            "question": "Given the cdf of iid variables, find the distribution of the maximum order statistic.",
+            "subtopic": "subtopic::multivariate::order_statistics"
+        }
+    ]
+}

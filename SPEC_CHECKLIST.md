@@ -15,7 +15,7 @@
 ## 1. Grade caps to avoid
 
 - [x] Real Rust engine change exists (else 50% cap). (`SpeedrunService` in the `anki` crate: `speedrun_ping` + `compute_readiness`, new protobuf message called from Python.)
-- [ ] Phone companion shares the engine AND syncs (else 70% cap).
+- [~] Phone companion shares the engine AND syncs (else 70% cap). Engine-sharing DONE: AnkiDroid APK built from our fork's engine (`librsdroid.so` arm64), installed + running on the `Medium_Phone` emulator (`nativeloader` loads our engine "ok"; `makeBackendUsable` succeeds). Two-way SYNC is the Friday item.
 - [x] Re-runnable test setup with seed (else 60% cap). (`train_test_split(seed)` is deterministic; Rust + Python tests re-run identically.)
 - [x] Held-out testing in place (else 60% cap). (seeded held-out split in `anki/speedrun/evalsplit.py` + leakage gate.)
 - [ ] Both apps install/run on a clean device (else 50% cap).
@@ -40,9 +40,9 @@ Desktop:
 - [~] Give-up rule done in Rust with a range-capable score type; FSRS memory calibration + range is a Sunday item.
 - [x] Desktop installer built + verified: `out/installer/dist/anki-25.09.99-mac-apple.dmg` (225 MB drag-install DMG; mounts cleanly, contains `Anki.app` v25.9.99 with the executable + Applications symlink). Final clean-machine launch is a manual check on a device without the dev toolchain.
       Mobile:
-- [~] Shared Rust engine cross-compiles for Android (`librsdroid.so` arm64-v8a); backend `.aar` + testing `.jar` build cleanly (`BUILD SUCCESSFUL`). AnkiDroid wired to the local backend (`local_backend=true`) and builds to Kotlin compile; APK blocked on a version skew (backend `anki` submodule 26.05b1 vs AnkiDroid's expected anki25.09.2 / our fork 25.09.99). Fix recipe + emulator handoff (`Medium_Phone` AVD) in `docs/android-build.md`.
-- [ ] Loads the Exam P deck and runs a real review session on the shared engine. (Two-way sync NOT required yet.)
-      Proof to capture: commit hash · clean-build recording · test results · clean-machine install recording · phone review-session recording.
+- [x] Shared Rust engine on the phone: backend `anki` submodule repointed at our fork, `.aar` + `librsdroid.so` (arm64-v8a) rebuilt from our engine, `local_backend=true`. The only cross-version break was one non-exhaustive `when` (AnkiDroid `Deck.kt`) over the newer `Order.RELATIVE_OVERDUENESS`; adding that branch made `assemblePlayDebug` report `BUILD SUCCESSFUL`. APK embeds `lib/arm64-v8a/librsdroid.so`; installs + runs on the `Medium_Phone` emulator (DeckPicker up, our engine loaded). Recipe in `docs/android-build.md`; proof screenshot `docs/android-emulator.png`.
+- [~] App runs on our engine and reads a real collection on-device (deck list + due counts rendered by our backend). Loading the Exam P deck + a full phone review session is the remaining step (export a `.colpkg` from desktop or sync). (Two-way sync NOT required yet.)
+  Proof to capture: commit hash · clean-build recording · test results · clean-machine install recording · phone review-session recording.
 
 ## 4. FRIDAY — AI added & checked; phone syncs
 
@@ -73,9 +73,9 @@ Desktop (AI):
 
 ## 6. Concrete challenges (section 7)
 
-- [~] 7a Rust change: the real three-tier mastery-gated scheduler now exists — mastery model (per-subtopic gate from revlog accuracy + FSRS retrievability), `GetMasteryState` + `GetMasteryOrderedNewCards` RPCs, tier/pool ordering. 11 Rust tests + 4 Python tests; undo/no-corruption covered; `docs/rust-change.md` (why Rust) + `docs/upstream-touched.md` (merge note). Remaining: wire ordering into the live queue builder + phone-build verification.
+- [~] 7a Rust change: the real three-tier mastery-gated scheduler now exists — mastery model (per-subtopic gate from revlog accuracy + FSRS retrievability), `GetMasteryState` + `GetMasteryOrderedNewCards` RPCs, tier/pool ordering. 11 Rust tests + 4 Python tests; undo/no-corruption covered; `docs/rust-change.md` (why Rust) + `docs/upstream-touched.md` (merge note). Remaining: wire ordering into the live queue builder (phone build now verified — engine runs on the emulator).
 - [ ] 7b Sync test: 10 offline phone + 10 offline desktop → all 20 land once; same-card conflict rule picks a clear winner (documented).
-- [x] 7c Coverage map: official P outline in `pylib/anki/speedrun/exam_p_topics.json` (3 units, 15 subtopics); coverage computed in Rust from note tags; % shown on the readiness dashboard; readiness abstains below 50% (give-up rule).
+- [x] 7c Coverage map: official 2026-05 P outline in `pylib/anki/speedrun/exam_p_topics.json` (3 units, 19 subtopics from the real learning outcomes); coverage computed in Rust from note tags, weighted by section; % shown on the readiness dashboard; readiness abstains below 50% (give-up rule). An interactive **study map** (`ts/routes/study-map`) renders the syllabus as a concept map (Exam P centre, units on an equilateral triangle, subtopics radiating) with links that fill by mastery via `get_mastery_state`.
 - [ ] 7d Paraphrase test: 30 cards × 2 reworded Qs; recall vs reworded accuracy; gap reported.
 - [x] 7e Leakage check: `tools/speedrun/leakage_scan.py` flags verbatim + near-copy (Jaccard) test items in training and exits non-zero; ran clean on the seed deck; `test_speedrun_split.py` covers detection + a deterministic seeded split.
 - [ ] 7f AI card check: gold set of 50; 50 generated from one source; correct/wrong/bad-teaching counts; cutoff pre-set.
@@ -115,4 +115,4 @@ See `docs/upstream-touched.md` for the full log. Summary of upstream Anki files 
 - `rslib/proto/python.rs` — `import anki.speedrun_pb2` in the generated-header list (1 line) — low/med.
 - `qt/aqt/mediasrv.py` — add `readiness-dashboard` route + expose `compute_readiness` (2 list entries) — med.
 - `qt/aqt/main.py` — add a Tools-menu action + `on_speedrun_readiness` handler — med.
-  New files (no merge risk): `proto/anki/speedrun.proto`, `rslib/src/speedrun/*` (service + mastery), `qt/aqt/speedrun.py`, `ts/routes/readiness-dashboard/+page.svelte`, `pylib/anki/speedrun/*` (topics, seed, evalsplit), `tools/speedrun/*` (deck builder, bench, crash_test, leakage_scan), `Makefile`, `pylib/tests/test_speedrun*.py`, `ts/tests/e2e/readiness-dashboard.test.ts`, `docs/rust-change.md`, `docs/upstream-touched.md`, `docs/android-build.md`, `docs/fsrs-reference.md`.
+  New files (no merge risk): `proto/anki/speedrun.proto`, `rslib/src/speedrun/*` (service + mastery), `qt/aqt/speedrun.py`, `ts/routes/readiness-dashboard/+page.svelte`, `ts/routes/study-map/+page.svelte`, `pylib/anki/speedrun/*` (topics, seed, evalsplit), `tools/speedrun/*` (deck builder, bench, crash_test, leakage_scan), `Makefile`, `pylib/tests/test_speedrun*.py`, `ts/tests/e2e/readiness-dashboard.test.ts`, `ts/tests/e2e/study-map.test.ts`, `docs/rust-change.md`, `docs/upstream-touched.md`, `docs/android-build.md`, `docs/fsrs-reference.md`, `docs/vision.md`, `docs/demo-script.md`, `docs/ai-features-prd.md`.

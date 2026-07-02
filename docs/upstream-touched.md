@@ -15,24 +15,28 @@ Format: `path - what changed - merge risk (low/med/high)`.
 - `rslib/proto/python.rs` - add `import anki.speedrun_pb2` to the generated-header
   import list (1 line) - low/med. This hardcoded list is the one place new proto
   packages must be registered for the Python backend; rarely edited upstream.
-- `qt/aqt/mediasrv.py` - add `"readiness-dashboard"` to `is_sveltekit_page()` and
-  `"compute_readiness"` to `exposed_backend_list` (2 entries) - med. Both are
-  append-only additions to upstream lists.
-- `qt/aqt/main.py` - add a Tools-menu `QAction` in `setupMenus()` plus an
-  `on_speedrun_readiness()` method (2 small insertions) - med.
+- `qt/aqt/mediasrv.py` - add `"readiness-dashboard"` and `"study-map"` to
+  `is_sveltekit_page()`, and `"compute_readiness"` + `"get_mastery_state"` to
+  `exposed_backend_list` (4 entries) - med. All append-only additions.
+- `qt/aqt/main.py` - add two Tools-menu `QAction`s in `setupMenus()`
+  (`Exam readiness`, `Study map`) plus `on_speedrun_readiness()` and
+  `on_speedrun_study_map()` methods - med.
 
 ## New files added by the fork (no merge risk)
 
 - `proto/anki/speedrun.proto` - `SpeedrunService` (`SpeedrunPing`, `ComputeReadiness`).
 - `rslib/src/speedrun/mod.rs`, `rslib/src/speedrun/service.rs` - service impl + tests.
-- `qt/aqt/speedrun.py` - the readiness dashboard dialog (hosts the SvelteKit page).
-- `ts/routes/readiness-dashboard/+page.svelte` - dashboard stub (give-up + honesty layout).
-- `pylib/anki/speedrun/__init__.py`, `.../exam_p_topics.json`, `.../seed.py` - topic map,
-  tag helpers, and the tagged deck builder.
-- `tools/speedrun/build_exam_p_deck.py` - CLI to seed the deck into a collection.
+- `qt/aqt/speedrun.py` - the readiness dashboard + study map dialogs (host the pages).
+- `ts/routes/readiness-dashboard/+page.svelte` - dashboard (three signals + honesty).
+- `ts/routes/study-map/+page.svelte` - the three-layer topic tree with mastery-coloured
+  edges (calls `get_mastery_state`).
+- `pylib/anki/speedrun/__init__.py`, `.../exam_p_topics.json`, `.../seed.py` - topic map
+  (official 2026-05 outline), tag helpers, and the tagged deck builder.
+- `tools/speedrun/build_exam_p_deck.py` - CLI to seed the deck / export an importable `.apkg`.
 - `pylib/tests/test_speedrun.py`, `pylib/tests/test_speedrun_deck.py` - Python tests.
-- `ts/tests/e2e/readiness-dashboard.test.ts` - Playwright test + screenshot.
-- `docs/rust-change.md`, `docs/upstream-touched.md` - documentation.
+- `ts/tests/e2e/readiness-dashboard.test.ts`, `ts/tests/e2e/study-map.test.ts` - Playwright
+  tests + screenshots.
+- `docs/rust-change.md`, `docs/upstream-touched.md`, `docs/vision.md` - documentation.
 
 ## Generated (not committed; produced by the build into `out/`)
 

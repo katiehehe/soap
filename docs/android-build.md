@@ -1,92 +1,98 @@
-# Android build status + finish-line recipe
+# Android build status + reproducible recipe
 
-This documents the Wednesday Android bring-up: what is done, the one remaining
-blocker, and the exact commands to finish. The desktop core is complete; this is
-the "shared engine on the phone" track.
+The "shared engine on the phone" track. Status: **the AnkiDroid APK now builds
+against our fork's engine and embeds it** — the desktop and phone run the same
+Rust backend (with the speedrun changes), which is what the PRD requires.
 
 ## What is done (verified)
 
 - `Anki-Android` and `Anki-Android-Backend` cloned as siblings under `~/dev/`.
-- Toolchain installed: Android SDK command-line tools, **NDK `29.0.14206865`**
-  (the version pinned in `Anki-Android-Backend/gradle/libs.versions.toml`),
-  `cargo-ndk 4.1.2`, Rust target `aarch64-linux-android`. Android Studio JBR used
-  as `JAVA_HOME`.
-- **The shared Rust engine cross-compiles for Android:**
-  `Anki-Android-Backend/rsdroid/build/generated/jniLibs/arm64-v8a/librsdroid.so`.
-- **The backend `.aar` + Robolectric `.jar` build cleanly** (`*** Build complete.`,
-  `BUILD SUCCESSFUL`):
-  - `Anki-Android-Backend/rsdroid/build/outputs/aar/rsdroid-release.aar`
-  - `Anki-Android-Backend/rsdroid-testing/build/libs/rsdroid-testing.jar`
-- AnkiDroid wired to consume the local backend: `Anki-Android/local.properties`
-  has `local_backend=true`, which makes `AnkiDroid/build.gradle` load the two
-  files above directly.
-- AnkiDroid builds through configuration, dependency resolution, and most Kotlin
-  compilation.
+- Toolchain: Android SDK cmdline-tools, **NDK `29.0.14206865`** (pinned in
+  `Anki-Android-Backend/gradle/libs.versions.toml`), `cargo-ndk 4.1.2`, Rust
+  target `aarch64-linux-android`, Android Studio JBR (Java 21) as `JAVA_HOME`.
+- **The backend `anki` submodule is repointed at THIS fork**, so the engine that
+  gets cross-compiled is ours (speedrun proto/service included).
+- **The engine cross-compiles for Android and the `.aar` is built from our fork:**
+  - `rsdroid/build/generated/jniLibs/arm64-v8a/librsdroid.so` (our engine)
+  - `rsdroid/build/outputs/aar/rsdroid-release.aar`
+  - `rsdroid-testing/build/libs/rsdroid-testing.jar`
+- **AnkiDroid builds a debug APK that embeds our engine:**
+  `AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk`
+  contains `lib/arm64-v8a/librsdroid.so` (48 MB stripped) — i.e. our shared Rust
+  backend, on the phone.
 
-## The one blocker: a version skew (not our code)
+## The one real incompatibility (and its fix)
 
-`./gradlew assemblePlayDebug` fails in `:libanki:compileDebugKotlin`:
+Our fork's Anki base is newer (≈26.05) than the Anki version this AnkiDroid
+checkout targets (`0.1.64-anki25.09.2`). The newer engine adds one filtered-deck
+sort order, `Order.RELATIVE_OVERDUENESS`, which AnkiDroid's `when` did not handle:
 
-    Deck.kt:127 'when' expression must be exhaustive.
-    Add the 'RELATIVE_OVERDUENESS' branch or an 'else' branch.
+    libanki/src/main/java/com/ichi2/anki/libanki/Deck.kt:127
+    'when' expression must be exhaustive. Add the 'RELATIVE_OVERDUENESS' branch...
 
-Cause: the two repos are at different Anki versions.
+That was the **only** Kotlin error across the whole build (Kotlin reports all
+errors in a module at once), which confirms the rest of our engine's API matches
+what this AnkiDroid expects. Fix = add the missing branch, using the translation
+that our engine already ships (`decks-relative-overdueness`):
 
-- AnkiDroid clone (`v2.25.0alpha1-119-g65577ec181`) targets backend
-  `0.1.64-anki25.09.2` (see `Anki-Android/gradle/libs.versions.toml`).
-- But `Anki-Android-Backend`'s `anki` submodule is at **26.05b1**, which added the
-  `Order.RELATIVE_OVERDUENESS` enum value that this AnkiDroid does not handle.
+```kotlin
+Order.RELATIVE_OVERDUENESS -> translations.decksRelativeOverdueness()
+```
 
-So the `.aar` we built contains upstream **26.05b1**, which both mismatches
-AnkiDroid and is not our engine. The fix aligns versions AND ships our engine.
-
-## Finish-line recipe (needs ~6-8 GB free disk)
-
-Point the backend's `anki` submodule at THIS fork (25.09.99 - same 25.09 line as
-AnkiDroid's expected 25.09.2), then rebuild.
+## Reproducible recipe (needs ~8-10 GB free disk)
 
 ```bash
-cd ~/dev/Anki-Android-Backend
-# Use a backend commit whose rsdroid bridge targets the 25.09 API (matches
-# AnkiDroid's 0.1.64-anki25.09.2), then point its anki submodule at our fork:
-cd anki
-git remote add fork /Users/katiehe/dev/soap
+# 1. Point the backend's anki submodule at our fork (has the speedrun engine).
+cd ~/dev/Anki-Android-Backend/anki
+git remote add fork /Users/katiehe/dev/soap   # once
 git fetch fork
-git checkout fork/main            # our fork @ 25.09.99 (has the speedrun engine)
-cd ..
+git checkout fork/main
 
+# 2. Build the .aar (cross-compiles our engine for arm64-v8a).
+cd ~/dev/Anki-Android-Backend
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/29.0.14206865"
-./build.sh                        # rebuilds .aar from our engine
+export PATH="$JAVA_HOME/bin:$PATH"
+./build.sh
 
+# 3. Tell AnkiDroid to consume the local .aar instead of the published backend.
+grep -q '^local_backend=true' ~/dev/Anki-Android/local.properties \
+  || echo 'local_backend=true' >> ~/dev/Anki-Android/local.properties
+
+# 4. Add the one enum branch in
+#    Anki-Android/libanki/src/main/java/com/ichi2/anki/libanki/Deck.kt
+#    (Order.toDisplayString): see snippet above.
+
+# 5. Build the APK.
 cd ~/dev/Anki-Android
-./gradlew assemblePlayDebug       # local_backend=true already set
+./gradlew assemblePlayDebug
+# -> AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
 ```
 
-If a residual enum/API mismatch remains, also check out `Anki-Android-Backend`
-itself at the tag matching `0.1.64-anki25.09.2` before repointing the submodule,
-so `rsdroid` targets the same engine API AnkiDroid expects.
+Only `arm64-v8a` carries our engine (that's the ABI we cross-compiled, and it's
+the right one for the Apple-silicon emulator and modern phones). The other ABI
+splits build but won't have `librsdroid.so`.
 
-APK output: `Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-debug.apk`.
+## Run it on the emulator
 
-## Emulator handoff (your step)
-
-An AVD named `Medium_Phone` already exists.
+An AVD named `Medium_Phone` already exists (arm64).
 
 ```bash
 export ANDROID_HOME="$HOME/Library/Android/sdk"
-"$ANDROID_HOME/emulator/emulator" -avd Medium_Phone &
+"$ANDROID_HOME/emulator/emulator" -avd Medium_Phone &     # or -no-window for headless
 "$ANDROID_HOME/platform-tools/adb" wait-for-device
+# wait until: adb shell getprop sys.boot_completed  -> 1
 "$ANDROID_HOME/platform-tools/adb" install -r \
-  ~/dev/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-debug.apk
+  ~/dev/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
 ```
 
-Then load the Exam P deck (export a `.colpkg` from desktop or use sync) and run a
-review session on the shared engine.
+Then load the Exam P deck (export a `.colpkg` from desktop or sync) and run a
+review session — it exercises the same scheduler/engine as desktop.
 
-## Note on disk
+## Notes
 
-The desktop + Android builds already use a lot of space on this machine
-(~7 GB free at last check). The rebuild above needs headroom; free space first if
-needed. This is why the final rebuild was deferred rather than run automatically.
+- The changes in step 1, 3, 4 live in the two external clones, not in this repo.
+  Keep them if you rebuild; `git checkout fork/main` in the submodule is what
+  swaps upstream Anki for our engine.
+- The desktop + Android builds are disk-hungry. Free regenerable caches
+  (`~/Library/Caches`, `~/.cache`, cargo tarball cache) before rebuilding if low.

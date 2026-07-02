@@ -1319,6 +1319,11 @@ title="{}" {}>{}</button>""".format(
 
         aqt.speedrun.show_readiness_dashboard(self)
 
+    def on_speedrun_study_map(self) -> None:
+        import aqt.speedrun
+
+        aqt.speedrun.show_study_map(self)
+
     def on_check_for_updates(self) -> None:
         from packaging.version import Version
 
@@ -1457,6 +1462,11 @@ title="{}" {}>{}</button>""".format(
         self.action_speedrun_readiness = QAction("Exam readiness (Speedrun)", self)
         m.menuTools.addAction(self.action_speedrun_readiness)
         qconnect(self.action_speedrun_readiness.triggered, self.on_speedrun_readiness)
+
+        # Tools: SOA Exam P study map / topic tree (Speedrun fork)
+        self.action_speedrun_study_map = QAction("Study map (Speedrun)", self)
+        m.menuTools.addAction(self.action_speedrun_study_map)
+        qconnect(self.action_speedrun_study_map.triggered, self.on_speedrun_study_map)
 
         # View
         qconnect(

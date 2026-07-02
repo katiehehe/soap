@@ -34,6 +34,14 @@ pub(crate) const POINTS_AT_STAKE_KEY: &str = "speedrunPointsAtStake";
 /// (weakest-topic-first).
 pub(crate) const SUBTOPIC_WEIGHTS_KEY: &str = "speedrunSubtopicWeights";
 
+/// Config key for the study-feature ABLATION (brief 8, build 2). When on (and
+/// the mastery scheduler is on), the within-unit interleaving tier is removed:
+/// a cleared subtopic drops straight into one global mixed pool instead of its
+/// unit's within-unit pool. Default off. This is the single flag that turns the
+/// full three-tier scheduler (build 1) into the ablated build (build 2); build
+/// 3 is plain Anki (mastery scheduler off).
+pub(crate) const ABLATE_WITHIN_UNIT_KEY: &str = "speedrunAblateWithinUnit";
+
 /// Pre-registered gate (PRD 8): a subtopic clears when it has been executed
 /// enough times, accurately, and its memory is strong.
 pub(crate) const MIN_PROBLEMS: u32 = 10;
@@ -349,34 +357,52 @@ pub(crate) fn study_priorities(stats: &[SubtopicStats]) -> Vec<StudyPriorityItem
 pub(crate) fn order_new_cards(
     cards: &[(CardId, String)],
     pools: &HashMap<String, Pool>,
+    ablate_within_unit: bool,
 ) -> Vec<CardId> {
-    fn rank(pool: Option<Pool>) -> u8 {
+    // Tier rank. Full (build 1): Blocked -> within-unit -> cross-unit. Ablated
+    // (build 2): the within-unit tier is removed, so every cleared subtopic
+    // collapses into a single mixed pool (rank 1). Unknown subtopics sort last.
+    let rank = |pool: Option<Pool>| -> u8 {
         match pool {
             Some(Pool::Blocked) => 0,
             Some(Pool::WithinUnit) => 1,
-            Some(Pool::CrossUnit) => 2,
+            Some(Pool::CrossUnit) => {
+                if ablate_within_unit {
+                    1
+                } else {
+                    2
+                }
+            }
             None => 3,
         }
-    }
-    // Precompute each card's tier rank once (a single hash lookup per card)
-    // rather than hashing the subtopic tag inside the O(n log n) comparator,
-    // which keeps ordering fast on a large new-card pool.
-    let mut keyed: Vec<(u8, &str, usize, CardId)> = cards
+    };
+    // Grouping key within a tier: Blocked practises one subtopic at a time (group
+    // by subtopic); the Full within-unit tier groups by UNIT so a unit's
+    // confusable cleared subtopics stay together (this IS the within-unit
+    // interleaving the ablation removes); the ablated mixed pool and the
+    // cross-unit spacing tier use no grouping, so cleared cards interleave
+    // globally in input order.
+    let group = |r: u8, pool: Option<Pool>, tag: &str| -> String {
+        if r == 0 {
+            tag.to_string()
+        } else if !ablate_within_unit && matches!(pool, Some(Pool::WithinUnit)) {
+            parse_subtopic_tag(tag).map(|(u, _)| u).unwrap_or_default()
+        } else {
+            String::new()
+        }
+    };
+    let mut keyed: Vec<(u8, String, usize, CardId)> = cards
         .iter()
         .enumerate()
-        .map(|(i, (cid, tag))| (rank(pools.get(tag).copied()), tag.as_str(), i, *cid))
+        .map(|(i, (cid, tag))| {
+            let pool = pools.get(tag).copied();
+            let r = rank(pool);
+            (r, group(r, pool, tag), i, *cid)
+        })
         .collect();
     keyed.sort_by(|a, b| {
-        // Tier first; within Blocked, group by subtopic tag so a subtopic is
-        // practised together; then fall back to stable input order.
         a.0.cmp(&b.0)
-            .then_with(|| {
-                if a.0 == 0 {
-                    a.1.cmp(b.1)
-                } else {
-                    std::cmp::Ordering::Equal
-                }
-            })
+            .then_with(|| a.1.cmp(&b.1))
             .then_with(|| a.2.cmp(&b.2))
     });
     keyed.into_iter().map(|(_, _, _, cid)| cid).collect()
@@ -595,6 +621,15 @@ impl Collection {
             .unwrap_or(false)
     }
 
+    /// Study-feature ablation switch (brief 8, build 2). When on, the
+    /// within-unit interleaving tier is removed from the new-card order.
+    /// Default false (build 1 = full three-tier scheduler). Only has an
+    /// effect when the mastery scheduler is also on.
+    pub(crate) fn speedrun_ablate_within_unit(&self) -> bool {
+        self.get_config_optional::<bool, _>(ABLATE_WITHIN_UNIT_KEY)
+            .unwrap_or(false)
+    }
+
     /// Map each note that carries a `subtopic::` tag to its first such tag.
     /// Used to attach a subtopic to each gathered new card for tier
     /// ordering.
@@ -642,6 +677,7 @@ impl Collection {
             .collect();
         let stats = self.speedrun_subtopic_stats(&all_subtopics)?;
         let pools = compute_pools(&stats);
+        let ablate = self.speedrun_ablate_within_unit();
 
         let empty = String::new();
         let cards: Vec<(CardId, String)> = new
@@ -653,7 +689,7 @@ impl Collection {
                 )
             })
             .collect();
-        let ordered = order_new_cards(&cards, &pools);
+        let ordered = order_new_cards(&cards, &pools, ablate);
 
         let mut by_id: HashMap<CardId, NewCard> = new.iter().map(|c| (c.id, *c)).collect();
         let reordered: Vec<NewCard> = ordered
@@ -829,8 +865,75 @@ mod tests {
             (CardId(3), "subtopic::gp::b".to_string()), // Blocked
             (CardId(4), "subtopic::unknown::z".to_string()), // unknown -> last
         ];
-        let ordered = order_new_cards(&cards, &pools);
+        let ordered = order_new_cards(&cards, &pools, false);
         assert_eq!(ordered, vec![CardId(3), CardId(2), CardId(1), CardId(4)]);
+    }
+
+    #[test]
+    fn full_scheduler_groups_within_unit_cleared_cards_by_unit() {
+        // Two units, each with a cleared (WithinUnit) subtopic + a blocking one,
+        // with cards input-interleaved across units. The FULL build groups each
+        // unit's within-unit cleared cards together (within-unit interleaving);
+        // the ABLATED build interleaves all cleared cards globally by input order.
+        let stats = vec![
+            stat("gp", "a", 12, 12, 0.95), // cleared -> WithinUnit (gp::b blocks)
+            stat("gp", "b", 0, 0, 0.0),    // blocked
+            stat("uv", "x", 12, 12, 0.95), // cleared -> WithinUnit (uv::y blocks)
+            stat("uv", "y", 0, 0, 0.0),    // blocked
+        ];
+        let pools = compute_pools(&stats);
+        let cards = vec![
+            (CardId(1), "subtopic::gp::a".to_string()),
+            (CardId(2), "subtopic::uv::x".to_string()),
+            (CardId(3), "subtopic::gp::a".to_string()),
+            (CardId(4), "subtopic::uv::x".to_string()),
+        ];
+        // Full: grouped by unit -> both gp cards, then both uv cards.
+        assert_eq!(
+            order_new_cards(&cards, &pools, false),
+            vec![CardId(1), CardId(3), CardId(2), CardId(4)]
+        );
+        // Ablated: within-unit tier removed -> global interleave in input order.
+        assert_eq!(
+            order_new_cards(&cards, &pools, true),
+            vec![CardId(1), CardId(2), CardId(3), CardId(4)]
+        );
+    }
+
+    #[test]
+    fn ablated_collapses_within_and_cross_into_one_mixed_pool() {
+        // gp::a is WithinUnit (gp::b blocks its unit); uv::x is CrossUnit (uv is
+        // fully mastered). Full serves the within-unit card before the cross-unit
+        // card; ablated treats both as one mixed pool, so input order decides.
+        let stats = vec![
+            stat("gp", "a", 12, 12, 0.95),
+            stat("gp", "b", 0, 0, 0.0),
+            stat("uv", "x", 12, 12, 0.95), // uv's only subtopic -> CrossUnit
+        ];
+        let pools = compute_pools(&stats);
+        let cards = vec![
+            (CardId(1), "subtopic::uv::x".to_string()), // CrossUnit
+            (CardId(2), "subtopic::gp::a".to_string()), // WithinUnit
+        ];
+        // Full: WithinUnit (rank 1) before CrossUnit (rank 2).
+        assert_eq!(
+            order_new_cards(&cards, &pools, false),
+            vec![CardId(2), CardId(1)]
+        );
+        // Ablated: both cleared -> one mixed pool -> input order preserved.
+        assert_eq!(
+            order_new_cards(&cards, &pools, true),
+            vec![CardId(1), CardId(2)]
+        );
+    }
+
+    #[test]
+    fn ablate_within_unit_flag_defaults_off_and_is_settable() {
+        let mut col = Collection::new();
+        assert!(!col.speedrun_ablate_within_unit());
+        col.set_config_json(ABLATE_WITHIN_UNIT_KEY, &true, false)
+            .unwrap();
+        assert!(col.speedrun_ablate_within_unit());
     }
 
     #[test]

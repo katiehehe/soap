@@ -21,9 +21,15 @@ straight into a single global mixed pool.
    is the same engine with the middle tier collapsed.
 3. **Plain Anki** — stock new-card order (no topic-aware ordering).
 
-Implementation note: builds 1 and 2 differ only by a flag on the ordering
-function; keep the flag out of the demo path (default = Full). Build 3 = upstream
-ordering.
+Implementation note: builds 1 and 2 differ only by a single flag, now
+implemented. All three builds run on the same engine, selected by two config
+keys (both default off, so the demo path is Full-off = plain Anki):
+
+- **Build 1 (Full):** `speedrunMasteryScheduler = true`, `speedrunAblateWithinUnit = false`.
+- **Build 2 (Ablated):** `speedrunMasteryScheduler = true`, `speedrunAblateWithinUnit = true`
+  — `order_new_cards(..., ablate_within_unit=true)` collapses every cleared
+  subtopic into one global mixed pool, removing the within-unit tier.
+- **Build 3 (Plain Anki):** `speedrunMasteryScheduler = false` — upstream ordering.
 
 ## Pre-registered hypothesis
 
@@ -50,6 +56,13 @@ Direction: Full > Ablated ≥ Plain on the primary metric. We report the result
 ## What "setup today" covers
 
 - This pre-registration (done).
-- The ordering function already exists and is unit-tested; the ablation is a
-  one-flag variant to add Sunday (kept off the demo path).
+- The ordering function exists and is unit-tested, and the ablation is now
+  implemented: `order_new_cards` takes an `ablate_within_unit` flag, driven by the
+  `speedrunAblateWithinUnit` config key (default off, kept off the demo path). The
+  Full-vs-Ablated ordering difference is covered by Rust tests
+  (`full_scheduler_groups_within_unit_cleared_cards_by_unit`,
+  `ablated_collapses_within_and_cross_into_one_mixed_pool`).
 - The held-out splitter + leakage scan already exist and are re-runnable.
+- Remaining for Sunday: RUN the three builds at equal study time and report the
+  pre-registered metric (accuracy on held-out confusable sub-types), including
+  nulls.

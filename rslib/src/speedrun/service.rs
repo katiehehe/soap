@@ -215,7 +215,9 @@ impl crate::services::SpeedrunService for Collection {
         let stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
         let pools = compute_pools(&stats);
         let cards = self.speedrun_new_cards_with_subtopic(&input.expected_subtopics)?;
-        let ordered = order_new_cards(&cards, &pools);
+        // The RPC reports the full three-tier order; the ablated variant is a
+        // live-queue-only experiment flag (see speedrun_reorder_new_cards).
+        let ordered = order_new_cards(&cards, &pools, false);
         Ok(MasteryOrderedCards {
             card_ids: ordered.into_iter().map(|c| c.0).collect(),
         })

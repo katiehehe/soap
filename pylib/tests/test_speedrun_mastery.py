@@ -153,3 +153,22 @@ def test_undo_works_with_speedrun_scheduler_flags_on():
     assert col.db.scalar("select count() from revlog") == before + 1
     col.undo()
     assert col.db.scalar("select count() from revlog") == before
+
+
+def test_ablation_build_configs_build_a_valid_queue():
+    # The study-feature ablation runs three builds off two config flags. Build 1
+    # (Full) and Build 2 (Ablated) differ only by speedrunAblateWithinUnit; both
+    # must build a valid queue. The ordering *difference* is covered by Rust unit
+    # tests (a fresh deck is all-Blocked, so orders coincide here).
+    col = getEmptyCol()
+    build_deck(col)
+    col.set_config("speedrunMasteryScheduler", True)
+    col.decks.select(col.decks.id("SOA Exam P"))
+
+    col.set_config("speedrunAblateWithinUnit", False)  # Build 1: Full
+    col.reset()
+    assert col.sched.getCard() is not None
+
+    col.set_config("speedrunAblateWithinUnit", True)  # Build 2: Ablated
+    col.reset()
+    assert col.sched.getCard() is not None

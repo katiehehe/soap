@@ -24,7 +24,9 @@ Format: `path - what changed - merge risk (low/med/high)`.
   `Authorization` header injection (2 entries) - med. All append-only additions.
 - `qt/aqt/main.py` - add two Tools-menu `QAction`s in `setupMenus()`
   (`Exam readiness`, `Study map`) plus `on_speedrun_readiness()` and
-  `on_speedrun_study_map()` methods - med.
+  `on_speedrun_study_map()` methods, and one `aqt.speedrun.register_reviewer_banner()`
+  call in `setupMenus()` to register the review-time mastery-tier banner hooks - med.
+  All append-only.
 - `qt/aqt/webview.py` - add `SPEEDRUN` to the `AnkiWebViewKind` enum and include it
   in the API-access list in `AnkiWebPage._profileForPage()` (2 entries) - med. Both
   append-only; without this the speedrun pages get "Unexpected API access"/403.

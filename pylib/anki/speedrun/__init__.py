@@ -69,6 +69,32 @@ def subtopic_weights(topics: dict[str, Any] | None = None) -> list[tuple[str, fl
     return weights
 
 
+def deck_name_for_subtopic_tag(
+    tag: str, root: str = "SOA Exam P", topics: dict[str, Any] | None = None
+) -> str | None:
+    """Deck name for a ``subtopic::<unit>::<sub>`` tag, matching how ``build_deck``
+    names its subdecks (``root::unit name::subtopic name``).
+
+    Used to open a subtopic's deck for blocked practice from the study map.
+    Returns None for a malformed or unknown tag.
+    """
+    parts = tag.split("::")
+    if len(parts) != 3 or parts[0] != "subtopic":
+        return None
+    _, unit_id, subtopic_id = parts
+    topics = topics or load_topics()
+    try:
+        return "::".join(
+            [
+                root,
+                unit_name(unit_id, topics),
+                subtopic_name(unit_id, subtopic_id, topics),
+            ]
+        )
+    except KeyError:
+        return None
+
+
 def apply_subtopic_weights_config(
     col: Any, topics: dict[str, Any] | None = None
 ) -> None:

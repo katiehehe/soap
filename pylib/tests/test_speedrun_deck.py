@@ -1,9 +1,27 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-from anki.speedrun import expected_subtopic_tags, subtopic_tag
+from anki.speedrun import (
+    deck_name_for_subtopic_tag,
+    expected_subtopic_tags,
+    subtopic_tag,
+)
 from anki.speedrun.seed import SEED_CARDS, build_deck
 from tests.shared import getEmptyCol
+
+
+def test_deck_name_for_subtopic_tag_matches_built_decks():
+    # The study map opens a subtopic's deck for blocked practice by name, so the
+    # helper must resolve to a deck that build_deck actually created.
+    col = getEmptyCol()
+    build_deck(col)
+    for tag in expected_subtopic_tags():
+        name = deck_name_for_subtopic_tag(tag)
+        assert name is not None and name.startswith("SOA Exam P::")
+        assert col.decks.by_name(name) is not None, name
+    # malformed / unknown tags resolve to None (never a wrong deck)
+    assert deck_name_for_subtopic_tag("not-a-tag") is None
+    assert deck_name_for_subtopic_tag("subtopic::nope::nope") is None
 
 
 def test_build_deck_covers_all_three_units():

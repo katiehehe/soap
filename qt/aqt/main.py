@@ -1468,6 +1468,11 @@ title="{}" {}>{}</button>""".format(
         m.menuTools.addAction(self.action_speedrun_study_map)
         qconnect(self.action_speedrun_study_map.triggered, self.on_speedrun_study_map)
 
+        # Speedrun: show the current card's mastery tier during review.
+        import aqt.speedrun
+
+        aqt.speedrun.register_reviewer_banner()
+
         # View
         qconnect(
             m.actionZoomIn.triggered,

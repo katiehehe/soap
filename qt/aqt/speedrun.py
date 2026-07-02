@@ -10,11 +10,19 @@ RPC, the three-layer topic tree with mastery-coloured edges).
 
 from __future__ import annotations
 
+import json
+from typing import TYPE_CHECKING
+
 import aqt
 import aqt.main
-from aqt.qt import QDialog, Qt, QVBoxLayout
+from aqt import gui_hooks
+from aqt.qt import QDialog, Qt, QTimer, QVBoxLayout
 from aqt.utils import disable_help_button, restoreGeom, saveGeom
 from aqt.webview import AnkiWebView, AnkiWebViewKind
+
+if TYPE_CHECKING:
+    from anki.cards import Card
+    from anki.collection import Collection
 
 
 class ReadinessDialog(QDialog):
@@ -65,9 +73,37 @@ class StudyMapDialog(QDialog):
         self.setLayout(layout)
 
         restoreGeom(self, self.name, default_size=(820, 860))
+        self.web.set_bridge_command(self._on_bridge_cmd, self)
         self.web.load_sveltekit_page("study-map")
         self.show()
         self.activateWindow()
+
+    def _on_bridge_cmd(self, cmd: str) -> None:
+        # The study map requests blocked practice on a subtopic's deck.
+        prefix = "speedrun-study:"
+        if cmd.startswith(prefix):
+            self._study_subtopic(cmd[len(prefix) :])
+
+    def _study_subtopic(self, tag: str) -> None:
+        from anki.speedrun import deck_name_for_subtopic_tag
+
+        name = deck_name_for_subtopic_tag(tag)
+        if not name:
+            return
+        deck_id = self.mw.col.decks.id_for_name(name)
+        if deck_id is None:
+            return
+
+        def start() -> None:
+            # Studying just this subtopic's deck IS blocked practice.
+            self.mw.col.decks.select(deck_id)
+            self.close()
+            self.mw.col.startTimebox()
+            self.mw.moveToState("review")
+
+        # Defer so we don't tear down this webview from inside its own bridge
+        # callback.
+        QTimer.singleShot(0, start)
 
     def reject(self) -> None:
         if self.web:
@@ -79,3 +115,85 @@ class StudyMapDialog(QDialog):
 
 def show_study_map(mw: aqt.main.AnkiQt) -> None:
     StudyMapDialog(mw)
+
+
+# --- Reviewer mastery-tier banner ----------------------------------------
+# Surfaces which tier the current card's subtopic is in during review
+# (Blocked / Within-unit / Cross-unit), so the tier is visible rather than an
+# invisible reorder. Registered once from main.py; read-only (no writes).
+
+_TIER_LABELS: dict[int, tuple[str, str]] = {
+    0: ("Blocked practice", "#e0a552"),  # build procedure in isolation
+    1: ("Within-unit interleaving", "#6486bf"),  # train recognition
+    2: ("Cross-unit review", "#57a37c"),  # spacing
+}
+
+
+def _tier_banner_enabled(col: Collection) -> bool:
+    return bool(col.get_config("speedrunTierBanner", True))
+
+
+def _current_subtopic_tag(card: Card) -> str | None:
+    return next((t for t in card.note().tags if t.startswith("subtopic::")), None)
+
+
+def _tier_for_tag(col: Collection, tag: str) -> tuple[str, str] | None:
+    from anki.speedrun import expected_subtopic_tags, subtopic_name
+
+    state = col._backend.get_mastery_state(
+        expected_subtopics=expected_subtopic_tags(), units=[], subtopic_weights=[]
+    )
+    pool = next((s.pool for s in state.subtopics if s.tag == tag), None)
+    if pool is None:
+        return None
+    label, color = _TIER_LABELS.get(pool, _TIER_LABELS[0])
+    parts = tag.split("::")
+    try:
+        name = subtopic_name(parts[1], parts[2])
+    except (IndexError, KeyError):
+        name = tag
+    return (f"{label} · {name}", color)
+
+
+def _show_tier_banner(card: Card) -> None:
+    mw = aqt.mw
+    if mw is None or mw.col is None or mw.reviewer is None or mw.reviewer.web is None:
+        return
+    if not _tier_banner_enabled(mw.col):
+        _clear_tier_banner()
+        return
+    tag = _current_subtopic_tag(card)
+    info = _tier_for_tag(mw.col, tag) if tag else None
+    if info is None:
+        _clear_tier_banner()
+        return
+    text, color = info
+    js = (
+        "(function(){var b=document.getElementById('speedrun-tier');"
+        "if(!b){b=document.createElement('div');b.id='speedrun-tier';"
+        "b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:2147483647;"
+        "text-align:center;font:600 12px sans-serif;padding:4px 6px;"
+        "pointer-events:none;';document.body.appendChild(b);}"
+        f"b.textContent={json.dumps(text)};"
+        f"b.style.color={json.dumps(color)};"
+        f"b.style.background={json.dumps(color + '22')};"
+        f"b.style.borderBottom='2px solid '+{json.dumps(color)};"
+        "})();"
+    )
+    mw.reviewer.web.eval(js)
+
+
+def _clear_tier_banner(*_args: object) -> None:
+    mw = aqt.mw
+    if mw is None or mw.reviewer is None or mw.reviewer.web is None:
+        return
+    mw.reviewer.web.eval(
+        "var b=document.getElementById('speedrun-tier'); if(b){b.remove();}"
+    )
+
+
+def register_reviewer_banner() -> None:
+    """Register the review-time mastery-tier banner hooks. Call once at startup."""
+    gui_hooks.reviewer_did_show_question.append(_show_tier_banner)
+    gui_hooks.reviewer_did_show_answer.append(_show_tier_banner)
+    gui_hooks.reviewer_will_end.append(_clear_tier_banner)

@@ -5,6 +5,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <script lang="ts">
     import { onMount } from "svelte";
 
+    import { bridgeCommand } from "@tslib/bridgecommand";
     import { computeReadiness, getMasteryState } from "@generated/backend";
     import type {
         MasteryState,
@@ -161,6 +162,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     function selectUnit(node: UnitNode): void {
         selectedUnit = node;
         selectedLeaf = null;
+    }
+    function studySubtopic(tag: string): void {
+        // Ask the desktop to open this subtopic's deck for blocked practice.
+        bridgeCommand("speedrun-study:" + tag);
     }
 </script>
 
@@ -420,6 +425,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         {@const m = ev(selectedLeaf.tag)}
         {@const c = colorFor(leafProgress(m), leafCleared(selectedLeaf.tag))}
         {@const enough = hasEnoughEvidence(m)}
+        {@const studyTag = selectedLeaf.tag}
         <section class="detail">
             <div class="detail-head">
                 <div>
@@ -480,6 +486,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     gate.
                 {/if}
             </p>
+            <button class="study-btn" on:click={() => studySubtopic(studyTag)}>
+                Study this subtopic (blocked practice)
+            </button>
         </section>
     {:else}
         <p class="empty-hint">
@@ -775,6 +784,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin: 0.75rem 0 0;
         font-size: 0.82rem;
         color: var(--fg-subtle, #6b7280);
+    }
+    .study-btn {
+        margin-top: 0.9rem;
+        width: 100%;
+        padding: 0.55rem 0.75rem;
+        border: none;
+        border-radius: 8px;
+        background: #6486bf;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .study-btn:hover {
+        filter: brightness(1.05);
     }
     .empty-hint {
         margin-top: 1.25rem;

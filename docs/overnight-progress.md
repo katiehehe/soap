@@ -373,3 +373,29 @@ let the user (A) go beyond it and (B) know if they're on track.
 - Verified GREEN: `cargo test -p anki speedrun::` (51 tests), `check:vitest`,
   `check:svelte`, `check:pytest:pylib`, `check:pytest:aqt`, full
   `check:format`/`check:eslint`/`check:ruff`/`check:clippy`, and study-map e2e.
+
+### Follow-up round 8: blocked practice carries through REVIEWS (not just new)
+
+Answers "shouldn't reviews be blocked too, until mastery?" — yes, for the
+pre-mastery phase. The mastery scheduler previously tier-ordered only the
+new-card stream; reviews were FSRS-timed (+ optional points-at-stake). Now, when
+`speedrunMasteryScheduler` is on, it ALSO tier-orders the due-review queue.
+
+- Engine: new `speedrun_reorder_review_cards_by_tier` (rslib mastery.rs) reuses
+  the exact new-card tier order (`order_new_cards`) + the same within-unit
+  ablation flag, applied to `Vec<DueCard>`. A not-yet-mastered subtopic's due
+  cards are grouped/served first (blocked drill) → within-unit → cross-unit, and
+  only interleave once the subtopic clears its gate. Read-only (stable reorder):
+  FSRS intervals + undo untouched.
+- `build_queues`: added a third opt-in hook after points-at-stake, gated by
+  `speedrunMasteryScheduler`. Ordering runs stakes-then-tier, so the tier is
+  primary and points-at-stake breaks ties within a tier.
+- Pedagogy note: this matches the thesis — block for acquisition, interleave for
+  retention. Blocking is applied only while a subtopic is pre-mastery (Blocked
+  pool); once it clears, its reviews interleave (within-unit → cross-unit).
+  Timing is left to FSRS (we only reorder), so nothing over-studies or fights
+  the scheduler.
+- Tests: +2 Rust (review tier grouping of blocked subtopics; noop without
+  syllabus cards). Undo still clean with both flags on (existing Python test).
+- Verified GREEN: `cargo test -p anki speedrun::` (53 tests),
+  `check:format:rust`, `check:clippy`, `check:pytest:pylib`.

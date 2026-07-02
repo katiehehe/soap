@@ -90,6 +90,9 @@ def main() -> int:
             "ANKI_BASE": str(base),
             "ANKI_API_PORT": str(MEDIASRV_PORT),
             "ANKI_SINGLE_INSTANCE_KEY": f"anki-e2e-{base.name}",
+            # Speedrun fork: don't auto-seed the SOA deck in e2e, so the tests
+            # can exercise the empty-collection give-up/honesty states.
+            "ANKI_SPEEDRUN_NOSEED": "1",
             # Documented testing escape: makes _have_api_access() return True
             # for all /_anki/* requests so external clients (Playwright's own
             # Chromium) can hit the API without injecting Authorization

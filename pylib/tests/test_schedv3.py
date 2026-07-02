@@ -2,14 +2,8 @@
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import copy
-import os
 import time
-from collections.abc import Callable
-from typing import Dict
 
-import pytest
-
-from anki import hooks
 from anki.consts import *
 from anki.lang import without_unicode_isolation
 from anki.scheduler import UnburyDeck

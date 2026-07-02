@@ -12,9 +12,10 @@ original and uses standard results (no copyrighted exam items).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from anki.speedrun import (
+    apply_prereqs_config,
     apply_subtopic_weights_config,
     difficulty_tag,
     load_topics,
@@ -29,6 +30,19 @@ if TYPE_CHECKING:
 
 ROOT_DECK = "SOA Exam P"
 
+# Per-collection flag so the (non-optional) deck is seeded exactly once.
+SEEDED_KEY = "speedrunSeeded"
+
+# Notetype for numerical / short-computed questions: the student TYPES the answer
+# ({{type:Answer}}) instead of just flipping a flashcard. Memorization cards keep
+# the built-in "Basic" front/back reveal. This matches how the exam actually
+# tests (compute a value) and the non-flashcard format AI-generated practice uses.
+SHORT_ANSWER_NOTETYPE = "SOA Short Answer"
+
+# SeedCard.kind values.
+KIND_RECALL = "recall"  # memorization -> flashcard (Basic)
+KIND_NUMERIC = "numeric"  # compute / short typed answer -> {{type:Answer}}
+
 
 class SeedCard(NamedTuple):
     unit_id: str
@@ -36,6 +50,17 @@ class SeedCard(NamedTuple):
     difficulty: str
     front: str
     back: str
+    # "recall" (flashcard) by default. "numeric" makes it a typed short-answer
+    # card: `answer` is the concise value the student types, and the fuller
+    # derivation in `back` becomes the explanation shown after answering.
+    kind: str = KIND_RECALL
+    answer: str = ""
+
+
+def format_tag(kind: str) -> str:
+    """Tag marking a card's format so the reviewer/analytics can tell typed
+    short-answer cards from flashcards."""
+    return "format::short_answer" if kind == KIND_NUMERIC else "format::flashcard"
 
 
 # A starter deck spanning every subtopic in the official outline, with a mix of
@@ -63,6 +88,8 @@ SEED_CARDS: list[SeedCard] = [
         "easy",
         "In how many ways can you choose 3 items from 10 when order does not matter?",
         "C(10, 3) = 10! / (3! 7!) = 120.",
+        kind=KIND_NUMERIC,
+        answer="120",
     ),
     SeedCard(
         "general",
@@ -70,6 +97,8 @@ SEED_CARDS: list[SeedCard] = [
         "medium",
         "From 5 men and 4 women, how many committees of 2 men and 2 women are possible?",
         "C(5, 2) * C(4, 2) = 10 * 6 = 60.",
+        kind=KIND_NUMERIC,
+        answer="60",
     ),
     SeedCard(
         "general",
@@ -84,6 +113,8 @@ SEED_CARDS: list[SeedCard] = [
         "medium",
         "A and B are independent with P(A) = 0.3, P(B) = 0.5. Find P(A or B).",
         "P(A or B) = 0.3 + 0.5 - (0.3)(0.5) = 0.65.",
+        kind=KIND_NUMERIC,
+        answer="0.65",
     ),
     SeedCard(
         "general",
@@ -112,6 +143,8 @@ SEED_CARDS: list[SeedCard] = [
         "medium",
         "Given P(A and B) = 0.2 and P(B) = 0.4, find P(A | B).",
         "P(A | B) = 0.2 / 0.4 = 0.5.",
+        kind=KIND_NUMERIC,
+        answer="0.5",
     ),
     SeedCard(
         "general",
@@ -127,6 +160,8 @@ SEED_CARDS: list[SeedCard] = [
         "A disease affects 1% of people. A test is 99% sensitive and 95% specific. "
         "Given a positive test, find P(disease).",
         "P = (0.99)(0.01) / [(0.99)(0.01) + (0.05)(0.99)] = 0.0099 / 0.0594 ~= 0.167.",
+        kind=KIND_NUMERIC,
+        answer="0.167",
     ),
     # --- Univariate Random Variables ---
     SeedCard(
@@ -198,6 +233,8 @@ SEED_CARDS: list[SeedCard] = [
         "medium",
         "For X ~ Poisson(3), find P(X = 0).",
         "P(X = 0) = e^(-3) ~= 0.0498.",
+        kind=KIND_NUMERIC,
+        answer="0.0498",
     ),
     SeedCard(
         "univariate",
@@ -219,6 +256,8 @@ SEED_CARDS: list[SeedCard] = [
         "medium",
         "X ~ Uniform(0, 1) and Y = -ln(X). Identify the distribution of Y.",
         "Y ~ Exponential(1): F_Y(y) = 1 - e^(-y) for y > 0.",
+        kind=KIND_NUMERIC,
+        answer="Exponential(1)",
     ),
     SeedCard(
         "univariate",
@@ -339,16 +378,45 @@ SEED_CARDS: list[SeedCard] = [
         "hard",
         "n = 100 iid values with mu = 50, sigma = 10. Approximate P(Xbar > 52).",
         "SE = 10 / sqrt(100) = 1; Z = (52 - 50) / 1 = 2; P(Z > 2) ~= 0.0228.",
+        kind=KIND_NUMERIC,
+        answer="0.0228",
     ),
 ]
 
 
+def ensure_short_answer_notetype(col: Collection) -> Any:
+    """Get (or create) the "SOA Short Answer" notetype: Front / Answer /
+    Explanation, with a ``{{type:Answer}}`` typed-input template so numerical
+    questions are answered by typing, not flipping. Idempotent."""
+    existing = col.models.by_name(SHORT_ANSWER_NOTETYPE)
+    if existing is not None:
+        return existing
+    mm = col.models
+    notetype = mm.new(SHORT_ANSWER_NOTETYPE)
+    for field_name in ("Front", "Answer", "Explanation"):
+        mm.add_field(notetype, mm.new_field(field_name))
+    template = mm.new_template("Card 1")
+    template["qfmt"] = '{{Front}}\n\n<hr class="sa-rule">\n\n{{type:Answer}}'
+    template["afmt"] = (
+        '{{Front}}\n\n<hr id="answer">\n\n{{type:Answer}}\n\n'
+        '{{#Explanation}}<div class="sa-expl">{{Explanation}}</div>{{/Explanation}}'
+    )
+    mm.add_template(notetype, template)
+    mm.add(notetype)  # mutates `notetype` with its new id + ordinals
+    return notetype
+
+
 def build_deck(col: Collection, root: str = ROOT_DECK) -> int:
-    """Create the tagged Exam P deck in ``col``. Returns the number of cards added."""
+    """Create the tagged Exam P deck in ``col``. Returns the number of cards added.
+
+    Numerical questions become typed short-answer cards (SOA Short Answer,
+    ``{{type:Answer}}``); memorization stays flashcard (Basic front/back).
+    """
     topics = load_topics()
-    notetype = col.models.by_name("Basic")
-    if notetype is None:
+    basic = col.models.by_name("Basic")
+    if basic is None:
         raise RuntimeError("Basic notetype not found in collection")
+    short_answer = ensure_short_answer_notetype(col)
 
     added = 0
     for card in SEED_CARDS:
@@ -361,15 +429,42 @@ def build_deck(col: Collection, root: str = ROOT_DECK) -> int:
         )
         deck_id = col.decks.id(deck_name)
         assert deck_id is not None
-        note = col.new_note(notetype)
-        note["Front"] = card.front
-        note["Back"] = card.back
+        if card.kind == KIND_NUMERIC:
+            note = col.new_note(short_answer)
+            note["Front"] = card.front
+            note["Answer"] = card.answer
+            note["Explanation"] = card.back
+        else:
+            note = col.new_note(basic)
+            note["Front"] = card.front
+            note["Back"] = card.back
         note.add_tag(unit_tag(card.unit_id))
         note.add_tag(subtopic_tag(card.unit_id, card.subtopic_id))
         note.add_tag(difficulty_tag(card.difficulty))
+        note.add_tag(format_tag(card.kind))
         col.add_note(note, deck_id)
         added += 1
     # Make the per-subtopic weights available to the engine's points-at-stake
     # live review order (ordering only; never affects any score).
     apply_subtopic_weights_config(col, topics)
+    # Write the guided-learning DAG (subtopic/unit prerequisites) so the live
+    # new-card gate can lock topics until their prerequisites are satisfied.
+    apply_prereqs_config(col, topics)
     return added
+
+
+def seed_if_missing(col: Collection) -> bool:
+    """Ensure the (non-optional) SOA Exam P deck exists: the app auto-builds it on
+    first open so the user never sees an empty collection. Runs once per
+    collection, guarded by ``SEEDED_KEY``; safe to call on every collection load
+    (including profile switches). Returns True only if it built the deck now.
+    """
+    if col.get_config(SEEDED_KEY, False):
+        return False
+    if col.decks.id_for_name(ROOT_DECK) is not None:
+        # Already present (e.g. imported) — just record it so we don't rebuild.
+        col.set_config(SEEDED_KEY, True)
+        return False
+    build_deck(col)
+    col.set_config(SEEDED_KEY, True)
+    return True

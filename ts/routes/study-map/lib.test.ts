@@ -6,6 +6,7 @@ import { describe, expect, test } from "vitest";
 import type { Circle, SubtopicEvidence } from "./lib";
 import type { PaceView } from "./lib";
 import {
+    arrowHead,
     borderPoint,
     computeLayout,
     edgeBetween,
@@ -15,8 +16,11 @@ import {
     leafStatus,
     MIN_PROBLEMS,
     paceTone,
+    prereqChain,
+    prereqEdges,
     statusLabel,
     subRadius,
+    subtopicTag,
     TAXONOMY,
     TIER,
     tierMeta,
@@ -217,6 +221,59 @@ describe("today's tiered study plan", () => {
         );
         expect(new Set(labels).size).toBe(3);
         expect(tierMeta(TIER.blocked).label).toMatch(/blocked/i);
+    });
+});
+
+describe("prerequisite DAG", () => {
+    test("every subtopic prereq references a real subtopic in the same unit", () => {
+        for (const u of TAXONOMY) {
+            const ids = new Set(u.subtopics.map((s) => s.id));
+            for (const s of u.subtopics) {
+                for (const p of s.prereqs) {
+                    expect(ids.has(p), `${u.id}:${s.id} -> ${p}`).toBe(true);
+                }
+            }
+        }
+    });
+
+    test("prereq edges touch both bubble borders and carry an arrowhead", () => {
+        const edges = prereqEdges(layout);
+        expect(edges.length).toBeGreaterThan(0);
+        const onBorder = (x: number, y: number, c: Circle): boolean =>
+            Math.abs(Math.hypot(x - c.x, y - c.y) - c.r) < 0.001;
+        const leafByTag = new Map(
+            layout.units.flatMap((u) => u.subs.map((s) => [s.tag, s])),
+        );
+        for (const e of edges.filter((e) => e.kind === "subtopic")) {
+            const from = leafByTag.get(e.from)!;
+            const to = leafByTag.get(e.to)!;
+            expect(onBorder(e.geom.x1, e.geom.y1, from), `${e.from} tail`).toBe(true);
+            expect(onBorder(e.geom.x2, e.geom.y2, to), `${e.to} head`).toBe(true);
+            // Arrowhead is a 3-point polygon whose tip sits at the edge end.
+            const pts = arrowHead(e.geom).split(" ");
+            expect(pts).toHaveLength(3);
+            const [tx, ty] = pts[0].split(",").map(Number);
+            expect(tx).toBeCloseTo(e.geom.x2);
+            expect(ty).toBeCloseTo(e.geom.y2);
+        }
+    });
+
+    test("unit arrows encode general -> univariate -> multivariate", () => {
+        const unitEdges = prereqEdges(layout).filter((e) => e.kind === "unit");
+        const pairs = unitEdges.map((e) => `${e.from}->${e.to}`);
+        expect(pairs).toContain("unit::general->unit::univariate");
+        expect(pairs).toContain("unit::univariate->unit::multivariate");
+    });
+
+    test("prereqChain returns ancestors to do first and dependents unlocked", () => {
+        // general: sets_axioms -> add_mult_rules -> conditional -> bayes.
+        const bayes = subtopicTag("general", "bayes");
+        const sets = subtopicTag("general", "sets_axioms");
+        const chain = prereqChain(subtopicTag("general", "conditional"));
+        expect(chain.ancestors.has(sets)).toBe(true); // must be done first
+        expect(chain.descendants.has(bayes)).toBe(true); // unlocks afterwards
+        // A root has no ancestors.
+        expect(prereqChain(sets).ancestors.size).toBe(0);
     });
 });
 

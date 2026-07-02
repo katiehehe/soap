@@ -24,8 +24,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         UnitMastery,
     } from "@generated/anki/speedrun_pb";
 
-    import type { LeafNode, PaceView, SubtopicEvidence, UnitNode } from "./lib";
+    import type {
+        LeafNode,
+        PaceView,
+        PrereqEdge,
+        SubtopicEvidence,
+        UnitNode,
+    } from "./lib";
     import {
+        arrowHead,
         COLORS,
         computeLayout,
         edgeBetween,
@@ -34,14 +41,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         leafProgress,
         MIN_PROBLEMS,
         paceTone,
+        prereqChain,
+        prereqEdges,
         statusLabel,
         subtopicTag,
         TAXONOMY,
+        UNIT_PREREQS,
     } from "./lib";
 
     const layout = computeLayout();
     const { center, units } = layout;
     const allTags = units.flatMap((u) => u.subs.map((s) => s.tag));
+    // Directed prerequisite arrows, computed once from the fixed geometry.
+    const prereqArrows = prereqEdges(layout);
+    // "Show prerequisites" is on by default so the guided order is visible.
+    let showPrereqs = true;
 
     // Weights mirror pylib/anki/speedrun/exam_p_topics.json, passed to the engine
     // so the weighted mastery rollup and the study priorities line up with the
@@ -60,10 +74,30 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     );
     const UNIT_NAME_BY_ID = new Map(TAXONOMY.map((u) => [u.id, u.name]));
 
+    // The guided-learning DAG, sent to the engine so what the map draws and what
+    // the scheduler gates on come from one source. Curriculum order only.
+    const SUBTOPIC_PREREQS = TAXONOMY.flatMap((u) =>
+        u.subtopics.map((s) => ({
+            tag: subtopicTag(u.id, s.id),
+            prereqs: s.prereqs.map((p) => subtopicTag(u.id, p)),
+        })),
+    );
+    const UNIT_PREREQS_REQ = TAXONOMY.map((u) => ({
+        unitId: u.id,
+        prereqs: UNIT_PREREQS[u.id] ?? [],
+    }));
+
     const GREY = COLORS.grey;
     const AMBER = COLORS.amber;
     const GREEN = COLORS.green;
     const ACCENT = COLORS.accent;
+
+    // Which sections to render. The home shell shows the map on one tab
+    // (variant "map") and the plan/pace/mastery panels on the Readiness & stats
+    // tab (variant "panels"); the standalone /study-map route shows everything.
+    export let variant: "map" | "panels" | "full" = "full";
+    $: showMap = variant !== "panels";
+    $: showPanels = variant !== "map";
 
     let result: MasteryState | null = null;
     let readiness: ReadinessResult | null = null;
@@ -78,30 +112,37 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let viewportWidth = 0;
     $: scale = viewportWidth > 0 ? Math.min(1, viewportWidth / layout.width) : 1;
 
-    onMount(async () => {
+    async function loadState(): Promise<void> {
         try {
             [result, readiness, studyPlan, pace] = await Promise.all([
                 getMasteryState({
                     expectedSubtopics: allTags,
                     units: UNIT_WEIGHTS,
                     subtopicWeights: SUBTOPIC_WEIGHTS,
+                    subtopicPrereqs: SUBTOPIC_PREREQS,
+                    unitPrereqs: UNIT_PREREQS_REQ,
                 }),
                 computeReadiness({ expectedSubtopics: allTags, units: UNIT_WEIGHTS }),
                 getStudyPlan({
                     expectedSubtopics: allTags,
                     units: UNIT_WEIGHTS,
                     subtopicWeights: SUBTOPIC_WEIGHTS,
+                    subtopicPrereqs: SUBTOPIC_PREREQS,
+                    unitPrereqs: UNIT_PREREQS_REQ,
                 }),
                 getStudyPace({
                     expectedSubtopics: allTags,
                     units: UNIT_WEIGHTS,
                     subtopicWeights: SUBTOPIC_WEIGHTS,
+                    subtopicPrereqs: SUBTOPIC_PREREQS,
+                    unitPrereqs: UNIT_PREREQS_REQ,
                 }),
             ]);
         } catch (err) {
             loadError = String(err);
         }
-    });
+    }
+    onMount(loadState);
 
     $: subMap = new Map<string, SubtopicMastery>(
         (result?.subtopics ?? []).map((s) => [s.tag, s]),
@@ -115,6 +156,34 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // Today's plan: the decks with something due now, grouped by tier. Counts are
     // Anki's own daily-limit-capped numbers, so they match the deck list.
     $: planGroups = groupPlanByTier(studyPlan?.items ?? []);
+
+    // "Today's focus": the subtopics genuinely worth highlighting right now —
+    // ones with cards DUE today (blocked practice, straight from the scheduler)
+    // plus your current single weakest/highest-priority subtopic. All MEASURED,
+    // never fabricated; it changes as cards fall due and mastery moves. Shown
+    // only once there's real study signal, so a brand-new deck stays quiet.
+    $: hasStudyActivity =
+        (studyPlan?.items?.length ?? 0) > 0 || (overall?.totalReviews ?? 0) > 0;
+    $: focusTags = (() => {
+        const tags = new Set<string>();
+        if (!hasStudyActivity) {
+            return tags;
+        }
+        // Subtopics with cards due today (blocked-practice tier).
+        for (const it of studyPlan?.items ?? []) {
+            if (it.tier === StudyMode.BLOCKED && it.subtopicTag) {
+                tags.add(it.subtopicTag);
+            }
+        }
+        // Plus your current weakest / highest-priority subtopic.
+        if (priorities.length > 0) {
+            tags.add(priorities[0].tag);
+        }
+        return tags;
+    })();
+    $: focusList = [...focusTags]
+        .map((t) => ({ tag: t, name: NAME_BY_TAG.get(t) ?? t }))
+        .slice(0, 6);
 
     // Exam-coverage pace (are you introducing new cards fast enough?). All values
     // are measured counts / arithmetic — a coverage pace, never a score.
@@ -138,6 +207,29 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // Honest readiness give-up state — never a fabricated number. The score
     // itself lives on the Readiness page; here we only surface why it's withheld.
     $: noScore = readiness?.value.case === "noScore" ? readiness.value.value : null;
+
+    // Guided-learning gate state from the engine (mirrors config
+    // speedrunGuidedMode; default on). Drives the "Guided sequence" toggle.
+    $: guidedMode = result?.guidedMode ?? true;
+
+    // Selecting a subtopic highlights its prerequisite CHAIN: ancestors (do
+    // these first) and descendants (these unlock afterwards).
+    $: chain = selectedLeaf ? prereqChain(selectedLeaf.tag) : null;
+    $: highlightSet = (() => {
+        const s = new Set<string>();
+        if (selectedLeaf) {
+            s.add(selectedLeaf.tag);
+            chain?.ancestors.forEach((t) => s.add(t));
+            chain?.descendants.forEach((t) => s.add(t));
+        }
+        return s;
+    })();
+    // Reactive set of guided-locked subtopic tags, so lock badges/dimming
+    // re-render the moment mastery state loads (a plain function call wouldn't
+    // create the dependency).
+    $: lockedSet = new Set<string>(
+        (result?.subtopics ?? []).filter((s) => s.locked).map((s) => s.tag),
+    );
 
     /** The subtopic's measured evidence, or null if we have none for it. */
     function ev(tag: string): SubtopicEvidence | null {
@@ -210,6 +302,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     function selectUnit(node: UnitNode): void {
         selectedUnit = node;
         selectedLeaf = null;
+    }
+    function closeDetail(): void {
+        selectedLeaf = null;
+        selectedUnit = null;
     }
     function studySubtopic(tag: string): void {
         // Ask the desktop to open this subtopic's deck for blocked practice.
@@ -294,31 +390,109 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 return "Review everything (all subtopics mastered)";
         }
     }
+
+    // --- guided gate: locks, prerequisite highlight, bypasses ---
+    function arrowActive(e: PrereqEdge): boolean {
+        return !!selectedLeaf && highlightSet.has(e.from) && highlightSet.has(e.to);
+    }
+    function unmetNames(m: SubtopicMastery): string[] {
+        return (m.unmetPrereqs ?? []).map((t) => NAME_BY_TAG.get(t) ?? t);
+    }
+    function setGuided(on: boolean): void {
+        // Global bypass ("free mode"): turn the hard prerequisite gate on/off.
+        bridgeCommand("speedrun-set-guided:" + (on ? "1" : "0"));
+        // Re-read state after the desktop writes the config.
+        setTimeout(loadState, 150);
+    }
+    function unlockSubtopic(tag: string): void {
+        // Per-topic bypass for experienced users.
+        bridgeCommand("speedrun-unlock:" + tag);
+        setTimeout(loadState, 150);
+    }
+    // Prerequisite-arrow styling (helpers keep the markup free of nested ternaries).
+    function arrowColor(active: boolean): string {
+        return active ? ACCENT : "#94a3b8";
+    }
+    function arrowLineOpacity(dim: boolean, active: boolean): number {
+        if (dim) {
+            return 0.1;
+        }
+        return active ? 0.95 : 0.32;
+    }
+    function arrowFillOpacity(dim: boolean, active: boolean): number {
+        if (dim) {
+            return 0.1;
+        }
+        return active ? 0.95 : 0.42;
+    }
 </script>
 
 <div class="study-map">
-    <header>
-        <h1>Study map</h1>
-        <p class="exam">SOA Exam P · Probability</p>
-        <p class="subtitle">
-            Each bubble is a topic. Its <b>size</b>
-            is that topic's weight on the exam; its
-            <b>colour</b>
-            fills as you clear its mastery gate:
-            <span class="key" style="color:{GREY}">●</span>
-            not started,
-            <span class="key" style="color:{AMBER}">●</span>
-            in progress,
-            <span class="key" style="color:{GREEN}">●</span>
-            mastered. Colour is measured from real reviews, never guessed.
-        </p>
-    </header>
+    {#if showMap}
+        <header>
+            <h1>Study map</h1>
+            <p class="exam">SOA Exam P · Probability</p>
+            <p class="subtitle">
+                Each bubble is a topic. Its <b>size</b>
+                is that topic's weight on the exam; its
+                <b>colour</b>
+                fills as you clear its mastery gate:
+                <span class="key" style="color:{GREY}">●</span>
+                not started,
+                <span class="key" style="color:{AMBER}">●</span>
+                in progress,
+                <span class="key" style="color:{GREEN}">●</span>
+                mastered. Colour is measured from real reviews, never guessed.
+            </p>
+        </header>
+    {/if}
+
+    {#if showMap}
+        <div class="map-controls">
+            <label class="ctrl">
+                <input type="checkbox" bind:checked={showPrereqs} />
+                Show prerequisites
+            </label>
+            <label class="ctrl">
+                <input
+                    type="checkbox"
+                    checked={guidedMode}
+                    on:change={(e) => setGuided(e.currentTarget.checked)}
+                />
+                Guided sequence:
+                <b>{guidedMode ? "on" : "off"}</b>
+            </label>
+            <span class="ctrl-hint">
+                Guided sequence locks a topic's new cards until its prerequisites are
+                met (its memory gate OR a practice test). Turn it off to study any topic
+                freely.
+            </span>
+        </div>
+    {/if}
 
     {#if loadError}
         <div class="notice error">Couldn't load mastery: {loadError}</div>
     {/if}
 
-    {#if studyPlan}
+    {#if showMap && focusList.length > 0}
+        <section class="focus-strip" aria-label="Today's focus">
+            <div class="focus-strip-head">
+                <span class="focus-badge">Today's focus</span>
+                <span class="focus-hint">
+                    highlighted on the map · due now + your weakest area
+                </span>
+            </div>
+            <div class="focus-chips">
+                {#each focusList as f}
+                    <button class="focus-chip" on:click={() => studySubtopic(f.tag)}>
+                        {f.name}
+                    </button>
+                {/each}
+            </div>
+        </section>
+    {/if}
+
+    {#if showPanels && studyPlan}
         <section class="plan" aria-label="Today's study plan">
             <div class="plan-head">
                 <h2>Today's plan</h2>
@@ -368,7 +542,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </section>
     {/if}
 
-    {#if pace}
+    {#if showPanels && pace}
         <section class="pace" aria-label="Exam pace">
             <div class="pace-head">
                 <h2>Exam pace</h2>
@@ -433,7 +607,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </section>
     {/if}
 
-    {#if overall}
+    {#if showPanels && overall}
         <section class="overall" aria-label="Overall mastery">
             <div class="overall-head">
                 <h2>Overall mastery</h2>
@@ -535,220 +709,303 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </section>
     {/if}
 
-    <div
-        class="viewport"
-        bind:clientWidth={viewportWidth}
-        style="height:{layout.height * scale}px;"
-    >
+    {#if showMap}
         <div
-            class="canvas"
-            style="width:{layout.width}px; height:{layout.height}px;
-                   transform:scale({scale}); transform-origin:top left;"
+            class="viewport"
+            bind:clientWidth={viewportWidth}
+            style="height:{layout.height * scale}px;"
         >
-            <svg
-                class="edges"
-                viewBox="0 0 {layout.width} {layout.height}"
-                width={layout.width}
-                height={layout.height}
+            <div
+                class="canvas"
+                style="width:{layout.width}px; height:{layout.height}px;
+                   transform:scale({scale}); transform-origin:top left;"
             >
-                {#each edges as e}
-                    <line
-                        x1={e.x1}
-                        y1={e.y1}
-                        x2={e.x2}
-                        y2={e.y2}
-                        stroke={GREY}
-                        stroke-width="2.5"
-                        stroke-linecap="round"
-                        opacity="0.4"
-                    />
-                    {#if e.progress > 0}
+                <svg
+                    class="edges"
+                    viewBox="0 0 {layout.width} {layout.height}"
+                    width={layout.width}
+                    height={layout.height}
+                >
+                    {#each edges as e}
                         <line
                             x1={e.x1}
                             y1={e.y1}
-                            x2={e.x1 + e.progress * (e.x2 - e.x1)}
-                            y2={e.y1 + e.progress * (e.y2 - e.y1)}
-                            stroke={e.color}
-                            stroke-width="4"
+                            x2={e.x2}
+                            y2={e.y2}
+                            stroke={GREY}
+                            stroke-width="2.5"
                             stroke-linecap="round"
+                            opacity="0.4"
                         />
-                    {/if}
-                {/each}
-            </svg>
+                        {#if e.progress > 0}
+                            <line
+                                x1={e.x1}
+                                y1={e.y1}
+                                x2={e.x1 + e.progress * (e.x2 - e.x1)}
+                                y2={e.y1 + e.progress * (e.y2 - e.y1)}
+                                stroke={e.color}
+                                stroke-width="4"
+                                stroke-linecap="round"
+                            />
+                        {/if}
+                    {/each}
 
-            <!-- centre -->
-            <div
-                class="bubble center"
-                style="left:{center.x - center.r}px; top:{center.y - center.r}px;
+                    <!-- directed prerequisite arrows (the guided-learning DAG) -->
+                    {#if showPrereqs}
+                        {#each prereqArrows as a}
+                            {@const active = arrowActive(a)}
+                            {@const dim = !!selectedLeaf && !active}
+                            <line
+                                x1={a.geom.x1}
+                                y1={a.geom.y1}
+                                x2={a.geom.x2}
+                                y2={a.geom.y2}
+                                stroke={arrowColor(active)}
+                                stroke-width={active ? 2.5 : 1.5}
+                                stroke-dasharray="5 4"
+                                opacity={arrowLineOpacity(dim, active)}
+                            />
+                            <polygon
+                                points={arrowHead(a.geom, a.kind === "unit" ? 14 : 11)}
+                                fill={arrowColor(active)}
+                                opacity={arrowFillOpacity(dim, active)}
+                            />
+                        {/each}
+                    {/if}
+                </svg>
+
+                <!-- centre -->
+                <div
+                    class="bubble center"
+                    style="left:{center.x - center.r}px; top:{center.y - center.r}px;
                        width:{center.r * 2}px; height:{center.r * 2}px;
                        border-color:{ACCENT}; --tint:{ACCENT}1f;"
-            >
-                <span class="node-title">Exam P</span>
-                {#if overall}
-                    <span class="node-sub">
-                        {overall.subtopicsMastered}/{overall.subtopicsTotal}
-                    </span>
-                {/if}
-            </div>
+                >
+                    <span class="node-title">Exam P</span>
+                    {#if overall}
+                        <span class="node-sub">
+                            {overall.subtopicsMastered}/{overall.subtopicsTotal}
+                        </span>
+                    {/if}
+                </div>
 
-            <!-- units -->
-            {#each units as u}
-                {@const up = unitProgress(u.id)}
-                {@const uc = colorFor(up, unitMap.get(u.id)?.mastered ?? false)}
-                <button
-                    class="bubble unit"
-                    class:selected={selectedUnit?.id === u.id}
-                    style="left:{u.x - u.r}px; top:{u.y - u.r}px;
+                <!-- units -->
+                {#each units as u}
+                    {@const up = unitProgress(u.id)}
+                    {@const uc = colorFor(up, unitMap.get(u.id)?.mastered ?? false)}
+                    <button
+                        class="bubble unit"
+                        class:selected={selectedUnit?.id === u.id}
+                        style="left:{u.x - u.r}px; top:{u.y - u.r}px;
                            width:{u.r * 2}px; height:{u.r * 2}px;
                            border-color:{uc}; --tint:{uc}1f;"
-                    on:click={() => selectUnit(u)}
-                >
-                    <span class="node-title">{u.name}</span>
-                    <span class="node-sub">
-                        {unitMap.get(u.id)?.subtopicsCleared ?? 0}/{u.subs.length} mastered
-                    </span>
-                </button>
-            {/each}
-
-            <!-- subtopics: bubble sized by weight, name label beneath -->
-            {#each units as u}
-                {#each u.subs as s}
-                    {@const p = leafProgress(ev(s.tag))}
-                    {@const c = colorFor(p, leafCleared(s.tag))}
-                    <button
-                        class="leaf"
-                        class:selected={selectedLeaf?.tag === s.tag}
-                        style="left:{s.x - 48}px; top:{s.y - s.r}px; width:96px;"
-                        title="{s.name} · exam weight {s.weight.toFixed(1)}"
-                        on:click={() => selectLeaf(s)}
+                        on:click={() => selectUnit(u)}
                     >
-                        <span
-                            class="leaf-bubble"
-                            style="width:{s.r * 2}px; height:{s.r * 2}px;
-                                   border-color:{c}; --tint:{c}1a;"
-                        ></span>
-                        <span class="caption">{s.name}</span>
+                        <span class="node-title">{u.name}</span>
+                        <span class="node-pct">{Math.round(u.weight)}% of exam</span>
+                        <span class="node-sub">
+                            {unitMap.get(u.id)?.subtopicsCleared ?? 0}/{u.subs.length} mastered
+                        </span>
                     </button>
                 {/each}
-            {/each}
-        </div>
-    </div>
 
-    {#if selectedUnit}
-        {@const um = unitMap.get(selectedUnit.id)}
-        {@const uc = colorFor(unitProgress(selectedUnit.id), um?.mastered ?? false)}
-        {@const unitId = selectedUnit.id}
-        <section class="detail">
-            <div class="detail-head">
-                <div>
-                    <h2>{selectedUnit.name}</h2>
-                    <p class="detail-unit">Unit · one of the three exam sections</p>
-                </div>
-                <span class="pill" style="background:{uc}22; color:{uc};">
-                    {um?.subtopicsCleared ?? 0}/{um?.subtopicsTotal ??
-                        selectedUnit.subs.length} mastered
-                </span>
+                <!-- subtopics: bubble sized by weight, name label beneath -->
+                {#each units as u}
+                    {#each u.subs as s}
+                        {@const p = leafProgress(ev(s.tag))}
+                        {@const c = colorFor(p, leafCleared(s.tag))}
+                        <button
+                            class="leaf"
+                            class:selected={selectedLeaf?.tag === s.tag}
+                            class:focus={focusTags.has(s.tag)}
+                            class:locked={lockedSet.has(s.tag)}
+                            class:dim={selectedLeaf && !highlightSet.has(s.tag)}
+                            style="left:{s.x - s.r}px; top:{s.y - s.r}px;
+                               width:{s.r * 2}px; height:{s.r * 2}px;
+                               border-color:{c}; --tint:{c}1a;"
+                            title="{s.name} · exam weight {s.weight.toFixed(
+                                1,
+                            )}{lockedSet.has(s.tag)
+                                ? ' · locked (prerequisites not met)'
+                                : ''}"
+                            on:click={() => selectLeaf(s)}
+                        >
+                            <span class="leaf-label">{s.name}</span>
+                            {#if lockedSet.has(s.tag)}
+                                <span class="lock-badge" aria-label="locked">🔒</span>
+                            {/if}
+                        </button>
+                    {/each}
+                {/each}
             </div>
-            <dl class="stats">
-                <div>
-                    <dt>Subtopics mastered</dt>
-                    <dd>{um?.subtopicsCleared ?? 0} / {um?.subtopicsTotal ?? 0}</dd>
-                </div>
-                <div>
-                    <dt>Exam importance</dt>
-                    <dd>{(um?.weight ?? selectedUnit.weight).toFixed(1)} of 100</dd>
-                </div>
-                <div>
-                    <dt>Mastery by weight</dt>
-                    <dd>{pct(um?.weightedMasteryPct ?? 0)}</dd>
-                </div>
-                <div>
-                    <dt>Interleaving tier</dt>
-                    <dd>{um?.mastered ? "cross-unit (spacing)" : "within-unit"}</dd>
-                </div>
-            </dl>
-            <p class="hint">
-                "Mastery by weight" is the share of this unit's exam importance you've
-                demonstrably mastered — measured from real reviews, not a predicted
-                score.
-            </p>
-            <button class="study-btn" on:click={() => studyUnit(unitId)}>
-                Study this unit (within-unit interleaving)
+        </div>
+    {/if}
+
+    {#if showMap && (selectedUnit || selectedLeaf)}
+        <section class="detail detail-popup">
+            <button
+                class="detail-close"
+                on:click={closeDetail}
+                aria-label="Close detail"
+            >
+                ×
             </button>
-        </section>
-    {:else if selectedLeaf}
-        {@const m = ev(selectedLeaf.tag)}
-        {@const c = colorFor(leafProgress(m), leafCleared(selectedLeaf.tag))}
-        {@const enough = hasEnoughEvidence(m)}
-        {@const studyTag = selectedLeaf.tag}
-        <section class="detail">
-            <div class="detail-head">
-                <div>
-                    <h2>{selectedLeaf.name}</h2>
-                    <p class="detail-unit">
-                        {units.find((u) => u.id === selectedLeaf?.unitId)?.name} · exam weight
-                        {selectedLeaf.weight.toFixed(1)}
-                    </p>
+            {#if selectedUnit}
+                {@const um = unitMap.get(selectedUnit.id)}
+                {@const uc = colorFor(
+                    unitProgress(selectedUnit.id),
+                    um?.mastered ?? false,
+                )}
+                {@const unitId = selectedUnit.id}
+                <div class="detail-head">
+                    <div>
+                        <h2>{selectedUnit.name}</h2>
+                        <p class="detail-unit">Unit · one of the three exam sections</p>
+                    </div>
+                    <span class="pill" style="background:{uc}22; color:{uc};">
+                        {um?.subtopicsCleared ?? 0}/{um?.subtopicsTotal ??
+                            selectedUnit.subs.length} mastered
+                    </span>
                 </div>
-                <span class="pill" style="background:{c}22; color:{c};">
-                    {statusLabel(m)}
-                </span>
-            </div>
-            <dl class="stats">
-                <div>
-                    <dt>Graded reviews</dt>
-                    <dd>
-                        {m?.reviews ?? 0}
-                        <span class="need">(need ≥ {MIN_PROBLEMS})</span>
-                    </dd>
+                <dl class="stats">
+                    <div>
+                        <dt>Subtopics mastered</dt>
+                        <dd>{um?.subtopicsCleared ?? 0} / {um?.subtopicsTotal ?? 0}</dd>
+                    </div>
+                    <div>
+                        <dt>Exam importance</dt>
+                        <dd>{(um?.weight ?? selectedUnit.weight).toFixed(1)} of 100</dd>
+                    </div>
+                    <div>
+                        <dt>Mastery by weight</dt>
+                        <dd>{pct(um?.weightedMasteryPct ?? 0)}</dd>
+                    </div>
+                    <div>
+                        <dt>Interleaving tier</dt>
+                        <dd>{um?.mastered ? "cross-unit (spacing)" : "within-unit"}</dd>
+                    </div>
+                </dl>
+                <p class="hint">
+                    "Mastery by weight" is the share of this unit's exam importance
+                    you've demonstrably mastered — measured from real reviews, not a
+                    predicted score.
+                </p>
+                <button class="study-btn" on:click={() => studyUnit(unitId)}>
+                    Study this unit (within-unit interleaving)
+                </button>
+            {:else if selectedLeaf}
+                {@const m = ev(selectedLeaf.tag)}
+                {@const full = subMap.get(selectedLeaf.tag)}
+                {@const c = colorFor(leafProgress(m), leafCleared(selectedLeaf.tag))}
+                {@const enough = hasEnoughEvidence(m)}
+                {@const studyTag = selectedLeaf.tag}
+                <div class="detail-head">
+                    <div>
+                        <h2>{selectedLeaf.name}</h2>
+                        <p class="detail-unit">
+                            {units.find((u) => u.id === selectedLeaf?.unitId)?.name} · exam
+                            weight
+                            {selectedLeaf.weight.toFixed(1)}
+                        </p>
+                    </div>
+                    <span class="pill" style="background:{c}22; color:{c};">
+                        {statusLabel(m)}
+                    </span>
                 </div>
-                <div>
-                    <dt>Accuracy</dt>
-                    <dd>
-                        {#if enough}
-                            {pct(m?.accuracy ?? 0)}
-                        {:else}
-                            <span class="pending">— need ≥ {MIN_PROBLEMS} reviews</span>
-                        {/if}
-                        <span class="need">(need ≥ 80%)</span>
-                    </dd>
+                <dl class="stats">
+                    <div>
+                        <dt>Graded reviews</dt>
+                        <dd>
+                            {m?.reviews ?? 0}
+                            <span class="need">(need ≥ {MIN_PROBLEMS})</span>
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Accuracy</dt>
+                        <dd>
+                            {#if enough}
+                                {pct(m?.accuracy ?? 0)}
+                            {:else}
+                                <span class="pending">
+                                    — need ≥ {MIN_PROBLEMS} reviews
+                                </span>
+                            {/if}
+                            <span class="need">(need ≥ 80%)</span>
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Mean retrievability</dt>
+                        <dd>
+                            {#if enough}
+                                {pct(m?.meanRetrievability ?? 0)}
+                            {:else}
+                                <span class="pending">
+                                    — need ≥ {MIN_PROBLEMS} reviews
+                                </span>
+                            {/if}
+                            <span class="need">(need ≥ 90%)</span>
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Gate</dt>
+                        <dd>{m?.gateCleared ? "cleared" : "not cleared"}</dd>
+                    </div>
+                </dl>
+
+                <!-- Performance: a SEPARATE signal from the memory gate above.
+                     Never blended into mastery (kept apart per the rubric). -->
+                <div class="perf">
+                    <div class="perf-head">
+                        <span class="perf-title">Performance (practice tests)</span>
+                        <span class="perf-sep">separate from the memory gate</span>
+                    </div>
+                    {#if full && full.perfQuestions > 0}
+                        <div class="perf-body">
+                            <b>{pct(full.perfAccuracy)}</b>
+                            <span class="need">
+                                {full.perfCorrect}/{full.perfQuestions} questions{full.performanceMastered
+                                    ? " · mastered"
+                                    : ""}
+                            </span>
+                        </div>
+                    {:else}
+                        <div class="perf-body pending">
+                            No graded practice questions yet — take a practice test to
+                            build this signal.
+                        </div>
+                    {/if}
                 </div>
-                <div>
-                    <dt>Mean retrievability</dt>
-                    <dd>
-                        {#if enough}
-                            {pct(m?.meanRetrievability ?? 0)}
-                        {:else}
-                            <span class="pending">— need ≥ {MIN_PROBLEMS} reviews</span>
-                        {/if}
-                        <span class="need">(need ≥ 90%)</span>
-                    </dd>
-                </div>
-                <div>
-                    <dt>Gate</dt>
-                    <dd>{m?.gateCleared ? "cleared" : "not cleared"}</dd>
-                </div>
-            </dl>
-            <p class="hint">
-                {#if !m || m.reviews === 0}
-                    No reviews yet — study this subtopic from the "SOA Exam P" deck to
-                    start building evidence.
-                {:else if !enough}
-                    Only {m.reviews} of {MIN_PROBLEMS} reviews so far — accuracy and retention
-                    stay hidden until there's enough evidence to judge them honestly.
-                {:else}
-                    Keep reviewing until accuracy ≥ 80% and retention ≥ 90% to clear the
-                    gate.
+
+                {#if full?.locked}
+                    <div class="lock-note">
+                        <b>🔒 Locked by guided sequence.</b>
+                        First master {unmetNames(full).join(", ") ||
+                            "its prerequisites"} — or clear it on a practice test.
+                        <button
+                            class="unlock-btn"
+                            on:click={() => unlockSubtopic(studyTag)}
+                        >
+                            Unlock anyway
+                        </button>
+                    </div>
                 {/if}
-            </p>
-            <button class="study-btn" on:click={() => studySubtopic(studyTag)}>
-                Study this subtopic (blocked practice)
-            </button>
+                <p class="hint">
+                    {#if !m || m.reviews === 0}
+                        No reviews yet — study this subtopic from the "SOA Exam P" deck
+                        to start building evidence.
+                    {:else if !enough}
+                        Only {m.reviews} of {MIN_PROBLEMS} reviews so far — accuracy and retention
+                        stay hidden until there's enough evidence to judge them honestly.
+                    {:else}
+                        Keep reviewing until accuracy ≥ 80% and retention ≥ 90% to clear
+                        the gate.
+                    {/if}
+                </p>
+                <button class="study-btn" on:click={() => studySubtopic(studyTag)}>
+                    Study this subtopic (blocked practice)
+                </button>
+            {/if}
         </section>
-    {:else}
-        <p class="empty-hint">
-            Select a unit or subtopic in the map to see its mastery detail.
-        </p>
     {/if}
 </div>
 
@@ -788,6 +1045,87 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-radius: 8px;
         padding: 0.75rem 1rem;
         margin-bottom: 1rem;
+    }
+
+    /* Map controls: show-prerequisites + guided-sequence toggles */
+    .map-controls {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.6rem 1rem;
+        margin: 0 0 1rem;
+        padding: 0.5rem 0.85rem;
+        border: 1px solid var(--border, #e2e2e5);
+        border-radius: 10px;
+        background: var(--canvas-elevated, #fbfbfc);
+        font-size: 0.85rem;
+    }
+    .map-controls .ctrl {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        cursor: pointer;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .map-controls .ctrl input {
+        cursor: pointer;
+    }
+    .ctrl-hint {
+        flex: 1 1 240px;
+        font-size: 0.76rem;
+        font-weight: 400;
+        color: var(--fg-subtle, #6b7280);
+    }
+
+    /* Today's focus strip */
+    .focus-strip {
+        border: 1px solid var(--border, #e2e2e5);
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        margin: 0 0 1rem;
+        background: var(--canvas-elevated, #fbfbfc);
+    }
+    .focus-strip-head {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.5rem;
+    }
+    .focus-badge {
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--sr-accent, #6366f1);
+        background: var(--sr-accent-weak, rgba(99, 102, 241, 0.12));
+        border-radius: 999px;
+        padding: 0.15rem 0.55rem;
+    }
+    .focus-hint {
+        font-size: 0.78rem;
+        color: var(--fg-subtle, #6b7280);
+    }
+    .focus-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+    .focus-chip {
+        border: 1px solid var(--sr-accent, #6366f1);
+        background: var(--sr-accent-weak, rgba(99, 102, 241, 0.12));
+        color: var(--fg, #2a2d33);
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.82rem;
+        padding: 0.3rem 0.7rem;
+        border-radius: 999px;
+        cursor: pointer;
+    }
+    .focus-chip:hover {
+        background: var(--sr-accent, #6366f1);
+        color: #fff;
     }
 
     /* Overall mastery */
@@ -1110,6 +1448,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 0.64rem;
         color: var(--fg-subtle, #6b7280);
     }
+    .node-pct {
+        font-size: 0.62rem;
+        font-weight: 700;
+        line-height: 1.1;
+        color: var(--sr-accent, #6366f1);
+    }
     .bubble.center .node-title {
         font-size: 1rem;
         font-weight: 700;
@@ -1132,58 +1476,135 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         box-shadow: 0 0 0 3px var(--fg-subtle, #6b7280);
     }
 
-    /* Subtopic: a circular bubble with the name beneath it */
+    /* Subtopic: a circular bubble with its label INSIDE it. */
     .leaf {
         position: absolute;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 3px;
-        background: none;
-        border: none;
-        padding: 0;
-        font: inherit;
-        color: inherit;
-        cursor: pointer;
-    }
-    .leaf-bubble {
         box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 6px;
         border: 2.5px solid var(--border, #e2e2e5);
         border-radius: 50%;
         background:
             linear-gradient(var(--tint), var(--tint)), var(--canvas-elevated, #fbfbfc);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+        overflow: hidden;
         transition:
             box-shadow 0.12s ease,
             transform 0.12s ease;
     }
-    .leaf:hover .leaf-bubble {
+    .leaf-label {
+        font-size: 0.62rem;
+        line-height: 1.1;
+        font-weight: 500;
+        overflow-wrap: anywhere;
+        color: var(--fg, #33373d);
+    }
+    .leaf:hover {
         box-shadow:
             0 0 0 3px var(--tint),
             0 2px 6px rgba(0, 0, 0, 0.1);
-        transform: scale(1.04);
+        transform: scale(1.05);
+        z-index: 3;
     }
-    .leaf.selected .leaf-bubble {
+    .leaf.selected {
         box-shadow: 0 0 0 3px var(--fg-subtle, #6b7280);
+        z-index: 3;
     }
-    .caption {
-        font-size: 0.68rem;
-        line-height: 1.12;
-        text-align: center;
-        color: var(--fg, #33373d);
-        max-width: 96px;
+    .leaf.selected .leaf-label {
+        font-weight: 700;
     }
-    .leaf.selected .caption {
-        font-weight: 600;
+    /* Today's focus: a distinct accent glow that draws the eye. */
+    .leaf.focus {
+        box-shadow:
+            0 0 0 4px var(--sr-accent-glow, rgba(99, 102, 241, 0.4)),
+            0 2px 8px rgba(0, 0, 0, 0.12);
+        animation: focusPulse 2.4s ease-in-out infinite;
+    }
+    @keyframes focusPulse {
+        0%,
+        100% {
+            box-shadow:
+                0 0 0 4px var(--sr-accent-glow, rgba(99, 102, 241, 0.4)),
+                0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        50% {
+            box-shadow:
+                0 0 0 7px var(--sr-accent-weak, rgba(99, 102, 241, 0.12)),
+                0 2px 10px rgba(0, 0, 0, 0.12);
+        }
+    }
+
+    /* Locked subtopic: prerequisites not met yet (guided mode). */
+    .leaf.locked {
+        border-style: dashed;
+        filter: grayscale(0.35);
+        opacity: 0.72;
+    }
+    /* Dim bubbles outside the selected subtopic's prerequisite chain. */
+    .leaf.dim {
+        opacity: 0.3;
+    }
+    .lock-badge {
+        position: absolute;
+        top: 7px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.72rem;
+        line-height: 1;
     }
 
     /* detail */
     .detail {
         border: 1px solid var(--border, #e2e2e5);
-        border-radius: 10px;
+        border-radius: 12px;
         padding: 1rem 1.25rem;
         margin-top: 1.25rem;
         background: var(--canvas-elevated, #fbfbfc);
+    }
+    /* Floating popup: appears immediately over the map on click, so it's obvious
+       something opened (rather than a panel far down the page). */
+    .detail-popup {
+        position: fixed;
+        top: 84px;
+        right: 24px;
+        width: 340px;
+        max-width: calc(100vw - 48px);
+        max-height: 76vh;
+        overflow-y: auto;
+        margin-top: 0;
+        z-index: 60;
+        box-shadow: 0 10px 34px rgba(0, 0, 0, 0.2);
+        animation: popIn 0.12s ease;
+    }
+    @keyframes popIn {
+        from {
+            opacity: 0;
+            transform: translateY(-6px);
+        }
+        to {
+            opacity: 1;
+            transform: none;
+        }
+    }
+    .detail-close {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        border: none;
+        background: transparent;
+        font-size: 1.4rem;
+        line-height: 1;
+        cursor: pointer;
+        color: var(--fg-subtle, #6b7280);
+    }
+    .detail-close:hover {
+        color: var(--fg, #1c1c1e);
     }
     .detail-head {
         display: flex;
@@ -1242,6 +1663,67 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 0.82rem;
         color: var(--fg-subtle, #6b7280);
     }
+
+    /* Performance (practice tests): a SEPARATE panel from the memory-gate
+       stats above, so the two signals never read as one blended number. */
+    .perf {
+        margin: 0.75rem 0 0;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid var(--border-subtle, #e6e6ea);
+        border-radius: 8px;
+        background: var(--canvas-inset, #f4f5f7);
+    }
+    .perf-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+    .perf-title {
+        font-weight: 700;
+        font-size: 0.82rem;
+    }
+    .perf-sep {
+        font-size: 0.68rem;
+        color: var(--fg-subtle, #9ca3af);
+    }
+    .perf-body {
+        margin-top: 0.3rem;
+        font-size: 0.86rem;
+    }
+    .perf-body.pending {
+        font-style: italic;
+        color: var(--fg-subtle, #6b7280);
+        font-size: 0.8rem;
+    }
+
+    /* Lock reason + per-topic bypass */
+    .lock-note {
+        margin: 0.75rem 0 0;
+        padding: 0.6rem 0.7rem;
+        border: 1px solid #e0a55255;
+        background: #e0a55214;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        line-height: 1.45;
+        color: var(--fg, #33373d);
+    }
+    .unlock-btn {
+        display: inline-block;
+        margin-top: 0.4rem;
+        padding: 0.25rem 0.6rem;
+        border: 1px solid #b9791f;
+        border-radius: 6px;
+        background: transparent;
+        color: #b9791f;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.8rem;
+        cursor: pointer;
+    }
+    .unlock-btn:hover {
+        background: #e0a55222;
+    }
     .study-btn {
         margin-top: 0.9rem;
         width: 100%;
@@ -1263,20 +1745,17 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: #6486bf;
         border: 1px solid #6486bf;
     }
-    .empty-hint {
-        margin-top: 1.25rem;
-        color: var(--fg-subtle, #6b7280);
-        font-size: 0.9rem;
-    }
-
     /* Calm by default: honour reduced-motion preferences. */
     @media (prefers-reduced-motion: reduce) {
         .bubble.unit,
-        .leaf-bubble {
+        .leaf {
             transition: none;
         }
-        .leaf:hover .leaf-bubble {
+        .leaf:hover {
             transform: none;
+        }
+        .leaf.focus {
+            animation: none;
         }
     }
 </style>

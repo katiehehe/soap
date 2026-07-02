@@ -5,11 +5,10 @@
 
 import os
 import tempfile
-from typing import Any
 
 from anki.collection import Collection as aopen
 from anki.dbproxy import emulate_named_args
-from anki.lang import TR, without_unicode_isolation
+from anki.lang import without_unicode_isolation
 from anki.stdmodels import _legacy_add_basic_model, get_stock_notetypes
 from anki.utils import is_win
 from tests.shared import assertException, getEmptyCol

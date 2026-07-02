@@ -374,26 +374,19 @@ class Toolbar:
             ),
         ]
 
-        # Speedrun (SOA Exam P fork): surface readiness + study map as first-class
-        # toolbar buttons, so they are one click from the main screen rather than
-        # only living in the Tools menu.
-        links.append(
+        # Speedrun (SOA Exam P fork): the app's home is the custom concept-map /
+        # readiness shell (the speedrunHome state). This toolbar is hidden on the
+        # home screen and only shows on Anki's own screens (review/browse/etc), so
+        # give a "Home" button back to the shell plus one-click "Study next".
+        links.insert(
+            0,
             self.create_link(
-                "speedrunReadiness",
-                "Readiness",
-                self._speedrun_readiness_handler,
-                tip="SOA Exam P readiness — three scores with ranges + honesty bundle",
-                id="speedrunReadiness",
-            )
-        )
-        links.append(
-            self.create_link(
-                "speedrunStudyMap",
-                "Study map",
-                self._speedrun_study_map_handler,
-                tip="SOA Exam P mastery concept map",
-                id="speedrunStudyMap",
-            )
+                "speedrunHome",
+                "Home",
+                self._speedrun_home_handler,
+                tip="Back to the Exam P home (concept map + readiness)",
+                id="speedrunHome",
+            ),
         )
         links.append(
             self.create_link(
@@ -480,6 +473,9 @@ class Toolbar:
 
     def _statsLinkHandler(self) -> None:
         self.mw.onStats()
+
+    def _speedrun_home_handler(self) -> None:
+        self.mw.moveToState("speedrunHome")
 
     def _speedrun_readiness_handler(self) -> None:
         import aqt.speedrun

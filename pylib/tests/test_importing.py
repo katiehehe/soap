@@ -6,8 +6,6 @@
 import os
 from tempfile import NamedTemporaryFile
 
-import pytest
-
 from anki.consts import *
 from anki.importing import (
     Anki2Importer,

@@ -5,6 +5,7 @@ from anki.speedrun.practice_test import (
     _unit_allocation,
     assemble_test,
     grade,
+    performance_by_subtopic,
     practice_stats,
     record_test,
     reset_practice_stats,
@@ -45,6 +46,26 @@ def test_missing_response_counts_wrong():
     items = load_sample_items()[:5]
     result = grade(items, {})  # answered nothing
     assert result.correct == 0
+
+
+def test_performance_by_subtopic_accumulates_separately():
+    # Practice tests build a SEPARATE per-subtopic performance signal (used for
+    # prerequisites + the map), distinct from the memory gate.
+    col = getEmptyCol()
+    assert performance_by_subtopic(col) == {}
+    items = load_sample_items()[:8]
+    responses = {it.id: (1 if i % 2 == 0 else 0) for i, it in enumerate(items)}
+    record_test(col, grade(items, responses))
+    perf = performance_by_subtopic(col)
+    assert sum(c["questions"] for c in perf.values()) == len(items)
+    assert sum(c["correct"] for c in perf.values()) == sum(responses.values())
+    # per-subtopic totals line up with the graded items
+    for it in items:
+        assert it.subtopic in perf
+    # accumulates across tests
+    record_test(col, grade(items, responses))
+    perf2 = performance_by_subtopic(col)
+    assert sum(c["questions"] for c in perf2.values()) == 2 * len(items)
 
 
 def test_record_test_accumulates_in_config():

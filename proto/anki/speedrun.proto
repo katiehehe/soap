@@ -137,11 +137,30 @@ message MasteryRequest {
   // absent it falls back to a plain cleared/total fraction. Weights never
   // affect the give-up thresholds.
   repeated SubtopicWeight subtopic_weights = 3;
+  // The guided-learning DAG from the Python topic map. When present (and guided
+  // mode is on in config), a subtopic is reported locked until its prereqs are
+  // satisfied. Curriculum ordering only; never affects the give-up thresholds
+  // or any score.
+  repeated SubtopicPrereqs subtopic_prereqs = 4;
+  repeated UnitPrereqs unit_prereqs = 5;
 }
 
 message SubtopicWeight {
   string tag = 1;
   double weight = 2;
+}
+
+// Guided-learning DAG edges. A subtopic's new cards stay locked until every
+// prerequisite is satisfied (its memory gate is cleared OR its practice-test
+// performance is mastered).
+message SubtopicPrereqs {
+  string tag = 1;
+  repeated string prereqs = 2;  // prerequisite subtopic tags
+}
+
+message UnitPrereqs {
+  string unit_id = 1;
+  repeated string prereqs = 2;  // prerequisite unit ids
 }
 
 // Which tier a subtopic is in. Blocked -> practise in isolation; WithinUnit ->
@@ -166,6 +185,24 @@ message SubtopicMastery {
   // Relative importance weight (0 when none supplied). Echoed from the request
   // so the UI can size this subtopic without a second source of truth.
   double weight = 10;
+  // Practice-test PERFORMANCE for this subtopic: a SEPARATE signal from the
+  // memory gate above, never blended into it. Accuracy over graded exam-style
+  // questions (config speedrunPerformanceBySubtopic). perf_questions is the
+  // sample size; performance_mastered requires a min sample AND >= 80%, so it
+  // abstains (stays false) below the sample floor rather than inventing a
+  // score.
+  uint32 perf_questions = 11;
+  uint32 perf_correct = 12;
+  double perf_accuracy = 13;
+  bool performance_mastered = 14;
+  // Guided gate: true when this subtopic's new cards are withheld because a
+  // prerequisite is not satisfied yet (guided mode on and it is not unlocked).
+  // A prerequisite is satisfied by the memory gate OR by performance.
+  bool locked = 15;
+  // Prerequisites not yet satisfied (subtopic tags), for the lock reason. Unit
+  // prereqs surface here too, as a representative unlocked subtopic of the
+  // blocking unit.
+  repeated string unmet_prereqs = 16;
 }
 
 message UnitMastery {
@@ -245,10 +282,15 @@ message MasteryState {
   repeated UnitMastery units = 2;
   MasteryOverall overall = 3;
   // Subtopics still worth studying, highest-impact first (weight x
-  // opportunity). Empty once everything is mastered.
+  // opportunity). Empty once everything is mastered. When guided mode is on,
+  // only unlocked subtopics appear, so guidance matches what the queue serves.
   repeated StudyPriority priorities = 4;
   // The tier-aware "what to study next" recommendation.
   StudyRecommendation recommendation = 5;
+  // Whether guided mode (the hard prerequisite gate) is currently on. Mirrors
+  // config speedrunGuidedMode (default true). The UI reflects this in its
+  // "Guided sequence" toggle.
+  bool guided_mode = 6;
 }
 
 message MasteryOrderedCards {

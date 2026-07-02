@@ -163,6 +163,84 @@ def apply_subtopic_weights_config(
     col.set_config("speedrunSubtopicWeights", weights)
 
 
+def subtopic_prereqs(
+    topics: dict[str, Any] | None = None,
+) -> list[tuple[str, list[str]]]:
+    """Per-subtopic prerequisite tags for the guided-learning DAG, keyed by
+    subtopic tag. Prereq ids in the topic map are within the same unit, so they
+    resolve to ``subtopic::<unit>::<prereq>`` tags here."""
+    topics = topics or load_topics()
+    out: list[tuple[str, list[str]]] = []
+    for unit in topics["units"]:
+        for sub in unit["subtopics"]:
+            prereq_tags = [
+                subtopic_tag(unit["id"], pid) for pid in sub.get("prereqs", [])
+            ]
+            out.append((subtopic_tag(unit["id"], sub["id"]), prereq_tags))
+    return out
+
+
+def unit_prereqs(
+    topics: dict[str, Any] | None = None,
+) -> list[tuple[str, list[str]]]:
+    """Per-unit prerequisite unit ids (the cross-unit curriculum order)."""
+    topics = topics or load_topics()
+    return [(unit["id"], list(unit.get("prereqs", []))) for unit in topics["units"]]
+
+
+def apply_prereqs_config(col: Any, topics: dict[str, Any] | None = None) -> None:
+    """Write the guided-learning DAG to collection config so the live queue gate
+    can read it without a request round-trip. Curriculum order only; it never
+    affects any score or the give-up rule. Safe to call repeatedly."""
+    topics = topics or load_topics()
+    col.set_config(
+        "speedrunSubtopicPrereqs",
+        {tag: prereqs for tag, prereqs in subtopic_prereqs(topics)},
+    )
+    col.set_config(
+        "speedrunUnitPrereqs",
+        {uid: prereqs for uid, prereqs in unit_prereqs(topics)},
+    )
+
+
+# Guided-learning gate config. Mirrors GUIDED_MODE_KEY / UNLOCKED_SUBTOPICS_KEY
+# in rslib/src/speedrun/mastery.rs. Guided mode defaults ON (a fresh learner is
+# guided through the curriculum order); turning it off is the free-mode bypass.
+GUIDED_MODE_KEY = "speedrunGuidedMode"
+UNLOCKED_SUBTOPICS_KEY = "speedrunUnlockedSubtopics"
+
+
+def guided_mode_enabled(col: Any) -> bool:
+    """Whether the hard prerequisite gate is on (default True)."""
+    return bool(col.get_config(GUIDED_MODE_KEY, True))
+
+
+def set_guided_mode(col: Any, on: bool) -> None:
+    """Turn the guided prerequisite gate on/off (the global 'free mode' bypass).
+    Curriculum ordering only — it never changes any score or the give-up rule."""
+    col.set_config(GUIDED_MODE_KEY, bool(on))
+
+
+def unlocked_subtopics(col: Any) -> list[str]:
+    """Subtopic tags the user has explicitly unlocked (per-topic gate bypass)."""
+    return list(col.get_config(UNLOCKED_SUBTOPICS_KEY, []) or [])
+
+
+def unlock_subtopic(col: Any, tag: str) -> None:
+    """Bypass the guided gate for one subtopic (for experienced users). Additive
+    and idempotent; never touches memory/performance or the give-up rule."""
+    cur = unlocked_subtopics(col)
+    if tag and tag not in cur:
+        cur.append(tag)
+        col.set_config(UNLOCKED_SUBTOPICS_KEY, cur)
+
+
+def relock_subtopic(col: Any, tag: str) -> None:
+    """Undo a per-topic unlock (return it to the guided gate)."""
+    cur = [t for t in unlocked_subtopics(col) if t != tag]
+    col.set_config(UNLOCKED_SUBTOPICS_KEY, cur)
+
+
 def expected_subtopic_tags(topics: dict[str, Any] | None = None) -> list[str]:
     """Every subtopic tag in the syllabus (the denominator for coverage)."""
     topics = topics or load_topics()

@@ -83,7 +83,15 @@ from aqt.webview import AnkiWebView, AnkiWebViewKind
 install_pylib_legacy()
 
 MainWindowState = Literal[
-    "startup", "deckBrowser", "overview", "review", "resetRequired", "profileManager"
+    "startup",
+    "deckBrowser",
+    "overview",
+    "review",
+    "resetRequired",
+    "profileManager",
+    # Speedrun (SOA Exam P fork): the custom home shell (concept map + readiness
+    # tabs) that replaces the deck browser as the landing screen.
+    "speedrunHome",
 ]
 
 
@@ -662,7 +670,9 @@ class AnkiQt(QMainWindow):
             self.update_undo_actions()
             gui_hooks.collection_did_load(self.col)
             self.apply_collection_options()
-            self.moveToState("deckBrowser")
+            # Speedrun (SOA Exam P fork): land on the custom home shell instead of
+            # the deck browser. The deck browser stays reachable (toolbar/shortcut).
+            self.moveToState("speedrunHome")
         except Exception:
             # dump error to stderr so it gets picked up by errors.py
             traceback.print_exc()
@@ -771,6 +781,22 @@ class AnkiQt(QMainWindow):
 
     def _deckBrowserState(self, oldState: MainWindowState) -> None:
         self.deckBrowser.show()
+
+    def _speedrunHomeState(self, oldState: MainWindowState) -> None:
+        # Full-bleed custom shell: hide Anki's top toolbar + bottom bar so the
+        # landing screen does not read as stock Anki, then render the SvelteKit
+        # "home" page (concept map + readiness tabs) into the main webview.
+        import aqt.speedrun
+
+        self.toolbarWeb.hide()
+        self.bottomWeb.hide()
+        aqt.speedrun.show_home(self)
+
+    def _speedrunHomeCleanup(self, newState: MainWindowState) -> None:
+        # Restore Anki's chrome when leaving the home shell (review/browse/etc).
+        self.toolbarWeb.elevate()
+        self.toolbarWeb.show()
+        self.bottomWeb.show()
 
     def _selectedDeck(self) -> DeckDict | None:
         did = self.col.decks.selected()
@@ -1468,10 +1494,13 @@ title="{}" {}>{}</button>""".format(
         m.menuTools.addAction(self.action_speedrun_study_map)
         qconnect(self.action_speedrun_study_map.triggered, self.on_speedrun_study_map)
 
-        # Speedrun: show the current card's mastery tier during review.
+        # Speedrun: show the current card's mastery tier during review, and
+        # auto-seed the (non-optional) SOA Exam P deck on first collection load.
         import aqt.speedrun
 
         aqt.speedrun.register_reviewer_banner()
+        aqt.speedrun.register_collection_hooks()
+        aqt.speedrun.register_theme()
 
         # View
         qconnect(

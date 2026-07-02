@@ -27,6 +27,7 @@ use anki_proto::speedrun::UnitMastery;
 use crate::collection::Collection;
 use crate::error;
 use crate::speedrun::mastery::build_study_plan;
+use crate::speedrun::mastery::compute_locks;
 use crate::speedrun::mastery::compute_pace;
 use crate::speedrun::mastery::compute_pools;
 use crate::speedrun::mastery::order_new_cards;
@@ -170,6 +171,38 @@ impl crate::services::SpeedrunService for Collection {
 
         let pools = compute_pools(&stats);
 
+        // Guided-learning gate. The DAG comes from the request (the Python topic
+        // map); the guided flag, per-topic unlocks, and practice-test
+        // PERFORMANCE come from config. Performance stays a SEPARATE signal from
+        // the memory gate — it is only OR-ed in to decide prerequisites, never
+        // blended into mastery.
+        let subtopic_prereqs: HashMap<String, Vec<String>> = input
+            .subtopic_prereqs
+            .iter()
+            .map(|p| (p.tag.clone(), p.prereqs.clone()))
+            .collect();
+        let unit_prereqs: HashMap<String, Vec<String>> = input
+            .unit_prereqs
+            .iter()
+            .map(|p| (p.unit_id.clone(), p.prereqs.clone()))
+            .collect();
+        let perf = self.speedrun_performance_config();
+        let unlocked = self.speedrun_unlocked_subtopics_config();
+        let guided = self.speedrun_guided_mode_enabled();
+        let locks = compute_locks(
+            &stats,
+            &perf,
+            &subtopic_prereqs,
+            &unit_prereqs,
+            &unlocked,
+            guided,
+        );
+        let locked_tags: std::collections::HashSet<String> = locks
+            .iter()
+            .filter(|(_, v)| v.locked)
+            .map(|(k, _)| k.clone())
+            .collect();
+
         // Per-unit rollup, in first-seen order.
         let mut unit_order: Vec<String> = Vec::new();
         let mut unit_total: std::collections::HashMap<String, u32> =
@@ -191,6 +224,9 @@ impl crate::services::SpeedrunService for Collection {
             .map(|s| {
                 let tag = s.tag();
                 let pool = pools.get(&tag).copied().unwrap_or(Pool::Blocked);
+                // Practice-test performance (separate signal) + guided lock.
+                let p = perf.get(&tag).copied().unwrap_or_default();
+                let lock = locks.get(&tag).cloned().unwrap_or_default();
                 SubtopicMastery {
                     tag,
                     unit_id: s.unit_id.clone(),
@@ -202,6 +238,12 @@ impl crate::services::SpeedrunService for Collection {
                     gate_cleared: s.gate_cleared(),
                     pool: pool_to_proto(pool) as i32,
                     weight: s.weight,
+                    perf_questions: p.questions,
+                    perf_correct: p.correct,
+                    perf_accuracy: p.accuracy(),
+                    performance_mastered: p.mastered(),
+                    locked: lock.locked,
+                    unmet_prereqs: lock.unmet_prereqs,
                 }
             })
             .collect();
@@ -246,10 +288,13 @@ impl crate::services::SpeedrunService for Collection {
         });
 
         // "What to study next", ranked by importance weight x measured
-        // opportunity. Cleared subtopics drop out; this only reorders measured
-        // state, so it never fabricates a score.
-        let priorities = study_priorities(&stats)
+        // opportunity. Cleared subtopics drop out; guided-locked subtopics are
+        // withheld too, so the guidance matches what the queue actually serves.
+        // This only reorders/filters measured state, so it never fabricates a
+        // score.
+        let priorities: Vec<StudyPriority> = study_priorities(&stats)
             .into_iter()
+            .filter(|p| !locked_tags.contains(&p.tag))
             .map(|p| StudyPriority {
                 tag: p.tag,
                 unit_id: p.unit_id,
@@ -261,11 +306,19 @@ impl crate::services::SpeedrunService for Collection {
             .collect();
 
         // Tier-aware "what to study next": block the weakest uncleared subtopic,
-        // then interleave a unit once it has >= 2 cleared, then cross-unit.
+        // then interleave a unit once it has >= 2 cleared, then cross-unit. If
+        // the guided gate hides the recommended blocked subtopic, point at the
+        // highest-priority UNLOCKED subtopic instead.
         let rec = recommend_study(&stats);
+        let mut subtopic_tag = rec.subtopic_tag.unwrap_or_default();
+        if !subtopic_tag.is_empty() && locked_tags.contains(&subtopic_tag) {
+            if let Some(first) = priorities.first() {
+                subtopic_tag = first.tag.clone();
+            }
+        }
         let recommendation = Some(StudyRecommendation {
             mode: study_mode_to_proto(rec.mode) as i32,
-            subtopic_tag: rec.subtopic_tag.unwrap_or_default(),
+            subtopic_tag,
             unit_id: rec.unit_id.unwrap_or_default(),
         });
 
@@ -275,6 +328,7 @@ impl crate::services::SpeedrunService for Collection {
             overall,
             priorities,
             recommendation,
+            guided_mode: guided,
         })
     }
 
@@ -347,6 +401,35 @@ impl crate::services::SpeedrunService for Collection {
         }
         let pools = compute_pools(&stats);
 
+        // Guided gate: drop blocked subtopics whose NEW cards are withheld, so
+        // the plan matches what the queue actually serves. Within/cross-unit
+        // items carry no subtopic tag, so they pass through untouched.
+        let subtopic_prereqs: HashMap<String, Vec<String>> = input
+            .subtopic_prereqs
+            .iter()
+            .map(|p| (p.tag.clone(), p.prereqs.clone()))
+            .collect();
+        let unit_prereqs: HashMap<String, Vec<String>> = input
+            .unit_prereqs
+            .iter()
+            .map(|p| (p.unit_id.clone(), p.prereqs.clone()))
+            .collect();
+        let perf = self.speedrun_performance_config();
+        let unlocked = self.speedrun_unlocked_subtopics_config();
+        let guided = self.speedrun_guided_mode_enabled();
+        let locked_tags: std::collections::HashSet<String> = compute_locks(
+            &stats,
+            &perf,
+            &subtopic_prereqs,
+            &unit_prereqs,
+            &unlocked,
+            guided,
+        )
+        .into_iter()
+        .filter(|(_, v)| v.locked)
+        .map(|(k, _)| k)
+        .collect();
+
         // Which deck holds each subtopic's cards (so we can read its counts).
         let tag_deck = self.speedrun_subtopic_deck_ids(&input.expected_subtopics)?;
 
@@ -365,6 +448,10 @@ impl crate::services::SpeedrunService for Collection {
 
         let items = build_study_plan(&stats, &pools, &tag_deck, &counts, &parent)
             .into_iter()
+            .filter(|p| match &p.subtopic_tag {
+                Some(t) => !locked_tags.contains(t),
+                None => true,
+            })
             .map(|p| StudyPlanItem {
                 tier: study_mode_to_proto(p.tier) as i32,
                 deck_id: p.deck_id,
@@ -1018,6 +1105,8 @@ mod tests {
                 ],
                 units: vec![],
                 subtopic_weights: vec![],
+                subtopic_prereqs: vec![],
+                unit_prereqs: vec![],
             })
             .unwrap();
 
@@ -1049,6 +1138,8 @@ mod tests {
                 expected_subtopics: vec!["subtopic::general::a".to_string()],
                 units: vec![],
                 subtopic_weights: vec![],
+                subtopic_prereqs: vec![],
+                unit_prereqs: vec![],
             })
             .unwrap();
         assert!(plan.items.is_empty());
@@ -1062,6 +1153,8 @@ mod tests {
             ],
             units: vec![],
             subtopic_weights: vec![],
+            subtopic_prereqs: vec![],
+            unit_prereqs: vec![],
         }
     }
 

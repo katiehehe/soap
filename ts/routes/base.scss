@@ -34,3 +34,14 @@ html {
     padding: 1rem 1rem !important;
     margin: -1rem auto -1rem -1rem !important;
 }
+
+// --- Speedrun (SOA Exam P) theme tokens ---------------------------------
+// One accent + a few tokens so the custom home shell and the concept-map focus
+// highlights read as a single product. Available to every route via the layout.
+:root {
+    --sr-accent: #6366f1;
+    --sr-accent-2: #8b5cf6;
+    --sr-accent-weak: rgba(99, 102, 241, 0.12);
+    --sr-accent-glow: rgba(99, 102, 241, 0.4);
+    --sr-radius: 10px;
+}

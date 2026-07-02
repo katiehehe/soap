@@ -3,12 +3,11 @@
 
 # coding: utf-8
 import html
-import re
 import time
 
 from anki.consts import MODEL_CLOZE
 from anki.errors import NotFoundError
-from anki.utils import is_win, strip_html
+from anki.utils import strip_html
 from tests.shared import getEmptyCol
 
 

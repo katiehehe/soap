@@ -20,6 +20,13 @@ test("study map renders the three-layer topic tree", async ({ page }) => {
     await expect(page.getByText("Order statistics")).toBeVisible();
     await expect(page.getByText("Insurance apps")).toBeVisible();
 
+    // Guided-learning DAG controls, on by default.
+    await expect(page.getByText("Show prerequisites")).toBeVisible();
+    await expect(page.getByText(/Guided sequence: (on|off)/)).toBeVisible();
+    // On a fresh collection only the curriculum roots are open, so downstream
+    // subtopics show a lock badge (the guided gate, default on).
+    await expect(page.locator(".lock-badge").first()).toBeVisible();
+
     // Overall mastery is shown, and on an empty collection it honestly reads
     // 0 of 19 mastered (a measured count, not a guess).
     await expect(page.getByRole("heading", { name: "Overall mastery" })).toBeVisible();
@@ -45,6 +52,11 @@ test("study map renders the three-layer topic tree", async ({ page }) => {
     await expect(detail.getByText("Graded reviews", { exact: true })).toBeVisible();
     // With no reviews, accuracy/retention are withheld rather than guessed.
     await expect(detail.getByText(/need ≥ 10 reviews/).first()).toBeVisible();
+    // Performance is shown as its OWN signal, separate from the memory gate.
+    await expect(detail.getByText("Performance (practice tests)")).toBeVisible();
+    // Order statistics is downstream, so it's locked with a reason + a bypass.
+    await expect(detail.getByText(/Locked by guided sequence/)).toBeVisible();
+    await expect(detail.getByRole("button", { name: "Unlock anyway" })).toBeVisible();
 
     await page.screenshot({ path: "out/study-map.png", fullPage: true });
 });

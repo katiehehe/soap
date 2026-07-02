@@ -4,7 +4,6 @@
 import os
 import tempfile
 
-from anki.collection import CardStats
 from tests.shared import getEmptyCol
 
 
@@ -36,4 +35,3 @@ def test_graphs():
     rep = g.report()
     with open(os.path.join(dir, "test.html"), "w", encoding="UTF-8") as note:
         note.write(rep)
-    return

@@ -30,9 +30,13 @@ from anki.speedrun.soa_sample import SampleItem, load_sample_items
 if TYPE_CHECKING:
     from anki.collection import Collection
 
-# Collection-config keys. Mirrored in rslib/src/speedrun/service.rs.
+# Collection-config keys. Mirrored in rslib/src/speedrun/{service,mastery}.rs.
 PRACTICE_STATS_KEY = "speedrunPracticeStats"  # {"questions", "correct", "tests"}
 PRACTICE_LOG_KEY = "speedrunPracticeLog"  # list of per-test summaries (audit)
+# Per-subtopic performance from practice tests: {tag: {"questions", "correct"}}.
+# A SEPARATE signal from the memory gate (never blended); it can satisfy
+# prerequisites in the guided DAG and is shown next to mastery on the map.
+PERFORMANCE_KEY = "speedrunPerformanceBySubtopic"
 
 DEFAULT_TEST_SIZE = 30
 
@@ -42,6 +46,7 @@ class TestResult:
     questions: int
     correct: int
     per_unit: dict[str, tuple[int, int]]  # unit_id -> (correct, total)
+    per_subtopic: dict[str, tuple[int, int]]  # subtopic tag -> (correct, total)
     label: str = ""
 
     @property
@@ -112,6 +117,7 @@ def grade(
     """Grade a test: ``responses`` maps item id -> 1 (correct) / 0 (wrong).
     Missing responses count as wrong. Reports the per-unit breakdown too."""
     per_unit: dict[str, list[int]] = {}
+    per_sub: dict[str, list[int]] = {}
     correct = 0
     for it in items:
         got = 1 if responses.get(it.id, 0) == 1 else 0
@@ -119,10 +125,14 @@ def grade(
         cell = per_unit.setdefault(it.unit_id, [0, 0])
         cell[0] += got
         cell[1] += 1
+        scell = per_sub.setdefault(it.subtopic, [0, 0])
+        scell[0] += got
+        scell[1] += 1
     return TestResult(
         questions=len(items),
         correct=correct,
         per_unit={u: (c, t) for u, (c, t) in per_unit.items()},
+        per_subtopic={s: (c, t) for s, (c, t) in per_sub.items()},
         label=label,
     )
 
@@ -137,14 +147,36 @@ def practice_stats(col: Collection) -> dict[str, int]:
     }
 
 
+def performance_by_subtopic(col: Collection) -> dict[str, dict[str, int]]:
+    """Accumulated per-subtopic practice-test performance from config
+    (tag -> {questions, correct}). Empty when no tests have been graded."""
+    raw = col.get_config(PERFORMANCE_KEY, None) or {}
+    out: dict[str, dict[str, int]] = {}
+    for tag, cell in raw.items():
+        out[tag] = {
+            "questions": int(cell.get("questions", 0)),
+            "correct": int(cell.get("correct", 0)),
+        }
+    return out
+
+
 def record_test(col: Collection, result: TestResult) -> dict[str, int]:
     """Accumulate a graded test into collection config so the readiness engine
-    can read it. Returns the new running totals. Appends a small audit summary."""
+    can read it. Returns the new running totals. Appends a small audit summary.
+    Also accumulates per-subtopic PERFORMANCE (a separate signal from the memory
+    gate) that can satisfy prerequisites in the guided DAG."""
     stats = practice_stats(col)
     stats["questions"] += result.questions
     stats["correct"] += result.correct
     stats["tests"] += 1
     col.set_config(PRACTICE_STATS_KEY, stats)
+
+    perf = performance_by_subtopic(col)
+    for tag, (c, t) in result.per_subtopic.items():
+        cell = perf.setdefault(tag, {"questions": 0, "correct": 0})
+        cell["questions"] += t
+        cell["correct"] += c
+    col.set_config(PERFORMANCE_KEY, perf)
 
     log = col.get_config(PRACTICE_LOG_KEY, None) or []
     log.append(
@@ -165,3 +197,4 @@ def reset_practice_stats(col: Collection) -> None:
     """Clear stored practice-test evidence (readiness returns to abstaining)."""
     col.remove_config(PRACTICE_STATS_KEY)
     col.remove_config(PRACTICE_LOG_KEY)
+    col.remove_config(PERFORMANCE_KEY)

@@ -30,7 +30,7 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -352,23 +352,25 @@ def candidate_tag(subtopic_tag: str) -> str:
 def add_generated_cards(
     col: Collection, cards: list[GeneratedCard], deck_name: str = AI_DECK
 ) -> list[int]:
-    """Add generated cards to a quarantine deck, tagged ``ai::unreviewed`` +
-    ``src::<source>`` + ``subtopic_candidate::``. They never carry the real
-    ``subtopic::`` tag, so coverage/mastery are unaffected until a human
-    approves. Returns the new note ids."""
-    notetype = col.models.by_name("Basic")
-    if notetype is None:
-        raise RuntimeError("Basic notetype not found")
+    """Add generated cards to a quarantine deck as typed short-answer cards
+    (exam-style, non-flashcard), tagged ``ai::unreviewed`` + ``src::<source>`` +
+    ``subtopic_candidate::`` + ``format::short_answer``. They never carry the real
+    ``subtopic::`` tag, so coverage/mastery are unaffected until a human approves.
+    Returns the new note ids."""
+    from anki.speedrun.seed import ensure_short_answer_notetype
+
+    notetype = ensure_short_answer_notetype(col)
     deck_id = col.decks.id(deck_name)
     assert deck_id is not None
     note_ids: list[int] = []
     for c in cards:
         note = col.new_note(notetype)
         note["Front"] = c.front
-        note["Back"] = c.back
+        note["Answer"] = c.back
         note.add_tag(AI_UNREVIEWED_TAG)
         note.add_tag(f"src::{_slug(c.source_name)}")
         note.add_tag(candidate_tag(c.subtopic_tag))
+        note.add_tag("format::short_answer")
         col.add_note(note, deck_id)
         note_ids.append(note.id)
     return note_ids

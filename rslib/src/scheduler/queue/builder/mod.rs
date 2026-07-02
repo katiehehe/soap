@@ -287,6 +287,16 @@ impl Collection {
 
         queues.gather_cards(self)?;
 
+        // Speedrun (SOA Exam P fork): the guided-learning gate. Default ON — a
+        // fresh learner is guided through the curriculum order — it withholds
+        // NEW cards for subtopics whose prerequisites aren't satisfied yet,
+        // unless the user turns guided mode off ("free mode") or unlocks the
+        // topic. A read-only queue filter (writes nothing) and a no-op when no
+        // prerequisite DAG is configured, so undo/integrity are unaffected and
+        // upstream/plain decks are untouched. Reviews are never gated.
+        if self.speedrun_guided_mode_enabled() {
+            self.speedrun_gate_new_cards(&mut queues.new)?;
+        }
         // Speedrun (SOA Exam P fork): opt-in three-tier mastery ordering of new
         // cards. Off by default, so upstream behaviour is unchanged unless the
         // user enables it; read-only, so undo and collection integrity are

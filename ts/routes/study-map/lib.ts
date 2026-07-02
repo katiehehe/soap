@@ -15,6 +15,10 @@ export interface SubtopicDef {
     // pylib/anki/speedrun/exam_p_topics.json (an editable emphasis estimate;
     // each unit's subtopic weights sum to its official section midpoint).
     weight: number;
+    // Prerequisite subtopic ids WITHIN the same unit (the guided-learning DAG).
+    // Mirrors "prereqs" in pylib/anki/speedrun/exam_p_topics.json; cross-unit
+    // order is expressed by UNIT_PREREQS below.
+    prereqs: string[];
 }
 export interface UnitDef {
     id: string;
@@ -23,47 +27,140 @@ export interface UnitDef {
 }
 
 // Mirrors pylib/anki/speedrun/exam_p_topics.json (official 2026-05 outline).
-// Names are kept short so they read well beneath a bubble; weights mirror the
-// JSON so the map sizes bubbles from the same source the engine weights by.
+// Names are kept short so they read well beneath a bubble; weights + prereqs
+// mirror the JSON so the map draws the same DAG the engine gates on.
 export const TAXONOMY: UnitDef[] = [
     {
         id: "general",
         name: "General Probability",
         subtopics: [
-            { id: "sets_axioms", name: "Sets & axioms", weight: 3.5 },
-            { id: "combinatorics", name: "Combinatorics", weight: 4.5 },
-            { id: "independence", name: "Independence", weight: 4.0 },
-            { id: "add_mult_rules", name: "Addition & mult. rules", weight: 4.0 },
-            { id: "conditional", name: "Conditional prob.", weight: 5.25 },
-            { id: "bayes", name: "Bayes' theorem", weight: 5.25 },
+            { id: "sets_axioms", name: "Sets & axioms", weight: 3.5, prereqs: [] },
+            {
+                id: "combinatorics",
+                name: "Combinatorics",
+                weight: 4.5,
+                prereqs: ["sets_axioms"],
+            },
+            {
+                id: "independence",
+                name: "Independence",
+                weight: 4.0,
+                prereqs: ["add_mult_rules"],
+            },
+            {
+                id: "add_mult_rules",
+                name: "Addition & mult. rules",
+                weight: 4.0,
+                prereqs: ["sets_axioms"],
+            },
+            {
+                id: "conditional",
+                name: "Conditional prob.",
+                weight: 5.25,
+                prereqs: ["add_mult_rules"],
+            },
+            {
+                id: "bayes",
+                name: "Bayes' theorem",
+                weight: 5.25,
+                prereqs: ["conditional"],
+            },
         ],
     },
     {
         id: "univariate",
         name: "Univariate RVs",
         subtopics: [
-            { id: "rv_basics", name: "PDFs & CDFs", weight: 6.5 },
-            { id: "expectation", name: "Expectation & moments", weight: 8.5 },
-            { id: "variance", name: "Variance & SD", weight: 7.0 },
-            { id: "discrete_dists", name: "Discrete dist.", weight: 9.0 },
-            { id: "continuous_dists", name: "Continuous dist.", weight: 9.0 },
-            { id: "insurance_apps", name: "Insurance apps", weight: 7.0 },
+            { id: "rv_basics", name: "PDFs & CDFs", weight: 6.5, prereqs: [] },
+            {
+                id: "expectation",
+                name: "Expectation & moments",
+                weight: 8.5,
+                prereqs: ["rv_basics"],
+            },
+            {
+                id: "variance",
+                name: "Variance & SD",
+                weight: 7.0,
+                prereqs: ["expectation"],
+            },
+            {
+                id: "discrete_dists",
+                name: "Discrete dist.",
+                weight: 9.0,
+                prereqs: ["variance"],
+            },
+            {
+                id: "continuous_dists",
+                name: "Continuous dist.",
+                weight: 9.0,
+                prereqs: ["variance"],
+            },
+            {
+                id: "insurance_apps",
+                name: "Insurance apps",
+                weight: 7.0,
+                prereqs: ["continuous_dists"],
+            },
         ],
     },
     {
         id: "multivariate",
         name: "Multivariate RVs",
         subtopics: [
-            { id: "joint_distributions", name: "Joint distributions", weight: 4.25 },
-            { id: "marginal_conditional", name: "Marginal & cond.", weight: 4.25 },
-            { id: "joint_moments", name: "Joint moments", weight: 3.5 },
-            { id: "covariance_correlation", name: "Covariance & corr.", weight: 4.25 },
-            { id: "order_statistics", name: "Order statistics", weight: 2.75 },
-            { id: "linear_combinations", name: "Linear combos", weight: 3.75 },
-            { id: "clt", name: "Central limit thm.", weight: 3.75 },
+            {
+                id: "joint_distributions",
+                name: "Joint distributions",
+                weight: 4.25,
+                prereqs: [],
+            },
+            {
+                id: "marginal_conditional",
+                name: "Marginal & cond.",
+                weight: 4.25,
+                prereqs: ["joint_distributions"],
+            },
+            {
+                id: "joint_moments",
+                name: "Joint moments",
+                weight: 3.5,
+                prereqs: ["marginal_conditional"],
+            },
+            {
+                id: "covariance_correlation",
+                name: "Covariance & corr.",
+                weight: 4.25,
+                prereqs: ["joint_moments"],
+            },
+            {
+                id: "order_statistics",
+                name: "Order statistics",
+                weight: 2.75,
+                prereqs: ["marginal_conditional"],
+            },
+            {
+                id: "linear_combinations",
+                name: "Linear combos",
+                weight: 3.75,
+                prereqs: ["covariance_correlation"],
+            },
+            {
+                id: "clt",
+                name: "Central limit thm.",
+                weight: 3.75,
+                prereqs: ["linear_combinations"],
+            },
         ],
     },
 ];
+
+// Cross-unit curriculum order (mirrors each unit's "prereqs" in the topic map):
+// univariate needs general; multivariate needs univariate.
+export const UNIT_PREREQS: Record<string, string[]> = {
+    general: [],
+    univariate: ["general"],
+    multivariate: ["univariate"],
+};
 
 // A calmer, cohesive palette (traffic-light meaning, softened).
 export const COLORS = {
@@ -84,11 +181,11 @@ export function unitWeight(u: UnitDef): number {
 // the biggest exam topics read as the biggest bubbles. Radii are capped well
 // below the spacing between bubble centres (see the radial constants) so no two
 // bubbles can overlap — verified by lib.test.ts.
-export const CENTER_R = 52;
-const UNIT_R_MIN = 44;
-const UNIT_R_MAX = 58;
-const SUB_R_MIN = 26;
-const SUB_R_MAX = 46;
+export const CENTER_R = 58;
+const UNIT_R_MIN = 54;
+const UNIT_R_MAX = 72;
+const SUB_R_MIN = 50;
+const SUB_R_MAX = 74;
 
 const SUB_WEIGHTS = TAXONOMY.flatMap((u) => u.subtopics.map((s) => s.weight));
 const SUB_W_MIN = Math.min(...SUB_WEIGHTS);
@@ -119,10 +216,10 @@ export function unitRadius(weight: number): number {
 // Radial layout constants. Two rings (near/far) per unit halve the number of
 // bubbles competing for angular space; the generous radii leave room for the
 // largest bubbles without overlap (verified by lib.test.ts).
-const R_UNIT = 210;
-const R_IN = 384;
-const R_OUT = 552;
-const STEP_DEG = 16; // angular gap between consecutive subtopics of a unit
+const R_UNIT = 250;
+const R_IN = 450;
+const R_OUT = 640;
+const STEP_DEG = 17; // angular gap between consecutive subtopics of a unit
 const UNIT_ANGLES_DEG = [-90, 30, 150]; // upward-pointing equilateral triangle
 const MARGIN = 26;
 const DEG = Math.PI / 180;
@@ -138,6 +235,8 @@ export interface LeafNode extends Circle {
     tag: string;
     unitId: string;
     weight: number;
+    // Prerequisite subtopic tags (full `subtopic::unit::id` tags).
+    prereqs: string[];
 }
 export interface UnitNode extends Circle {
     id: string;
@@ -175,13 +274,22 @@ export function computeLayout(): Layout {
                 tag: subtopicTag(u.id, s.id),
                 unitId: u.id,
                 weight: s.weight,
+                prereqs: s.prereqs.map((p) => subtopicTag(u.id, p)),
                 x: r * Math.cos(angle),
                 y: r * Math.sin(angle),
                 r: subRadius(s.weight),
             };
         });
         const w = unitWeight(u);
-        return { id: u.id, name: u.name, weight: w, x: ux, y: uy, r: unitRadius(w), subs };
+        return {
+            id: u.id,
+            name: u.name,
+            weight: w,
+            x: ux,
+            y: uy,
+            r: unitRadius(w),
+            subs,
+        };
     });
 
     // 2. measure bounds over every bubble (centre +/- radius)
@@ -252,6 +360,127 @@ export function edgeBetween(a: Circle, b: Circle): EdgeGeom {
     const start = borderPoint(a, b.x, b.y);
     const end = borderPoint(b, a.x, a.y);
     return { x1: start.x, y1: start.y, x2: end.x, y2: end.y };
+}
+
+// ---------------------------------------------------------------------------
+// Prerequisite DAG (the guided-learning order)
+//
+// Directed arrows drawn OVER the radial map: prerequisite -> dependent. They
+// mirror the same DAG the engine gates on, so what the map shows and what the
+// scheduler withholds always agree.
+// ---------------------------------------------------------------------------
+
+export interface PrereqEdge {
+    from: string; // prerequisite tag (arrow tail)
+    to: string; // dependent tag (arrow head)
+    geom: EdgeGeom;
+    kind: "subtopic" | "unit";
+}
+
+/** All prerequisite arrows for the map: subtopic -> subtopic (within a unit)
+ * and unit -> unit (the cross-unit order). Each runs border-to-border so it
+ * visually touches both bubbles; the arrowhead sits at the dependent end. */
+export function prereqEdges(layout: Layout): PrereqEdge[] {
+    const leafByTag = new Map<string, LeafNode>();
+    for (const u of layout.units) {
+        for (const s of u.subs) {
+            leafByTag.set(s.tag, s);
+        }
+    }
+    const edges: PrereqEdge[] = [];
+    for (const u of layout.units) {
+        for (const s of u.subs) {
+            for (const p of s.prereqs) {
+                const from = leafByTag.get(p);
+                if (from) {
+                    edges.push({
+                        from: p,
+                        to: s.tag,
+                        geom: edgeBetween(from, s),
+                        kind: "subtopic",
+                    });
+                }
+            }
+        }
+    }
+    const unitById = new Map(layout.units.map((u) => [u.id, u]));
+    for (const u of layout.units) {
+        for (const p of UNIT_PREREQS[u.id] ?? []) {
+            const from = unitById.get(p);
+            if (from) {
+                edges.push({
+                    from: `unit::${p}`,
+                    to: `unit::${u.id}`,
+                    geom: edgeBetween(from, u),
+                    kind: "unit",
+                });
+            }
+        }
+    }
+    return edges;
+}
+
+/** Arrowhead triangle (an SVG points string) at the END of an edge, pointing
+ * along the edge direction. `size` is the arrow length in px. */
+export function arrowHead(geom: EdgeGeom, size = 12): string {
+    const dx = geom.x2 - geom.x1;
+    const dy = geom.y2 - geom.y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    const bx = geom.x2 - ux * size; // base, `size` back from the tip
+    const by = geom.y2 - uy * size;
+    const w = size * 0.5; // half-width of the base
+    const px = -uy * w;
+    const py = ux * w;
+    return `${geom.x2},${geom.y2} ${bx + px},${by + py} ${bx - px},${by - py}`;
+}
+
+/** Map of subtopic tag -> its prerequisite tags (within its unit). */
+function subtopicPrereqMap(): Map<string, string[]> {
+    const m = new Map<string, string[]>();
+    for (const u of TAXONOMY) {
+        for (const s of u.subtopics) {
+            m.set(
+                subtopicTag(u.id, s.id),
+                s.prereqs.map((p) => subtopicTag(u.id, p)),
+            );
+        }
+    }
+    return m;
+}
+
+/** Transitive prerequisites (ancestors — do these first) and dependents
+ * (descendants — these unlock afterwards) of a subtopic tag, for highlighting a
+ * selected bubble's chain on the map. Within-unit (subtopic prereqs live inside
+ * a unit); cross-unit order is shown by the unit arrows. */
+export function prereqChain(tag: string): {
+    ancestors: Set<string>;
+    descendants: Set<string>;
+} {
+    const prereqs = subtopicPrereqMap();
+    const deps = new Map<string, string[]>();
+    for (const [t, ps] of prereqs) {
+        for (const p of ps) {
+            (deps.get(p) ?? deps.set(p, []).get(p)!).push(t);
+        }
+    }
+    const walk = (start: string, graph: Map<string, string[]>): Set<string> => {
+        const out = new Set<string>();
+        const stack = [...(graph.get(start) ?? [])];
+        while (stack.length) {
+            const cur = stack.pop()!;
+            if (out.has(cur)) {
+                continue;
+            }
+            out.add(cur);
+            for (const n of graph.get(cur) ?? []) {
+                stack.push(n);
+            }
+        }
+        return out;
+    };
+    return { ancestors: walk(tag, prereqs), descendants: walk(tag, deps) };
 }
 
 // ---------------------------------------------------------------------------

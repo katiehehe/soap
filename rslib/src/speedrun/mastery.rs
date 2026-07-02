@@ -48,11 +48,41 @@ pub(crate) const ABLATE_WITHIN_UNIT_KEY: &str = "speedrunAblateWithinUnit";
 /// pace is shown (we never invent a deadline).
 pub(crate) const EXAM_DATE_KEY: &str = "speedrunExamDate";
 
+/// Config key: guided-learning mode (the hard prerequisite gate). Unlike the
+/// other speedrun scheduler flags, this defaults ON — a fresh learner is guided
+/// through the curriculum order. Turning it off is the experienced-user "free
+/// mode" bypass. Either way the gate is only a read-only new-card filter, so
+/// undo and collection integrity are untouched.
+pub(crate) const GUIDED_MODE_KEY: &str = "speedrunGuidedMode";
+
+/// Config key: subtopic tags the user has explicitly unlocked (a per-topic
+/// bypass of the guided gate). A JSON list of tags; empty by default.
+pub(crate) const UNLOCKED_SUBTOPICS_KEY: &str = "speedrunUnlockedSubtopics";
+
+/// Config key: per-subtopic practice-test performance ({tag: {questions,
+/// correct}}), written by Python's `practice_test.record_test`. A SEPARATE
+/// signal from the memory gate: it can satisfy a prerequisite, but it never
+/// changes the memory gate itself.
+pub(crate) const PERFORMANCE_KEY: &str = "speedrunPerformanceBySubtopic";
+
+/// Config keys: the guided-learning DAG, written by Python from the topic map.
+/// Subtopic edges ({tag: [prereq tags]}) and unit edges ({unit: [prereq
+/// units]}). Curriculum ordering only; never affects the give-up thresholds.
+pub(crate) const SUBTOPIC_PREREQS_KEY: &str = "speedrunSubtopicPrereqs";
+pub(crate) const UNIT_PREREQS_KEY: &str = "speedrunUnitPrereqs";
+
 /// Pre-registered gate (PRD 8): a subtopic clears when it has been executed
 /// enough times, accurately, and its memory is strong.
 pub(crate) const MIN_PROBLEMS: u32 = 10;
 pub(crate) const MIN_ACCURACY: f64 = 0.80;
 pub(crate) const MIN_RETRIEVABILITY: f64 = 0.90;
+
+/// Performance gate (SEPARATE from the memory gate): a subtopic is
+/// "performance-mastered" with enough graded practice-test questions AND high
+/// enough accuracy. Below the sample floor it abstains (stays false) rather
+/// than inventing a number, so a couple of lucky answers can't unlock the tree.
+pub(crate) const MIN_PERF_QUESTIONS: u32 = 5;
+pub(crate) const MIN_PERF_ACCURACY: f64 = 0.80;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Pool {
@@ -115,6 +145,33 @@ impl SubtopicStats {
     }
 }
 
+/// Per-subtopic practice-test performance: accuracy over graded exam-style
+/// questions. A SEPARATE measure from the memory gate above — the two never
+/// blend (kept apart per the rubric's three-separate-scores rule). It can
+/// satisfy a prerequisite in the guided DAG, but it never moves the memory
+/// gate.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct Performance {
+    pub questions: u32,
+    pub correct: u32,
+}
+
+impl Performance {
+    pub(crate) fn accuracy(&self) -> f64 {
+        if self.questions == 0 {
+            0.0
+        } else {
+            self.correct as f64 / self.questions as f64
+        }
+    }
+
+    /// Performance-mastered: enough graded practice questions AND accurate.
+    /// Abstains (false) below the sample floor, so it never fabricates mastery.
+    pub(crate) fn mastered(&self) -> bool {
+        self.questions >= MIN_PERF_QUESTIONS && self.accuracy() >= MIN_PERF_ACCURACY
+    }
+}
+
 /// Parse a `subtopic::<unit>::<sub>` tag into (unit, subtopic).
 pub(crate) fn parse_subtopic_tag(tag: &str) -> Option<(String, String)> {
     let rest = tag.strip_prefix("subtopic::")?;
@@ -154,6 +211,114 @@ pub(crate) fn compute_pools(stats: &[SubtopicStats]) -> HashMap<String, Pool> {
                 Pool::WithinUnit
             };
             (s.tag(), pool)
+        })
+        .collect()
+}
+
+/// The guided-gate state of one subtopic: whether its new cards are withheld,
+/// and which prerequisites are not yet satisfied (for the lock reason on the
+/// map). Curriculum ordering only — it never affects any score or the give-up
+/// rule.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct LockState {
+    pub locked: bool,
+    pub unmet_prereqs: Vec<String>,
+}
+
+/// A prerequisite is satisfied when its MEMORY gate is cleared OR its
+/// practice-test PERFORMANCE is mastered — so an experienced learner can unlock
+/// downstream topics by testing well, without flashcard reps. The two signals
+/// stay separate; this only ORs them for the gate decision.
+fn prereq_satisfied(
+    tag: &str,
+    gate: &HashMap<String, bool>,
+    perf: &HashMap<String, Performance>,
+) -> bool {
+    // Unknown prereq (not among the syllabus stats): fail OPEN so a data gap
+    // can't permanently lock the tree. Known prereqs must actually be satisfied.
+    let Some(&cleared) = gate.get(tag) else {
+        return true;
+    };
+    cleared || perf.get(tag).map(|p| p.mastered()).unwrap_or(false)
+}
+
+/// Compute the guided-learning lock for every subtopic. A subtopic is locked
+/// when guided mode is on, it isn't explicitly unlocked, and some prerequisite
+/// is unmet — either a direct subtopic prereq, or (via unit prereqs) a whole
+/// upstream unit that isn't finished. `unmet_prereqs` is always populated (even
+/// in free mode) so the UI can show the recommended order; only `locked`
+/// respects the guided flag + per-topic unlocks. Pure (no I/O), so it is fully
+/// unit-testable and never touches the collection.
+pub(crate) fn compute_locks(
+    stats: &[SubtopicStats],
+    perf: &HashMap<String, Performance>,
+    subtopic_prereqs: &HashMap<String, Vec<String>>,
+    unit_prereqs: &HashMap<String, Vec<String>>,
+    unlocked: &std::collections::HashSet<String>,
+    guided: bool,
+) -> HashMap<String, LockState> {
+    // Memory-gate state per subtopic tag.
+    let gate: HashMap<String, bool> = stats.iter().map(|s| (s.tag(), s.gate_cleared())).collect();
+
+    // Subtopics grouped by unit, for whole-unit satisfaction.
+    let mut unit_subs: HashMap<String, Vec<String>> = HashMap::new();
+    for s in stats {
+        unit_subs
+            .entry(s.unit_id.clone())
+            .or_default()
+            .push(s.tag());
+    }
+    // A unit counts as satisfied (as a prereq for a downstream unit) only when
+    // ALL of its subtopics are prereq-satisfied — "master univariate before
+    // multivariate". An unknown/empty unit imposes no gate.
+    let unit_satisfied = |unit: &str| -> bool {
+        match unit_subs.get(unit) {
+            Some(tags) if !tags.is_empty() => tags.iter().all(|t| prereq_satisfied(t, &gate, perf)),
+            _ => true,
+        }
+    };
+    // A representative not-yet-satisfied subtopic of a unit, for the lock reason.
+    let unit_blocker = |unit: &str| -> Option<String> {
+        unit_subs
+            .get(unit)?
+            .iter()
+            .find(|t| !prereq_satisfied(t, &gate, perf))
+            .cloned()
+    };
+
+    stats
+        .iter()
+        .map(|s| {
+            let tag = s.tag();
+            let mut unmet: Vec<String> = Vec::new();
+            // Direct subtopic prerequisites.
+            if let Some(ps) = subtopic_prereqs.get(&tag) {
+                for p in ps {
+                    if !prereq_satisfied(p, &gate, perf) {
+                        unmet.push(p.clone());
+                    }
+                }
+            }
+            // Cross-unit prerequisites: each upstream unit must be finished.
+            if let Some(us) = unit_prereqs.get(&s.unit_id) {
+                for u in us {
+                    if !unit_satisfied(u) {
+                        if let Some(b) = unit_blocker(u) {
+                            if !unmet.contains(&b) {
+                                unmet.push(b);
+                            }
+                        }
+                    }
+                }
+            }
+            let locked = guided && !unlocked.contains(&tag) && !unmet.is_empty();
+            (
+                tag,
+                LockState {
+                    locked,
+                    unmet_prereqs: unmet,
+                },
+            )
         })
         .collect()
 }
@@ -984,6 +1149,62 @@ impl Collection {
             .unwrap_or(false)
     }
 
+    /// Whether guided-learning mode (the hard prerequisite gate) is on.
+    /// Defaults TRUE: a fresh learner is guided through the curriculum
+    /// order. Turning it off ("free mode") is the experienced-user bypass.
+    pub(crate) fn speedrun_guided_mode_enabled(&self) -> bool {
+        self.get_config_optional::<bool, _>(GUIDED_MODE_KEY)
+            .unwrap_or(true)
+    }
+
+    /// Subtopic tags the user has explicitly unlocked (per-topic gate bypass).
+    /// Empty by default.
+    pub(crate) fn speedrun_unlocked_subtopics_config(&self) -> std::collections::HashSet<String> {
+        self.get_config_optional::<Vec<String>, _>(UNLOCKED_SUBTOPICS_KEY)
+            .unwrap_or_default()
+            .into_iter()
+            .collect()
+    }
+
+    /// Per-subtopic practice-test performance from config (tag -> Performance).
+    /// Empty when no test has been graded. A separate signal from the memory
+    /// gate; used to satisfy prerequisites and to report the Performance row.
+    pub(crate) fn speedrun_performance_config(&self) -> HashMap<String, Performance> {
+        #[derive(serde::Deserialize)]
+        struct Cell {
+            #[serde(default)]
+            questions: u32,
+            #[serde(default)]
+            correct: u32,
+        }
+        self.get_config_optional::<HashMap<String, Cell>, _>(PERFORMANCE_KEY)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(tag, c)| {
+                (
+                    tag,
+                    Performance {
+                        questions: c.questions,
+                        correct: c.correct,
+                    },
+                )
+            })
+            .collect()
+    }
+
+    /// The guided-learning DAG from config: subtopic edges (tag -> prereq
+    /// tags). Empty when unset, which makes the gate a no-op.
+    pub(crate) fn speedrun_subtopic_prereqs_config(&self) -> HashMap<String, Vec<String>> {
+        self.get_config_optional::<HashMap<String, Vec<String>>, _>(SUBTOPIC_PREREQS_KEY)
+            .unwrap_or_default()
+    }
+
+    /// The guided-learning DAG from config: unit edges (unit -> prereq units).
+    pub(crate) fn speedrun_unit_prereqs_config(&self) -> HashMap<String, Vec<String>> {
+        self.get_config_optional::<HashMap<String, Vec<String>>, _>(UNIT_PREREQS_KEY)
+            .unwrap_or_default()
+    }
+
     /// Map each note that carries a `subtopic::` tag to its first such tag.
     /// Used to attach a subtopic to each gathered new card for tier
     /// ordering.
@@ -1054,6 +1275,63 @@ impl Collection {
         if reordered.len() == new.len() {
             *new = reordered;
         }
+        Ok(())
+    }
+
+    /// The hard guided gate: when guided mode is on, withhold NEW cards for
+    /// subtopics whose prerequisites aren't satisfied yet (memory gate cleared
+    /// OR performance mastered), unless the subtopic is explicitly unlocked. A
+    /// read-only queue filter — like a per-deck new-card limit — so it writes
+    /// nothing; undo, FSRS intervals, and collection integrity are untouched.
+    /// Deliberately a no-op when no DAG is configured (upstream tests / plain
+    /// decks) or when no gathered new card is a syllabus card. Reviews and
+    /// practice tests are never gated.
+    pub(crate) fn speedrun_gate_new_cards(&mut self, new: &mut Vec<NewCard>) -> Result<()> {
+        use std::collections::HashSet;
+        if new.is_empty() {
+            return Ok(());
+        }
+        let subtopic_prereqs = self.speedrun_subtopic_prereqs_config();
+        let unit_prereqs = self.speedrun_unit_prereqs_config();
+        if subtopic_prereqs.is_empty() && unit_prereqs.is_empty() {
+            return Ok(());
+        }
+        let note_subtopics = self.speedrun_note_subtopic_map()?;
+        if !new.iter().any(|c| note_subtopics.contains_key(&c.note_id)) {
+            return Ok(());
+        }
+        // Locks depend on whole-unit satisfaction, so compute over every
+        // syllabus subtopic present, not just the gathered new cards'.
+        let mut seen = HashSet::new();
+        let all_subtopics: Vec<String> = note_subtopics
+            .values()
+            .filter(|t| seen.insert((*t).clone()))
+            .cloned()
+            .collect();
+        let stats = self.speedrun_subtopic_stats(&all_subtopics)?;
+        let perf = self.speedrun_performance_config();
+        let unlocked = self.speedrun_unlocked_subtopics_config();
+        let locks = compute_locks(
+            &stats,
+            &perf,
+            &subtopic_prereqs,
+            &unit_prereqs,
+            &unlocked,
+            true,
+        );
+        let locked: HashSet<&str> = locks
+            .iter()
+            .filter(|(_, v)| v.locked)
+            .map(|(k, _)| k.as_str())
+            .collect();
+        if locked.is_empty() {
+            return Ok(());
+        }
+        let empty = String::new();
+        new.retain(|c| {
+            let tag = note_subtopics.get(&c.note_id).unwrap_or(&empty);
+            !locked.contains(tag.as_str())
+        });
         Ok(())
     }
 
@@ -1912,5 +2190,222 @@ mod tests {
             .unwrap();
         let after: Vec<CardId> = review.iter().map(|c| c.id).collect();
         assert_eq!(before, after, "non-syllabus review queues stay untouched");
+    }
+
+    // --- guided-learning gate (the prerequisite DAG) ---
+
+    fn perf_cell(questions: u32, correct: u32) -> Performance {
+        Performance { questions, correct }
+    }
+
+    #[test]
+    fn performance_mastered_needs_sample_and_accuracy() {
+        assert!(perf_cell(5, 4).mastered()); // 5 Q at 80%
+        assert!(!perf_cell(4, 4).mastered()); // too few questions
+        assert!(!perf_cell(10, 7).mastered()); // 70% < 80%
+        assert!(!perf_cell(0, 0).mastered()); // abstains with no sample
+    }
+
+    #[test]
+    fn locks_gate_downstream_until_prereqs_are_satisfied() {
+        // a -> b -> c chain, nothing cleared: a is open, b and c are locked.
+        let stats = vec![
+            stat("u", "a", 0, 0, 0.0),
+            stat("u", "b", 0, 0, 0.0),
+            stat("u", "c", 0, 0, 0.0),
+        ];
+        let prereqs = HashMap::from([
+            ("subtopic::u::a".to_string(), vec![]),
+            (
+                "subtopic::u::b".to_string(),
+                vec!["subtopic::u::a".to_string()],
+            ),
+            (
+                "subtopic::u::c".to_string(),
+                vec!["subtopic::u::b".to_string()],
+            ),
+        ]);
+        let perf = HashMap::new();
+        let unlocked = std::collections::HashSet::new();
+        let locks = compute_locks(&stats, &perf, &prereqs, &HashMap::new(), &unlocked, true);
+        assert!(!locks["subtopic::u::a"].locked);
+        assert!(locks["subtopic::u::b"].locked);
+        assert!(locks["subtopic::u::c"].locked);
+
+        // Clear a via the MEMORY gate: b opens, c stays locked.
+        let stats2 = vec![
+            stat("u", "a", 12, 12, 0.95),
+            stat("u", "b", 0, 0, 0.0),
+            stat("u", "c", 0, 0, 0.0),
+        ];
+        let locks2 = compute_locks(&stats2, &perf, &prereqs, &HashMap::new(), &unlocked, true);
+        assert!(!locks2["subtopic::u::b"].locked);
+        assert!(locks2["subtopic::u::c"].locked);
+    }
+
+    #[test]
+    fn performance_can_satisfy_a_prereq_without_flashcards() {
+        // a is NOT memory-cleared, but is performance-mastered -> b unlocks.
+        let stats = vec![stat("u", "a", 0, 0, 0.0), stat("u", "b", 0, 0, 0.0)];
+        let prereqs = HashMap::from([(
+            "subtopic::u::b".to_string(),
+            vec!["subtopic::u::a".to_string()],
+        )]);
+        let perf = HashMap::from([("subtopic::u::a".to_string(), perf_cell(10, 9))]);
+        let locks = compute_locks(
+            &stats,
+            &perf,
+            &prereqs,
+            &HashMap::new(),
+            &std::collections::HashSet::new(),
+            true,
+        );
+        assert!(!locks["subtopic::u::b"].locked);
+        assert!(locks["subtopic::u::b"].unmet_prereqs.is_empty());
+    }
+
+    #[test]
+    fn unit_prereqs_gate_whole_units() {
+        // uv depends on gp; gp has one unfinished subtopic -> uv is locked.
+        let stats = vec![
+            stat("gp", "a", 12, 12, 0.95),
+            stat("gp", "b", 0, 0, 0.0), // gp not finished
+            stat("uv", "x", 0, 0, 0.0),
+        ];
+        let unit_prereqs = HashMap::from([("uv".to_string(), vec!["gp".to_string()])]);
+        let locks = compute_locks(
+            &stats,
+            &HashMap::new(),
+            &HashMap::new(),
+            &unit_prereqs,
+            &std::collections::HashSet::new(),
+            true,
+        );
+        assert!(locks["subtopic::uv::x"].locked);
+        assert!(locks["subtopic::uv::x"]
+            .unmet_prereqs
+            .contains(&"subtopic::gp::b".to_string()));
+
+        // Finish gp -> uv opens.
+        let stats2 = vec![
+            stat("gp", "a", 12, 12, 0.95),
+            stat("gp", "b", 12, 12, 0.95),
+            stat("uv", "x", 0, 0, 0.0),
+        ];
+        let locks2 = compute_locks(
+            &stats2,
+            &HashMap::new(),
+            &HashMap::new(),
+            &unit_prereqs,
+            &std::collections::HashSet::new(),
+            true,
+        );
+        assert!(!locks2["subtopic::uv::x"].locked);
+    }
+
+    #[test]
+    fn free_mode_and_unlock_bypass_the_gate() {
+        let stats = vec![stat("u", "a", 0, 0, 0.0), stat("u", "b", 0, 0, 0.0)];
+        let prereqs = HashMap::from([(
+            "subtopic::u::b".to_string(),
+            vec!["subtopic::u::a".to_string()],
+        )]);
+        // Free mode (guided = false): nothing locked, but unmet is still reported
+        // so the map can show the recommended order.
+        let free = compute_locks(
+            &stats,
+            &HashMap::new(),
+            &prereqs,
+            &HashMap::new(),
+            &std::collections::HashSet::new(),
+            false,
+        );
+        assert!(!free["subtopic::u::b"].locked);
+        assert_eq!(
+            free["subtopic::u::b"].unmet_prereqs,
+            vec!["subtopic::u::a".to_string()]
+        );
+        // Per-topic unlock: b is unlocked -> not locked even under guided mode.
+        let unlocked = std::collections::HashSet::from(["subtopic::u::b".to_string()]);
+        let g = compute_locks(
+            &stats,
+            &HashMap::new(),
+            &prereqs,
+            &HashMap::new(),
+            &unlocked,
+            true,
+        );
+        assert!(!g["subtopic::u::b"].locked);
+    }
+
+    #[test]
+    fn guided_gate_defaults_on_and_is_settable() {
+        let mut col = Collection::new();
+        assert!(col.speedrun_guided_mode_enabled()); // default ON
+        col.set_config_json(GUIDED_MODE_KEY, &false, false).unwrap();
+        assert!(!col.speedrun_guided_mode_enabled());
+    }
+
+    #[test]
+    fn gate_withholds_locked_new_cards_but_keeps_open_ones() {
+        // DAG a -> b, guided default on. Only a's new cards survive the gate.
+        let mut col = Collection::new();
+        let (ca, na) = add_tagged(&mut col, &["subtopic::u::a"]);
+        let (cb, nb) = add_tagged(&mut col, &["subtopic::u::b"]);
+        let prereqs = HashMap::from([
+            ("subtopic::u::a".to_string(), Vec::<String>::new()),
+            (
+                "subtopic::u::b".to_string(),
+                vec!["subtopic::u::a".to_string()],
+            ),
+        ]);
+        col.set_config_json(SUBTOPIC_PREREQS_KEY, &prereqs, false)
+            .unwrap();
+
+        let mut new = vec![nc(ca, na), nc(cb, nb)];
+        col.speedrun_gate_new_cards(&mut new).unwrap();
+        let ids: Vec<CardId> = new.iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![ca], "b is locked until a is satisfied");
+
+        // Free mode -> the caller's guard skips the gate, so everything flows.
+        col.set_config_json(GUIDED_MODE_KEY, &false, false).unwrap();
+        let mut new2 = vec![nc(ca, na), nc(cb, nb)];
+        if col.speedrun_guided_mode_enabled() {
+            col.speedrun_gate_new_cards(&mut new2).unwrap();
+        }
+        let ids2: Vec<CardId> = new2.iter().map(|c| c.id).collect();
+        assert_eq!(ids2, vec![ca, cb], "free mode serves everything");
+    }
+
+    #[test]
+    fn gate_is_noop_without_a_dag() {
+        // No prereq config -> the gate drops no card (upstream / plain decks).
+        let mut col = Collection::new();
+        let (ca, na) = add_tagged(&mut col, &["subtopic::u::a"]);
+        let (cb, nb) = add_tagged(&mut col, &["subtopic::u::b"]);
+        let mut new = vec![nc(ca, na), nc(cb, nb)];
+        col.speedrun_gate_new_cards(&mut new).unwrap();
+        assert_eq!(new.len(), 2);
+    }
+
+    #[test]
+    fn build_queues_gates_new_cards_when_guided() {
+        // End-to-end: with a DAG configured and guided mode default-on, the live
+        // queue serves only the unlocked subtopic's new card.
+        let mut col = Collection::new();
+        add_tagged(&mut col, &["subtopic::u::a"]);
+        add_tagged(&mut col, &["subtopic::u::b"]);
+        let prereqs = HashMap::from([
+            ("subtopic::u::a".to_string(), Vec::<String>::new()),
+            (
+                "subtopic::u::b".to_string(),
+                vec!["subtopic::u::a".to_string()],
+            ),
+        ]);
+        col.set_config_json(SUBTOPIC_PREREQS_KEY, &prereqs, false)
+            .unwrap();
+        col.set_current_deck(DeckId(1)).unwrap();
+        let queued = col.get_queued_cards(5, false).unwrap();
+        assert_eq!(queued.cards.len(), 1, "b's new card is gated out");
     }
 }

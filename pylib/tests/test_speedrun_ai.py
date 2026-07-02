@@ -81,7 +81,11 @@ def test_three_signals_compute_with_ai_off():
 
     # The measured mastery signal behind the dashboard computes with AI off.
     ms = col._backend.get_mastery_state(
-        expected_subtopics=expected_subtopic_tags(), units=units, subtopic_weights=[]
+        expected_subtopics=expected_subtopic_tags(),
+        units=units,
+        subtopic_weights=[],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     assert len(ms.subtopics) == 19
 

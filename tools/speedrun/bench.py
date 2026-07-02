@@ -120,6 +120,8 @@ def main() -> None:
                 expected_subtopics=expected,
                 units=weight_msgs,
                 subtopic_weights=sub_weight_msgs,
+                subtopic_prereqs=[],
+                unit_prereqs=[],
             ),
             args.reps,
         ),
@@ -128,7 +130,11 @@ def main() -> None:
         "mastery-ordered new cards",
         bench_action(
             lambda: col._backend.get_mastery_ordered_new_cards(
-                expected_subtopics=expected, units=[], subtopic_weights=[]
+                expected_subtopics=expected,
+                units=[],
+                subtopic_weights=[],
+                subtopic_prereqs=[],
+                unit_prereqs=[],
             ),
             args.reps,
         ),

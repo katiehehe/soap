@@ -11,6 +11,7 @@ RPC, the three-layer topic tree with mastery-coloured edges).
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -19,7 +20,7 @@ import aqt.main
 from aqt import gui_hooks
 from aqt.qt import QDialog, Qt, QTimer, QVBoxLayout
 from aqt.utils import disable_help_button, restoreGeom, saveGeom, showInfo
-from aqt.webview import AnkiWebView, AnkiWebViewKind
+from aqt.webview import AnkiWebView, AnkiWebViewKind, WebContent
 
 if TYPE_CHECKING:
     from anki.cards import Card
@@ -113,6 +114,13 @@ class StudyMapDialog(QDialog):
             n = _parse_positive_int(cmd[len("speedrun-extend-new:") :])
             if n is not None:
                 self._deferred(lambda: extend_new_and_study(self.mw, n))
+        elif cmd.startswith("speedrun-set-guided:"):
+            raw = cmd[len("speedrun-set-guided:") :]
+            # Write config only; the page re-reads mastery state itself.
+            self._apply_only(lambda: set_guided_cmd(self.mw, raw))
+        elif cmd.startswith("speedrun-unlock:"):
+            tag = cmd[len("speedrun-unlock:") :]
+            self._apply_only(lambda: unlock_subtopic_cmd(self.mw, tag))
 
     def _deferred(self, open_fn: Callable[[], bool]) -> None:
         def start() -> None:
@@ -120,6 +128,12 @@ class StudyMapDialog(QDialog):
             open_fn()
 
         QTimer.singleShot(0, start)
+
+    def _apply_only(self, action: Callable[[], object]) -> None:
+        # Mutate config without reloading/closing the page; the SvelteKit page
+        # re-fetches mastery state after issuing the command, so the lock/toggle
+        # updates in place. Deferred so we never mutate from inside the callback.
+        QTimer.singleShot(0, action)
 
     def _apply_and_reload(self, action: Callable[[], object]) -> None:
         # Mutate config/limits, then reload the page so the pace card re-reads it.
@@ -214,6 +228,22 @@ def clear_exam_date_cmd(mw: aqt.main.AnkiQt) -> None:
     clear_exam_date(mw.col)
 
 
+def set_guided_cmd(mw: aqt.main.AnkiQt, raw: str) -> None:
+    """Toggle the guided prerequisite gate (the global free-mode bypass).
+    Curriculum ordering only; it never changes any score or the give-up rule."""
+    from anki.speedrun import set_guided_mode
+
+    set_guided_mode(mw.col, raw.strip() in ("1", "true", "True", "on"))
+
+
+def unlock_subtopic_cmd(mw: aqt.main.AnkiQt, tag: str) -> None:
+    """Per-topic gate bypass for an experienced user."""
+    from anki.speedrun import unlock_subtopic
+
+    if tag:
+        unlock_subtopic(mw.col, tag)
+
+
 def set_new_per_day(mw: aqt.main.AnkiQt, n: int) -> None:
     """Set the exam deck's steady new-cards/day limit (the 'get on track' lever).
     Note: if the exam deck shares the default preset, this changes that preset."""
@@ -248,13 +278,28 @@ def study_recommended(mw: aqt.main.AnkiQt) -> None:
     that's underway, or cross-unit review once everything is cleared. Never
     fabricated — it only reflects the measured gate state."""
     from anki import speedrun_pb2
-    from anki.speedrun import expected_subtopic_tags, subtopic_weights, unit_weights
+    from anki.speedrun import (
+        expected_subtopic_tags,
+        subtopic_prereqs,
+        subtopic_weights,
+        unit_prereqs,
+        unit_weights,
+    )
 
+    # Pass the DAG so the recommendation respects the guided gate (an unlocked
+    # subtopic), matching what the live queue actually serves.
     state = mw.col._backend.get_mastery_state(
         expected_subtopics=expected_subtopic_tags(),
         units=[speedrun_pb2.UnitWeight(unit_id=u, weight=w) for u, w in unit_weights()],
         subtopic_weights=[
             speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in subtopic_weights()
+        ],
+        subtopic_prereqs=[
+            speedrun_pb2.SubtopicPrereqs(tag=t, prereqs=p)
+            for t, p in subtopic_prereqs()
+        ],
+        unit_prereqs=[
+            speedrun_pb2.UnitPrereqs(unit_id=u, prereqs=p) for u, p in unit_prereqs()
         ],
     )
     rec = state.recommendation
@@ -267,6 +312,80 @@ def study_recommended(mw: aqt.main.AnkiQt) -> None:
         ok = open_all_deck(mw)
     if not ok:
         showInfo("Couldn't open the recommended deck.")
+
+
+# --- Custom home shell (concept map + readiness tabs) ---------------------
+# The app's landing screen (the speedrunHome state) renders a full-bleed
+# SvelteKit "home" page into mw.web. Its top-bar buttons are routed to the native
+# Anki flows here, and the embedded concept-map tab reuses the same study/pace
+# bridge commands as the standalone study map.
+
+
+def show_home(mw: aqt.main.AnkiQt) -> None:
+    """Render the custom home shell into the main webview."""
+    mw.web.set_bridge_command(lambda cmd: _home_bridge_cmd(mw, cmd), mw)
+    mw.web.load_sveltekit_page("home")
+
+
+def _home_bridge_cmd(mw: aqt.main.AnkiQt, cmd: str) -> None:
+    # Defer: several actions move to another state or reload the webview, which
+    # must not run from inside the webview's own bridge callback.
+    QTimer.singleShot(0, lambda: _dispatch_home_cmd(mw, cmd))
+
+
+def _home_nav(mw: aqt.main.AnkiQt, where: str) -> None:
+    if where == "study":
+        study_recommended(mw)
+    elif where == "add":
+        mw.onAddCard()
+    elif where == "browse":
+        mw.onBrowse()
+    elif where == "stats":
+        mw.onStats()
+    elif where == "decks":
+        mw.moveToState("deckBrowser")
+    elif where == "sync":
+        mw.on_sync_button_clicked()
+
+
+def _dispatch_home_cmd(mw: aqt.main.AnkiQt, cmd: str) -> None:
+    def reload() -> None:
+        mw.web.load_sveltekit_page("home")
+
+    if cmd.startswith("speedrun-nav:"):
+        _home_nav(mw, cmd[len("speedrun-nav:") :])
+    elif cmd.startswith("speedrun-study-deck:"):
+        try:
+            did = int(cmd[len("speedrun-study-deck:") :])
+        except ValueError:
+            return
+        open_deck_by_id(mw, did)
+    elif cmd.startswith("speedrun-study-unit:"):
+        open_unit_deck(mw, cmd[len("speedrun-study-unit:") :])
+    elif cmd == "speedrun-study-all":
+        open_all_deck(mw)
+    elif cmd.startswith("speedrun-study:"):
+        open_subtopic_deck(mw, cmd[len("speedrun-study:") :])
+    elif cmd.startswith("speedrun-set-exam-date:"):
+        set_exam_date_cmd(mw, cmd[len("speedrun-set-exam-date:") :])
+        reload()
+    elif cmd == "speedrun-clear-exam-date":
+        clear_exam_date_cmd(mw)
+        reload()
+    elif cmd.startswith("speedrun-set-new-per-day:"):
+        n = _parse_positive_int(cmd[len("speedrun-set-new-per-day:") :])
+        if n is not None:
+            set_new_per_day(mw, n)
+            reload()
+    elif cmd.startswith("speedrun-extend-new:"):
+        n = _parse_positive_int(cmd[len("speedrun-extend-new:") :])
+        if n is not None:
+            extend_new_and_study(mw, n)
+    elif cmd.startswith("speedrun-set-guided:"):
+        # Write config only; the embedded map re-reads mastery state itself.
+        set_guided_cmd(mw, cmd[len("speedrun-set-guided:") :])
+    elif cmd.startswith("speedrun-unlock:"):
+        unlock_subtopic_cmd(mw, cmd[len("speedrun-unlock:") :])
 
 
 # --- Reviewer mastery-tier banner ----------------------------------------
@@ -293,7 +412,11 @@ def _tier_for_tag(col: Collection, tag: str) -> tuple[str, str] | None:
     from anki.speedrun import expected_subtopic_tags, subtopic_name
 
     state = col._backend.get_mastery_state(
-        expected_subtopics=expected_subtopic_tags(), units=[], subtopic_weights=[]
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     pool = next((s.pool for s in state.subtopics if s.tag == tag), None)
     if pool is None:
@@ -349,3 +472,99 @@ def register_reviewer_banner() -> None:
     gui_hooks.reviewer_did_show_question.append(_show_tier_banner)
     gui_hooks.reviewer_did_show_answer.append(_show_tier_banner)
     gui_hooks.reviewer_will_end.append(_clear_tier_banner)
+
+
+# --- First-run deck seeding (the main deck is not optional) -----------------
+# The SOA Exam P deck is built automatically on first open, so the user never
+# sees an empty Anki. The logic lives in anki.speedrun.seed (guarded by a
+# per-collection flag, so it runs once); here we just wire it to the load hook.
+
+
+def on_collection_load(col: Collection) -> None:
+    """collection_did_load hook: ensure the main deck exists. Never blocks load
+    (a seeding error is logged, not raised, so the app still opens)."""
+    # Test harnesses (e2e) opt out so they can exercise the empty-collection
+    # honesty/give-up states.
+    if os.environ.get("ANKI_SPEEDRUN_NOSEED"):
+        return
+    try:
+        from anki.speedrun.seed import seed_if_missing
+
+        seed_if_missing(col)
+    except Exception:
+        import traceback
+
+        traceback.print_exc()
+
+
+def register_collection_hooks() -> None:
+    """Register startup hooks that need the collection. Call once at init."""
+    gui_hooks.collection_did_load.append(on_collection_load)
+
+
+# --- App-wide Speedrun theme ----------------------------------------------
+# One accent + rounded controls threaded across every Qt screen (browser,
+# editor, dialogs) so the app reads as a single custom product, not stock Anki.
+# Appended to the app stylesheet via the style_did_init filter hook, so it runs
+# on startup and on every theme change, and layers on top of Anki's own styles.
+
+SPEEDRUN_ACCENT = "#6366f1"
+
+_SPEEDRUN_QSS = f"""
+/* Speedrun (SOA Exam P) accent + rounded controls */
+QPushButton {{
+    border-radius: 8px;
+    padding: 5px 12px;
+}}
+QPushButton:default {{
+    background-color: {SPEEDRUN_ACCENT};
+    color: white;
+    border: 1px solid {SPEEDRUN_ACCENT};
+}}
+QPushButton:default:hover {{
+    background-color: #7377f5;
+}}
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QTextEdit {{
+    border-radius: 8px;
+}}
+QTabBar::tab:selected {{
+    color: {SPEEDRUN_ACCENT};
+}}
+"""
+
+
+def _append_theme(buf: str) -> str:
+    return buf + _SPEEDRUN_QSS
+
+
+# Style the typed short-answer box (numeric questions from the SOA Short Answer
+# notetype) so it reads as part of the custom app, not a stray input.
+_REVIEWER_CSS = f"""
+<style>
+#typeans {{
+    border: 2px solid rgba(99, 102, 241, 0.35);
+    border-radius: 10px;
+    padding: 8px 12px;
+    outline: none;
+    min-width: 12em;
+}}
+#typeans:focus {{
+    border-color: {SPEEDRUN_ACCENT};
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22);
+}}
+</style>
+"""
+
+
+def _on_webview_content(web_content: WebContent, context: object) -> None:
+    import aqt.reviewer
+
+    if isinstance(context, aqt.reviewer.Reviewer):
+        web_content.head += _REVIEWER_CSS
+
+
+def register_theme() -> None:
+    """Thread the Speedrun accent through all Qt screens, and style the reviewer's
+    typed short-answer box. Call once at init."""
+    gui_hooks.style_did_init.append(_append_theme)
+    gui_hooks.webview_will_set_content.append(_on_webview_content)

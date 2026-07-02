@@ -10,8 +10,10 @@ from anki.speedrun import (
     exam_timestamp_for_iso,
     expected_subtopic_tags,
     set_exam_date,
+    subtopic_prereqs,
     subtopic_tag,
     subtopic_weights,
+    unit_prereqs,
     unit_weights,
 )
 from anki.speedrun.seed import SEED_CARDS, build_deck
@@ -27,7 +29,11 @@ def test_get_mastery_state_reads_reviews_and_gates():
     expected = expected_subtopic_tags()
 
     state = col._backend.get_mastery_state(
-        expected_subtopics=expected, units=[], subtopic_weights=[]
+        expected_subtopics=expected,
+        units=[],
+        subtopic_weights=[],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
 
     # Every syllabus unit is rolled up, none mastered on a fresh deck.
@@ -51,7 +57,11 @@ def test_get_mastery_state_reads_reviews_and_gates():
     col.sched.answerCard(card, 3)
 
     state2 = col._backend.get_mastery_state(
-        expected_subtopics=expected, units=[], subtopic_weights=[]
+        expected_subtopics=expected,
+        units=[],
+        subtopic_weights=[],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     assert sum(s.reviews for s in state2.subtopics) >= 1
 
@@ -68,6 +78,8 @@ def test_get_mastery_state_echoes_weights_and_weighted_rollup():
         expected_subtopics=expected_subtopic_tags(),
         units=[speedrun_pb2.UnitWeight(unit_id=u, weight=w) for u, w in unit_weights()],
         subtopic_weights=[speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in sw],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
 
     weight_by_tag = dict(sw)
@@ -100,7 +112,11 @@ def test_mastery_ordered_new_cards_returns_blocked_cards():
     build_deck(col)
     # Single-field response: the generated wrapper returns card_ids directly.
     card_ids = col._backend.get_mastery_ordered_new_cards(
-        expected_subtopics=expected_subtopic_tags(), units=[], subtopic_weights=[]
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     # All seeded cards are new + tagged, so they all come back in the order.
     assert len(card_ids) == len(SEED_CARDS)
@@ -124,6 +140,8 @@ def test_points_at_stake_order_reads_due_cards():
         subtopic_weights=[
             speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in subtopic_weights()
         ],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     assert len(cards) >= 1
     for c in cards:
@@ -179,6 +197,8 @@ def test_study_plan_blocked_on_fresh_deck():
         subtopic_weights=[
             speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in weights
         ],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     assert len(items) >= 1
     # StudyMode.BLOCKED == 0: nothing is cleared, so every row is blocked practice.
@@ -207,6 +227,8 @@ def test_study_plan_counts_match_seeded_cards():
         subtopic_weights=[
             speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in subtopic_weights()
         ],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     want = Counter(subtopic_tag(c.unit_id, c.subtopic_id) for c in SEED_CARDS)
     got = {it.subtopic_tag: it.new_count for it in items}
@@ -232,10 +254,89 @@ def test_study_plan_drops_decks_with_nothing_due():
         expected_subtopics=expected_subtopic_tags(),
         units=[],
         subtopic_weights=[],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     tags = {it.subtopic_tag for it in items}
     assert target not in tags, "a subtopic with nothing due today must be dropped"
     assert len(tags) >= 1, "other subtopics still have new cards due"
+
+
+def _prereq_msgs() -> tuple[
+    list[speedrun_pb2.SubtopicPrereqs], list[speedrun_pb2.UnitPrereqs]
+]:
+    sp = [speedrun_pb2.SubtopicPrereqs(tag=t, prereqs=p) for t, p in subtopic_prereqs()]
+    up = [speedrun_pb2.UnitPrereqs(unit_id=u, prereqs=p) for u, p in unit_prereqs()]
+    return sp, up
+
+
+def test_guided_gate_locks_downstream_and_keeps_performance_separate():
+    # End-to-end through the engine: a fresh beginner (guided default on) sees
+    # only the curriculum roots open; downstream subtopics and the next unit are
+    # locked. Performance is reported as its OWN signal, abstaining with no data.
+    col = getEmptyCol()
+    build_deck(col)
+    sp, up = _prereq_msgs()
+    state = col._backend.get_mastery_state(
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[],
+        subtopic_prereqs=sp,
+        unit_prereqs=up,
+    )
+    assert state.guided_mode is True
+    by_tag = {s.tag: s for s in state.subtopics}
+    # A root of general is open; its downstream + all of multivariate are locked.
+    assert by_tag["subtopic::general::sets_axioms"].locked is False
+    assert by_tag["subtopic::general::bayes"].locked is True
+    assert by_tag["subtopic::multivariate::joint_distributions"].locked is True
+    # Lock reason names an unmet prerequisite (never a fabricated number).
+    assert by_tag["subtopic::general::bayes"].unmet_prereqs
+    # Performance stays a SEPARATE signal, abstaining with no practice yet.
+    bayes = by_tag["subtopic::general::bayes"]
+    assert bayes.perf_questions == 0
+    assert bayes.performance_mastered is False
+
+    # Free mode (global bypass): nothing is locked.
+    col.set_config("speedrunGuidedMode", False)
+    free = col._backend.get_mastery_state(
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[],
+        subtopic_prereqs=sp,
+        unit_prereqs=up,
+    )
+    assert free.guided_mode is False
+    assert all(not s.locked for s in free.subtopics)
+
+
+def test_performance_satisfies_a_prereq_without_flashcards():
+    # An experienced user's practice-test PERFORMANCE (a separate signal) can
+    # satisfy a prerequisite and unlock the next subtopic, with no flashcard reps
+    # and without ever touching the memory gate.
+    col = getEmptyCol()
+    build_deck(col)
+    sp, up = _prereq_msgs()
+    col.set_config(
+        "speedrunPerformanceBySubtopic",
+        {"subtopic::general::sets_axioms": {"questions": 8, "correct": 8}},
+    )
+    state = col._backend.get_mastery_state(
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[],
+        subtopic_prereqs=sp,
+        unit_prereqs=up,
+    )
+    by_tag = {s.tag: s for s in state.subtopics}
+    sa = by_tag["subtopic::general::sets_axioms"]
+    assert sa.perf_questions == 8
+    assert sa.performance_mastered is True
+    # ...but the MEMORY gate is untouched (no reviews) — the two never blend.
+    assert sa.gate_cleared is False
+    assert sa.reviews == 0
+    # combinatorics depends only on sets_axioms, so performance unlocks it.
+    assert by_tag["subtopic::general::combinatorics"].locked is False
 
 
 def test_exam_date_round_trips_through_config():
@@ -255,7 +356,11 @@ def test_study_pace_without_exam_date():
     col = getEmptyCol()
     build_deck(col)
     pace = col._backend.get_study_pace(
-        expected_subtopics=expected_subtopic_tags(), units=[], subtopic_weights=[]
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     assert pace.has_exam_date is False
     assert pace.remaining_new == len(SEED_CARDS)  # all seeded cards are new
@@ -272,7 +377,11 @@ def test_study_pace_on_track_and_behind_with_exam_date():
     far = (date.today() + timedelta(days=365)).isoformat()
     assert set_exam_date(col, far)
     pace = col._backend.get_study_pace(
-        expected_subtopics=expected_subtopic_tags(), units=[], subtopic_weights=[]
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     assert pace.has_exam_date is True
     assert pace.days_left >= 360
@@ -283,7 +392,11 @@ def test_study_pace_on_track_and_behind_with_exam_date():
     soon = (date.today() + timedelta(days=1)).isoformat()
     assert set_exam_date(col, soon)
     pace = col._backend.get_study_pace(
-        expected_subtopics=expected_subtopic_tags(), units=[], subtopic_weights=[]
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[],
+        subtopic_prereqs=[],
+        unit_prereqs=[],
     )
     assert pace.on_track is False
     assert pace.recommended_new_per_day > pace.current_new_per_day

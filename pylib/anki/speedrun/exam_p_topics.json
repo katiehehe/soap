@@ -3,45 +3,124 @@
     "syllabus_version": "2026-05",
     "note": "Subtopics follow the official 2026-05 Exam P learning outcomes (soa.org). Section weights are the published ranges; the three units are also the tiers the mastery-gated scheduler gates on.",
     "weights_note": "Per-subtopic 'weight' is a RELATIVE EMPHASIS estimate (editable), not an official SOA figure: SOA publishes weight ranges only at the unit level. Each unit's subtopic weights sum to that unit's published section midpoint, so the whole syllabus sums to ~100. Weights drive UI bubble sizing and the weighted mastery rollup; they never affect the honesty/give-up thresholds.",
+    "prereqs_note": "Per-subtopic and per-unit 'prereqs' define the guided-learning DAG: a topic's new cards stay locked until its prerequisites are satisfied (memory gate cleared OR practice-test performance mastered), unless guided mode is off or the user unlocks it. Subtopic prereqs are ids within the same unit; cross-unit ordering is expressed by unit prereqs. Prereqs are curriculum ordering only; they never affect the honesty/give-up thresholds or any score.",
     "units": [
         {
             "id": "general",
             "name": "General Probability",
             "weight_pct": [23, 30],
+            "prereqs": [],
             "subtopics": [
-                { "id": "sets_axioms", "name": "Sets, sample spaces, and axioms", "weight": 3.5 },
-                { "id": "combinatorics", "name": "Combinatorial probability", "weight": 4.5 },
-                { "id": "independence", "name": "Independence and mutually exclusive events", "weight": 4.0 },
-                { "id": "add_mult_rules", "name": "Addition and multiplication rules", "weight": 4.0 },
-                { "id": "conditional", "name": "Conditional probability", "weight": 5.25 },
-                { "id": "bayes", "name": "Bayes' theorem and law of total probability", "weight": 5.25 }
+                { "id": "sets_axioms", "name": "Sets, sample spaces, and axioms", "weight": 3.5, "prereqs": [] },
+                {
+                    "id": "combinatorics",
+                    "name": "Combinatorial probability",
+                    "weight": 4.5,
+                    "prereqs": ["sets_axioms"]
+                },
+                {
+                    "id": "independence",
+                    "name": "Independence and mutually exclusive events",
+                    "weight": 4.0,
+                    "prereqs": ["add_mult_rules"]
+                },
+                {
+                    "id": "add_mult_rules",
+                    "name": "Addition and multiplication rules",
+                    "weight": 4.0,
+                    "prereqs": ["sets_axioms"]
+                },
+                {
+                    "id": "conditional",
+                    "name": "Conditional probability",
+                    "weight": 5.25,
+                    "prereqs": ["add_mult_rules"]
+                },
+                {
+                    "id": "bayes",
+                    "name": "Bayes' theorem and law of total probability",
+                    "weight": 5.25,
+                    "prereqs": ["conditional"]
+                }
             ]
         },
         {
             "id": "univariate",
             "name": "Univariate Random Variables",
             "weight_pct": [44, 50],
+            "prereqs": ["general"],
             "subtopics": [
-                { "id": "rv_basics", "name": "Random variables, PDFs, and CDFs", "weight": 6.5 },
-                { "id": "expectation", "name": "Expectation, moments, and percentiles", "weight": 8.5 },
-                { "id": "variance", "name": "Variance, SD, and coefficient of variation", "weight": 7.0 },
-                { "id": "discrete_dists", "name": "Common discrete distributions", "weight": 9.0 },
-                { "id": "continuous_dists", "name": "Common continuous distributions", "weight": 9.0 },
-                { "id": "insurance_apps", "name": "Insurance applications (deductibles, limits)", "weight": 7.0 }
+                { "id": "rv_basics", "name": "Random variables, PDFs, and CDFs", "weight": 6.5, "prereqs": [] },
+                {
+                    "id": "expectation",
+                    "name": "Expectation, moments, and percentiles",
+                    "weight": 8.5,
+                    "prereqs": ["rv_basics"]
+                },
+                {
+                    "id": "variance",
+                    "name": "Variance, SD, and coefficient of variation",
+                    "weight": 7.0,
+                    "prereqs": ["expectation"]
+                },
+                {
+                    "id": "discrete_dists",
+                    "name": "Common discrete distributions",
+                    "weight": 9.0,
+                    "prereqs": ["variance"]
+                },
+                {
+                    "id": "continuous_dists",
+                    "name": "Common continuous distributions",
+                    "weight": 9.0,
+                    "prereqs": ["variance"]
+                },
+                {
+                    "id": "insurance_apps",
+                    "name": "Insurance applications (deductibles, limits)",
+                    "weight": 7.0,
+                    "prereqs": ["continuous_dists"]
+                }
             ]
         },
         {
             "id": "multivariate",
             "name": "Multivariate Random Variables",
             "weight_pct": [23, 30],
+            "prereqs": ["univariate"],
             "subtopics": [
-                { "id": "joint_distributions", "name": "Joint distributions", "weight": 4.25 },
-                { "id": "marginal_conditional", "name": "Marginal and conditional distributions", "weight": 4.25 },
-                { "id": "joint_moments", "name": "Moments of joint and conditional distributions", "weight": 3.5 },
-                { "id": "covariance_correlation", "name": "Covariance and correlation", "weight": 4.25 },
-                { "id": "order_statistics", "name": "Order statistics", "weight": 2.75 },
-                { "id": "linear_combinations", "name": "Linear combinations of random variables", "weight": 3.75 },
-                { "id": "clt", "name": "Central limit theorem", "weight": 3.75 }
+                { "id": "joint_distributions", "name": "Joint distributions", "weight": 4.25, "prereqs": [] },
+                {
+                    "id": "marginal_conditional",
+                    "name": "Marginal and conditional distributions",
+                    "weight": 4.25,
+                    "prereqs": ["joint_distributions"]
+                },
+                {
+                    "id": "joint_moments",
+                    "name": "Moments of joint and conditional distributions",
+                    "weight": 3.5,
+                    "prereqs": ["marginal_conditional"]
+                },
+                {
+                    "id": "covariance_correlation",
+                    "name": "Covariance and correlation",
+                    "weight": 4.25,
+                    "prereqs": ["joint_moments"]
+                },
+                {
+                    "id": "order_statistics",
+                    "name": "Order statistics",
+                    "weight": 2.75,
+                    "prereqs": ["marginal_conditional"]
+                },
+                {
+                    "id": "linear_combinations",
+                    "name": "Linear combinations of random variables",
+                    "weight": 3.75,
+                    "prereqs": ["covariance_correlation"]
+                },
+                { "id": "clt", "name": "Central limit theorem", "weight": 3.75, "prereqs": ["linear_combinations"] }
             ]
         }
     ]

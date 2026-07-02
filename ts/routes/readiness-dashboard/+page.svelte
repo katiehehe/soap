@@ -59,15 +59,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: coveragePct = noScore?.coveragePct ?? score?.coveragePct ?? 0;
     $: gradedReviews = noScore?.gradedReviews ?? 0;
     $: nextAction = noScore?.nextBestAction ?? score?.nextBestAction ?? "—";
-    // Distinguish "not enough data" from "data threshold met, model not yet
-    // calibrated" so the abstain reason is stated honestly, not misreported.
-    $: readinessCalibrating =
-        !!noScore && noScore.reason.toLowerCase().includes("calibrat");
-    $: readinessAbstainValue = readinessCalibrating
-        ? "Model not yet calibrated"
+    // Distinguish the abstain reasons honestly: below the review/coverage gate
+    // vs. gate met but awaiting graded practice-test evidence.
+    $: readinessNeedsPractice =
+        !!noScore && noScore.reason.toLowerCase().includes("practice");
+    $: readinessAbstainValue = readinessNeedsPractice
+        ? "Take a practice test"
         : "Not enough data yet";
-    $: readinessAbstainDetail = readinessCalibrating
-        ? "data threshold met; awaiting the performance model"
+    $: readinessAbstainDetail = readinessNeedsPractice
+        ? "review gate met; needs graded practice tests"
         : "held below threshold";
 
     function pct(x: number): string {
@@ -115,7 +115,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 ? `${score.point.toFixed(1)} (${score.low.toFixed(1)}–${score.high.toFixed(1)})`
                 : readinessAbstainValue,
             detail: score
-                ? `confidence ${pct(score.confidence)}`
+                ? `P(pass) ${pct(score.passProbability)} · confidence ${pct(score.confidence)}`
                 : readinessAbstainDetail,
             source: "P(pass) model",
         },
@@ -210,6 +210,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         score.confidence,
                     )}
                 </p>
+                <p class="pass-prob">
+                    P(pass today): <b>{pct(score.passProbability)}</b>
+                    <span class="hint">(scaled ≥ 6)</span>
+                </p>
                 <div class="next-action">
                     <span class="label">Single best next action</span>
                     <p>{score.nextBestAction}</p>
@@ -225,8 +229,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 under 50% weighted
                 <b>practiced</b>
                 coverage (the share of subtopics you've actually studied, not just have cards
-                for), no score is shown. Fields stay "—" until the memory and performance
-                models are calibrated — we never fabricate a number.
+                for), no score is shown. A readiness number also needs ≥ 30 graded practice-test
+                questions; until then these fields stay "—". We never fabricate a number.
             </p>
             <dl class="bundle">
                 <div>
@@ -248,6 +252,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 <div>
                     <dt>How sure (confidence)</dt>
                     <dd>{score ? pct(score.confidence) : "—"}</dd>
+                </div>
+                <div>
+                    <dt>P(pass) today</dt>
+                    <dd>{score ? pct(score.passProbability) : "—"}</dd>
                 </div>
                 <div>
                     <dt>How accurate past guesses were</dt>
@@ -481,6 +489,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 1rem;
         font-weight: 400;
         color: var(--fg-subtle, #6b7280);
+    }
+    .pass-prob {
+        margin: 0.4rem 0 0;
+        font-size: 1rem;
+    }
+    .pass-prob b {
+        font-size: 1.15rem;
     }
 
     /* Honesty bundle */

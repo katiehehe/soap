@@ -100,6 +100,11 @@ message ReadinessScore {
   // turned out to be"); only populated once readiness scores are actually
   // emitted, so today it stays 0 and the UI shows it as not-yet-available.
   double past_accuracy = 9;
+  // P(pass) = P(scaled score >= 6), estimated from graded practice-test
+  // results. The brief's readiness for P is "P(pass) with a confidence band + a
+  // projected 0-10 band"; point/low/high carry the projected 0-10 band, this
+  // carries the pass probability. In [0, 1].
+  double pass_probability = 10;
 }
 
 // The honest "not enough data yet" state. Carries the evidence and the single

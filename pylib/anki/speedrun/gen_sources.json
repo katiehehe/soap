@@ -1,0 +1,61 @@
+{
+    "note": "Named SOURCE passages for AI card generation (Friday AI Feature 2). ORIGINAL statements of standard probability facts, authored for this fork (no copyrighted text). Each generated card must be grounded in, and cite, one of these sources. key_terms are the answer keys the generation rubric checks for (tools/speedrun/evals/generate_eval.py). These are AI INPUTS, so the leakage scan runs them against the held-out item corpus.",
+    "sources": [
+        {
+            "id": "src-bayes",
+            "name": "Bayes theorem note",
+            "subtopic": "subtopic::general::bayes",
+            "passage": "Bayes' theorem updates a prior probability into a posterior after observing evidence. It states that P(A given B) equals P(B given A) times P(A), divided by P(B). The denominator P(B) is usually expanded with the law of total probability over a partition of outcomes.",
+            "key_terms": ["posterior", "prior", "total probability", "p(b given a)"]
+        },
+        {
+            "id": "src-conditional",
+            "name": "Conditional probability note",
+            "subtopic": "subtopic::general::conditional",
+            "passage": "Conditional probability P(A given B) equals P(A and B) divided by P(B), and is defined only when P(B) is positive. It measures the probability of A once B is known to have occurred.",
+            "key_terms": ["p(a and b)", "p(b)", "conditional", "positive"]
+        },
+        {
+            "id": "src-binomial",
+            "name": "Binomial distribution note",
+            "subtopic": "subtopic::univariate::discrete_dists",
+            "passage": "A binomial random variable counts the number of successes in n independent trials, each with the same success probability p. Its mean is n times p, and its variance is n times p times one minus p.",
+            "key_terms": ["successes", "trials", "np", "n times p"]
+        },
+        {
+            "id": "src-exponential",
+            "name": "Exponential distribution note",
+            "subtopic": "subtopic::univariate::continuous_dists",
+            "passage": "An exponential random variable models waiting times and is memoryless. With rate lambda, its mean is one over lambda and its variance is one over lambda squared.",
+            "key_terms": ["memoryless", "rate", "one over lambda", "waiting"]
+        },
+        {
+            "id": "src-expectation",
+            "name": "Expectation note",
+            "subtopic": "subtopic::univariate::expectation",
+            "passage": "The expected value of a continuous random variable is the integral of x times its density over the support. Expectation is linear, so E[aX + b] equals a times E[X] plus b.",
+            "key_terms": ["integral", "density", "linear", "e[x]"]
+        },
+        {
+            "id": "src-variance",
+            "name": "Variance note",
+            "subtopic": "subtopic::univariate::variance",
+            "passage": "Variance measures the spread of a random variable and equals E[X squared] minus the square of E[X]. The standard deviation is the square root of the variance.",
+            "key_terms": ["spread", "e[x squared]", "standard deviation", "square root"]
+        },
+        {
+            "id": "src-covariance",
+            "name": "Covariance note",
+            "subtopic": "subtopic::multivariate::covariance_correlation",
+            "passage": "Covariance measures how two random variables move together and equals E[XY] minus E[X] times E[Y]. Correlation rescales covariance by the product of the standard deviations, so it always lies between minus one and one.",
+            "key_terms": ["e[xy]", "correlation", "between minus one and one", "together"]
+        },
+        {
+            "id": "src-clt",
+            "name": "Central limit theorem note",
+            "subtopic": "subtopic::multivariate::clt",
+            "passage": "The central limit theorem states that the sample mean of many independent, identically distributed variables is approximately normal, with mean mu and variance sigma squared divided by n, for large n.",
+            "key_terms": ["central limit", "normal", "sample mean", "sigma squared divided by n"]
+        }
+    ]
+}

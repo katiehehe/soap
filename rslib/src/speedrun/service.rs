@@ -14,6 +14,7 @@ use anki_proto::speedrun::NoScore;
 use anki_proto::speedrun::PointsAtStakeCard;
 use anki_proto::speedrun::PointsAtStakeOrder;
 use anki_proto::speedrun::ReadinessResult;
+use anki_proto::speedrun::ReadinessScore;
 use anki_proto::speedrun::SpeedrunPingResponse;
 use anki_proto::speedrun::StudyPace;
 use anki_proto::speedrun::StudyPlan;
@@ -43,6 +44,29 @@ use crate::timestamp::TimestampSecs;
 /// NoScore. These are code, not a UI hint (PRD 9).
 const MIN_GRADED_REVIEWS: u32 = 200;
 const MIN_COVERAGE: f64 = 0.50;
+/// A readiness NUMBER is additionally withheld until there is graded
+/// practice-test evidence: at least this many practice-test questions. Below it
+/// the model has nothing to estimate P(pass) from, so we still return NoScore.
+const MIN_PRACTICE_QUESTIONS: u32 = 30;
+/// Documented pass mapping: SOA P is scored 0-10, pass >= 6. Under the simplest
+/// linear map (scaled ~= 10 x proportion-correct) that is proportion >= 0.6.
+/// Stated in docs/score-models.md so it can be recalibrated with real scaled
+/// scores; it is a fixed assumption, never tuned to flatter a result.
+const PASS_PROPORTION: f64 = 0.60;
+/// Config key holding accumulated practice-test evidence (written by Python's
+/// practice_test.record_test). Mirrors PRACTICE_STATS_KEY in that module.
+const PRACTICE_STATS_KEY: &str = "speedrunPracticeStats";
+
+/// Accumulated practice-test evidence, read from collection config.
+#[derive(serde::Deserialize, Default)]
+struct PracticeStats {
+    #[serde(default)]
+    questions: u32,
+    #[serde(default)]
+    correct: u32,
+    #[serde(default)]
+    tests: u32,
+}
 
 impl crate::services::SpeedrunService for Collection {
     /// Trivial read-only health check proving the proto -> Rust -> Python
@@ -78,21 +102,47 @@ impl crate::services::SpeedrunService for Collection {
             return Ok(below_threshold_no_score(graded_reviews, coverage_pct));
         }
 
-        // The data threshold is met, but on the Wednesday core there are no
-        // calibrated models yet. Refuse to invent a number (the honesty rule): we
-        // still return NoScore, just with a different reason.
-        Ok(ReadinessResult {
-            value: Some(readiness_result::Value::NoScore(NoScore {
-                reason: "Data threshold met, but the readiness score model is not \
-                         yet calibrated, so no number is shown."
-                    .into(),
+        // Review + coverage gates are met. A readiness NUMBER additionally needs
+        // graded practice-test evidence (P(pass) is estimated from real graded
+        // exam-style results, never invented). Below the practice-question
+        // threshold we still return NoScore — the honesty rule, not a UI hint.
+        let practice: PracticeStats = self.get_config_default(PRACTICE_STATS_KEY);
+        if practice.questions < MIN_PRACTICE_QUESTIONS {
+            return Ok(no_practice_evidence_no_score(
                 graded_reviews,
-                reviews_needed: 0,
                 coverage_pct,
-                next_best_action: "Keep reviewing across all three units; calibrated \
-                                   scoring arrives with the memory and performance \
-                                   models."
-                    .into(),
+                practice.questions,
+            ));
+        }
+
+        // Enough graded practice-test evidence: emit the readiness band. Every
+        // field is populated (the honesty bundle), so a bare number can't ship.
+        let band = readiness_from_practice(practice.questions, practice.correct, coverage_pct);
+        let pct = 100.0 * practice.correct as f64 / practice.questions as f64;
+        let reasons = vec![
+            format!(
+                "{} graded practice-test questions across {} test(s), {pct:.0}% correct.",
+                practice.questions, practice.tests
+            ),
+            format!("{:.0}% weighted syllabus coverage.", coverage_pct * 100.0),
+            "Projected 0-10 assumes scaled score ~= 10 x proportion correct (see \
+             docs/score-models.md); range is a 95% Wilson interval."
+                .to_string(),
+        ];
+        Ok(ReadinessResult {
+            value: Some(readiness_result::Value::Score(ReadinessScore {
+                point: band.point,
+                low: band.low,
+                high: band.high,
+                coverage_pct,
+                confidence: band.confidence,
+                updated_at: TimestampSecs::now().0,
+                reasons,
+                next_best_action: self.readiness_next_action(&input.expected_subtopics)?,
+                // No history of past predictions vs outcomes yet, so past
+                // accuracy is not-yet-available (the UI shows it as such).
+                past_accuracy: 0.0,
+                pass_probability: band.pass_probability,
             })),
         })
     }
@@ -410,6 +460,35 @@ fn study_mode_to_proto(
 }
 
 impl Collection {
+    /// The single best next action for a readiness score: the weakest
+    /// reviewed-but-uncleared subtopic by MEASURED revlog accuracy, so the
+    /// honesty bundle always names one concrete, evidence-grounded step. Falls
+    /// back to the top study priority (e.g. a not-started subtopic) when
+    /// nothing has been reviewed, or a generic prompt when everything is
+    /// cleared.
+    fn readiness_next_action(&mut self, expected: &[String]) -> error::Result<String> {
+        let stats = self.speedrun_subtopic_stats(expected)?;
+        let weakest = stats
+            .iter()
+            .filter(|s| s.reviews > 0 && !s.gate_cleared())
+            .min_by(|a, b| {
+                a.accuracy()
+                    .partial_cmp(&b.accuracy())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        if let Some(s) = weakest {
+            return Ok(format!(
+                "Focus your weakest area next: {} ({:.0}% correct so far), then re-test.",
+                s.tag(),
+                s.accuracy() * 100.0
+            ));
+        }
+        Ok(match study_priorities(&stats).first() {
+            Some(p) => format!("Study {} next, then re-test to narrow the range.", p.tag),
+            None => "Keep taking full practice tests to narrow the range.".to_string(),
+        })
+    }
+
     /// Number of graded reviews (a rating was given) in the revlog.
     fn graded_review_count(&self) -> error::Result<u32> {
         let count: i64 =
@@ -523,12 +602,120 @@ fn below_threshold_no_score(graded_reviews: u32, coverage_pct: f64) -> Readiness
     }
 }
 
+/// NoScore when review/coverage gates pass but there is not yet enough graded
+/// practice-test evidence to estimate P(pass). Still an honest abstain.
+fn no_practice_evidence_no_score(
+    graded_reviews: u32,
+    coverage_pct: f64,
+    questions: u32,
+) -> ReadinessResult {
+    let need = MIN_PRACTICE_QUESTIONS.saturating_sub(questions);
+    ReadinessResult {
+        value: Some(readiness_result::Value::NoScore(NoScore {
+            reason: format!(
+                "Review coverage is met, but a readiness score needs graded practice \
+                 tests: {questions}/{MIN_PRACTICE_QUESTIONS} practice-test questions so far."
+            ),
+            graded_reviews,
+            reviews_needed: 0,
+            coverage_pct,
+            next_best_action: format!(
+                "Take a practice test ({need} more graded questions) to unlock a \
+                 readiness range."
+            ),
+        })),
+    }
+}
+
+/// A readiness band: the projected 0-10 point + range, P(pass), and confidence.
+struct ReadinessBand {
+    point: f64,
+    low: f64,
+    high: f64,
+    pass_probability: f64,
+    confidence: f64,
+}
+
+/// Turn graded practice-test evidence into a readiness band. Pure arithmetic
+/// over the counts (deterministic, unit-tested): the projected 0-10 band is
+/// 10 x the Wilson 95% interval on the proportion correct, P(pass) is the
+/// normal-approx probability the true proportion clears the pass mark, and
+/// confidence rises with a tighter band and more coverage. Never fabricated —
+/// it only summarises real graded results.
+fn readiness_from_practice(questions: u32, correct: u32, coverage_pct: f64) -> ReadinessBand {
+    let n = questions.max(1) as f64;
+    let p = (correct as f64 / n).clamp(0.0, 1.0);
+    let (lo, hi) = wilson_interval(correct, questions);
+    let scale = |x: f64| (10.0 * x).clamp(0.0, 10.0);
+    let se = (p * (1.0 - p) / n).sqrt();
+    let pass_probability = if se > 0.0 {
+        normal_cdf((p - PASS_PROPORTION) / se)
+    } else if p >= PASS_PROPORTION {
+        1.0
+    } else {
+        0.0
+    };
+    let (point, low, high) = (scale(p), scale(lo), scale(hi));
+    let band_conf = (1.0 - (high - low) / 10.0).clamp(0.0, 1.0);
+    let confidence = (0.5 * band_conf + 0.5 * coverage_pct).clamp(0.0, 1.0);
+    ReadinessBand {
+        point,
+        low,
+        high,
+        pass_probability,
+        confidence,
+    }
+}
+
+/// 95% Wilson score interval for a binomial proportion (z = 1.96). Robust near
+/// 0/1 and for small n, unlike the plain normal approximation.
+fn wilson_interval(correct: u32, total: u32) -> (f64, f64) {
+    if total == 0 {
+        return (0.0, 0.0);
+    }
+    let z = 1.96_f64;
+    let n = total as f64;
+    let phat = correct as f64 / n;
+    let z2 = z * z;
+    let denom = 1.0 + z2 / n;
+    let center = (phat + z2 / (2.0 * n)) / denom;
+    let margin = (z / denom) * ((phat * (1.0 - phat) / n) + z2 / (4.0 * n * n)).sqrt();
+    (
+        (center - margin).clamp(0.0, 1.0),
+        (center + margin).clamp(0.0, 1.0),
+    )
+}
+
+/// Standard normal CDF via an erf approximation (Abramowitz & Stegun 7.1.26,
+/// max abs error ~1.5e-7) — no external deps.
+fn normal_cdf(z: f64) -> f64 {
+    0.5 * (1.0 + erf(z / std::f64::consts::SQRT_2))
+}
+
+fn erf(x: f64) -> f64 {
+    let t = 1.0 / (1.0 + 0.327_591_1 * x.abs());
+    let poly = ((((1.061_405_429 * t - 1.453_152_027) * t + 1.421_413_741) * t - 0.284_496_736)
+        * t
+        + 0.254_829_592)
+        * t;
+    let y = 1.0 - poly * (-x * x).exp();
+    if x >= 0.0 {
+        y
+    } else {
+        -y
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use anki_proto::speedrun::readiness_result::Value;
     use anki_proto::speedrun::ComputeReadinessRequest;
     use anki_proto::speedrun::MasteryRequest;
 
+    use super::normal_cdf;
+    use super::readiness_from_practice;
+    use super::wilson_interval;
+    use super::PRACTICE_STATS_KEY;
     use crate::collection::Collection;
     use crate::deckconfig::DeckConfigId;
     use crate::prelude::*;
@@ -678,27 +865,93 @@ mod tests {
     }
 
     #[test]
-    fn meeting_thresholds_still_refuses_a_number_without_models() {
+    fn meeting_review_gates_still_refuses_without_practice_tests() {
         let mut col = Collection::new();
-        // 50 reviews on each of the 4 subtopics: 200 graded reviews AND full
-        // practiced coverage, so both give-up gates are met.
+        // 200 graded reviews AND full practiced coverage, but NO practice-test
+        // evidence: readiness must still abstain (P(pass) has nothing to
+        // estimate from). The give-up rule holds beyond the review gate.
         for tag in expected() {
             add_reviewed_note(&mut col, &[tag.as_str()], 50);
         }
-        let result = col.compute_readiness(request(expected())).unwrap();
-        match result.value.unwrap() {
+        match col
+            .compute_readiness(request(expected()))
+            .unwrap()
+            .value
+            .unwrap()
+        {
             Value::NoScore(no_score) => {
                 assert_eq!(no_score.reviews_needed, 0);
                 assert!(
-                    no_score.reason.to_lowercase().contains("calibrat"),
+                    no_score.reason.to_lowercase().contains("practice"),
                     "unexpected reason: {}",
                     no_score.reason
                 );
             }
-            Value::Score(_) => {
-                panic!("Wednesday has no calibrated model; must not emit a number")
-            }
+            Value::Score(_) => panic!("no practice evidence -> must not emit a number"),
         }
+    }
+
+    #[test]
+    fn emits_a_readiness_band_with_practice_evidence() {
+        let mut col = Collection::new();
+        for tag in expected() {
+            add_reviewed_note(&mut col, &[tag.as_str()], 50); // 200 reviews,
+                                                              // full coverage
+        }
+        // Graded practice-test evidence (78/120 correct) unlocks a real band.
+        col.set_config_json(
+            PRACTICE_STATS_KEY,
+            &serde_json::json!({"questions": 120, "correct": 78, "tests": 4}),
+            false,
+        )
+        .unwrap();
+        match col
+            .compute_readiness(request(expected()))
+            .unwrap()
+            .value
+            .unwrap()
+        {
+            Value::Score(s) => {
+                // 78/120 = 0.65 -> ~6.5/10, inside its range, pass-prob > 0.5.
+                assert!(s.low <= s.point && s.point <= s.high, "band: {s:?}");
+                assert!(s.point > 6.0 && s.point < 7.0, "point={}", s.point);
+                assert!(s.pass_probability > 0.5);
+                assert_eq!(s.coverage_pct, 1.0);
+                // Honesty bundle is fully populated (a bare number can't ship).
+                assert!(!s.reasons.is_empty());
+                assert!(!s.next_best_action.is_empty());
+                assert!(s.confidence > 0.0 && s.confidence <= 1.0);
+                assert!(s.updated_at > 0);
+            }
+            Value::NoScore(ns) => panic!("expected a score, got NoScore: {}", ns.reason),
+        }
+    }
+
+    #[test]
+    fn readiness_band_scales_and_bounds() {
+        let strong = readiness_from_practice(100, 85, 1.0);
+        assert!(strong.point > 8.0 && strong.point <= 10.0);
+        assert!(strong.low <= strong.point && strong.point <= strong.high);
+        assert!(strong.pass_probability > 0.9);
+        let weak = readiness_from_practice(100, 30, 1.0);
+        assert!(weak.point < 4.0, "point={}", weak.point);
+        assert!(weak.pass_probability < 0.1);
+    }
+
+    #[test]
+    fn wilson_interval_brackets_the_estimate() {
+        let (lo, hi) = wilson_interval(50, 100);
+        assert!(lo < 0.5 && 0.5 < hi);
+        assert!((0.0..=1.0).contains(&lo) && (0.0..=1.0).contains(&hi));
+        // Zero total -> degenerate (0, 0), never a panic.
+        assert_eq!(wilson_interval(0, 0), (0.0, 0.0));
+    }
+
+    #[test]
+    fn normal_cdf_is_calibrated_at_known_points() {
+        assert!((normal_cdf(0.0) - 0.5).abs() < 1e-6);
+        assert!(normal_cdf(3.0) > 0.99 && normal_cdf(-3.0) < 0.01);
+        assert!(normal_cdf(1.0) > normal_cdf(0.0));
     }
 
     #[test]

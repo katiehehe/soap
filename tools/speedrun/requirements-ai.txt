@@ -1,0 +1,7 @@
+# Optional dependency for the Friday AI layer (Feature 1 classifier + Feature 2
+# generation). AI is OFF by default and the app scores without it, so this is not
+# required to build or run the app or the non-AI evals.
+#
+#   out/pyenv/bin/pip install -r tools/speedrun/requirements-ai.txt
+#   export OPENAI_API_KEY=...      # then: make ai-eval
+openai>=1.0

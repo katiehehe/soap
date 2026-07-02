@@ -2,22 +2,28 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-"""Performance model (score-model Step 2) eval on a SYNTHETIC fixture.
+"""Performance model (score-model Step 2) eval.
 
-Generates a deterministic, clearly-labelled synthetic dataset of disguised
-exam-style questions (correctness driven by mastery / difficulty / timing /
-coverage plus seeded noise), runs the seeded held-out pipeline, scans for
-train/test leakage, and reports held-out accuracy + AUC + calibration against a
-majority-class baseline.
+Two modes, both deterministic and leakage-checked, both clearly SYNTHETIC (never
+a real student result):
 
-This validates the PIPELINE end to end. The numbers are on synthetic data and are
-NOT a real student result. On real data (a labelled held-out set of disguised
-questions) the same pipeline runs unchanged; until that data exists the app shows
-"performance: not yet measured" and never fabricates a number.
+- default: a fully synthetic fixture (correctness driven by a known logistic
+  relationship in mastery / difficulty / timing / coverage plus seeded noise).
+  Validates the PIPELINE end to end on tabular data.
+- ``--persona``: the REAL held-out exam-style item corpus (``soa_sample``)
+  crossed with a synthetic student **cohort** (``persona.synthetic_cohort``).
+  Correctness comes from each student's latent skill vs each item's difficulty.
+  The held-out split is BY ITEM (never by example), so no item's text appears in
+  both train and test — the leakage scan enforces this.
+
+On a real labelled held-out set of disguised questions the same pipeline runs
+unchanged; until that data exists the app shows "performance: not yet measured"
+and never fabricates a number.
 
 Usage:
     out/pyenv/bin/python tools/speedrun/evals/performance_eval.py [--n 400] [--seed 0]
-Or via `make performance`.
+    out/pyenv/bin/python tools/speedrun/evals/performance_eval.py --persona [--students 40]
+Or via `make performance` / `make performance ARGS="--persona"`.
 """
 
 from __future__ import annotations
@@ -36,7 +42,19 @@ for _p in (os.path.join(_REPO, "pylib"), os.path.join(_REPO, "out", "pylib")):
         sys.path.insert(0, _p)
 
 from anki.speedrun.evalsplit import find_leaks, train_test_split  # noqa: E402
-from anki.speedrun.performance import PerformanceExample, run_pipeline  # noqa: E402
+from anki.speedrun.performance import (  # noqa: E402
+    PerformanceExample,
+    evaluate,
+    run_pipeline,
+    train_logistic,
+)
+from anki.speedrun.persona import (  # noqa: E402
+    difficulty_num,
+    p_correct,
+    response_time_for,
+    synthetic_cohort,
+)
+from anki.speedrun.soa_sample import load_corpus  # noqa: E402
 
 
 def synthetic_dataset(n: int, seed: int) -> list[PerformanceExample]:
@@ -67,12 +85,110 @@ def synthetic_dataset(n: int, seed: int) -> list[PerformanceExample]:
     return out
 
 
+def _mean_skill(persona) -> float:
+    return sum(persona.skill.values()) / len(persona.skill)
+
+
+def persona_examples(item_ids, cohort, items_by_id) -> list[PerformanceExample]:
+    """Cohort x items -> one graded PerformanceExample per (student, item).
+    Deterministic. ``coverage`` proxies each student's breadth via mean skill."""
+    out: list[PerformanceExample] = []
+    for persona in cohort:
+        cov = min(1.0, max(0.4, _mean_skill(persona)))
+        for iid in item_ids:
+            it = items_by_id[iid]
+            rt = response_time_for(persona, it.subtopic, it.difficulty)
+            p = p_correct(persona, it.subtopic, it.difficulty, cov, rt)
+            rng = random.Random(f"perf|{persona.seed}|{iid}")
+            out.append(
+                PerformanceExample(
+                    id=f"{persona.name}|{iid}",
+                    mastery=persona.skill_for(it.subtopic),
+                    difficulty=difficulty_num(it.difficulty),
+                    response_time=rt,
+                    coverage=cov,
+                    correct=1 if rng.random() < p else 0,
+                    text=it.question,
+                )
+            )
+    return out
+
+
+def _report(result) -> None:
+    if result.status != "ok":
+        print(
+            f"NOT ENOUGH DATA: held-out set too small ({result.n_test}); no metric "
+            "shown (give-up rule)."
+        )
+        return
+    cal = result.calibration
+    print(f"\nHeld-out performance (train {result.n_train} / test {result.n_test}):")
+    print(f"  accuracy       : {result.accuracy:.3f}")
+    print(f"  AUC            : {result.auc:.3f}")
+    print(
+        f"  baseline (majority class): {result.baseline_accuracy:.3f}   "
+        f"-> beats baseline: {result.beats_baseline}"
+    )
+    if cal is not None and cal.status == "ok":
+        print(
+            f"  calibration    : Brier {cal.brier:.3f}, log loss {cal.log_loss:.3f}, "
+            f"ECE {cal.ece:.3f} (base rate {cal.base_rate:.3f})"
+        )
+
+
+def run_persona(students: int, seed: int, test_frac: float) -> int:
+    corpus = load_corpus()
+    items_by_id = {it.id: it for it in corpus.items}
+    provenance = "official SOA" if corpus.is_real_soa else "original fallback"
+    print("=" * 72)
+    print("PERSONA MODE — real held-out item corpus x a SYNTHETIC student cohort.")
+    print(f"corpus: {corpus.source} ({provenance}); split BY ITEM (no item leakage).")
+    print("These numbers measure the model on synthetic responses; NOT a real student.")
+    print("=" * 72)
+
+    # Held-out split BY ITEM (not by example), so an item's text can never sit in
+    # both train and test.
+    train_ids, test_ids = train_test_split(
+        list(items_by_id), test_frac=test_frac, seed=seed
+    )
+    # Leakage scan over the unique item texts (rubric 7e).
+    leaks = find_leaks(
+        [(i, items_by_id[i].question) for i in train_ids],
+        [(i, items_by_id[i].question) for i in test_ids],
+    )
+    print(
+        f"Leakage scan (by item): {'CLEAN' if not leaks else f'{len(leaks)} LEAK(S) — aborting'}"
+    )
+    if leaks:
+        return 1
+
+    cohort = synthetic_cohort(students, seed=seed)
+    train = persona_examples(train_ids, cohort, items_by_id)
+    test = persona_examples(test_ids, cohort, items_by_id)
+    model = train_logistic(train, seed=seed)
+    result = evaluate(model, test, n_train=len(train), min_test=30, min_samples=30)
+    print(
+        f"\ncohort: {students} synthetic students x "
+        f"{len(train_ids)} train / {len(test_ids)} held-out items"
+    )
+    _report(result)
+    print("\nReproducible: deterministic given --students and --seed.")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--n", type=int, default=400)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--test-frac", type=float, default=0.3)
+    parser.add_argument(
+        "--persona", action="store_true", help="corpus x synthetic cohort"
+    )
+    parser.add_argument("--students", type=int, default=40)
     args = parser.parse_args()
+
+    if args.persona:
+        return run_persona(args.students, args.seed, args.test_frac)
 
     print("=" * 72)
     print("SYNTHETIC FIXTURE — validates the performance pipeline end to end.")
@@ -98,26 +214,7 @@ def main() -> int:
         return 1
 
     result = run_pipeline(data, seed=args.seed, test_frac=args.test_frac)
-    if result.status != "ok":
-        print(
-            f"NOT ENOUGH DATA: held-out set too small ({result.n_test}); no metric "
-            "shown (give-up rule)."
-        )
-        return 0
-
-    cal = result.calibration
-    print(f"\nHeld-out performance (train {result.n_train} / test {result.n_test}):")
-    print(f"  accuracy       : {result.accuracy:.3f}")
-    print(f"  AUC            : {result.auc:.3f}")
-    print(
-        f"  baseline (majority class): {result.baseline_accuracy:.3f}   "
-        f"-> beats baseline: {result.beats_baseline}"
-    )
-    if cal is not None and cal.status == "ok":
-        print(
-            f"  calibration    : Brier {cal.brier:.3f}, log loss {cal.log_loss:.3f}, "
-            f"ECE {cal.ece:.3f} (base rate {cal.base_rate:.3f})"
-        )
+    _report(result)
     print("\nReproducible: deterministic given --n and --seed.")
     return 0
 

@@ -135,3 +135,21 @@ def test_build_deck_writes_weights_and_points_at_stake_flag_builds():
     col.set_config("speedrunPointsAtStake", True)
     col.decks.select(col.decks.id("SOA Exam P"))
     assert col.sched.getCard() is not None
+
+
+def test_undo_works_with_speedrun_scheduler_flags_on():
+    # 7a requires undo keeps working with the Rust change. The live-queue reorders
+    # are read-only, so answering a card with both flags on must still undo
+    # cleanly (the revlog row is removed).
+    col = getEmptyCol()
+    build_deck(col)
+    col.set_config("speedrunMasteryScheduler", True)
+    col.set_config("speedrunPointsAtStake", True)
+    col.decks.select(col.decks.id("SOA Exam P"))
+    card = col.sched.getCard()
+    assert card is not None
+    before = col.db.scalar("select count() from revlog")
+    col.sched.answerCard(card, 3)
+    assert col.db.scalar("select count() from revlog") == before + 1
+    col.undo()
+    assert col.db.scalar("select count() from revlog") == before

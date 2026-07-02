@@ -80,6 +80,12 @@ message ReadinessScore {
   int64 updated_at = 6;
   repeated string reasons = 7;
   string next_best_action = 8;
+  // How accurate past readiness guesses turned out to be, in [0, 1] (e.g. the
+  // share of past predictions whose real outcome fell within the stated band).
+  // Required by the honesty bundle (brief 1: "how accurate your past guesses
+  // turned out to be"); only populated once readiness scores are actually
+  // emitted, so today it stays 0 and the UI shows it as not-yet-available.
+  double past_accuracy = 9;
 }
 
 // The honest "not enough data yet" state. Carries the evidence and the single

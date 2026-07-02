@@ -59,6 +59,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: coveragePct = noScore?.coveragePct ?? score?.coveragePct ?? 0;
     $: gradedReviews = noScore?.gradedReviews ?? 0;
     $: nextAction = noScore?.nextBestAction ?? score?.nextBestAction ?? "—";
+    // Distinguish "not enough data" from "data threshold met, model not yet
+    // calibrated" so the abstain reason is stated honestly, not misreported.
+    $: readinessCalibrating =
+        !!noScore && noScore.reason.toLowerCase().includes("calibrat");
+    $: readinessAbstainValue = readinessCalibrating
+        ? "Model not yet calibrated"
+        : "Not enough data yet";
+    $: readinessAbstainDetail = readinessCalibrating
+        ? "data threshold met; awaiting the performance model"
+        : "held below threshold";
 
     function pct(x: number): string {
         return `${Math.round(x * 100)}%`;
@@ -103,10 +113,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             state: score ? "score" : "giveup",
             value: score
                 ? `${score.point.toFixed(1)} (${score.low.toFixed(1)}–${score.high.toFixed(1)})`
-                : "Not enough data yet",
+                : readinessAbstainValue,
             detail: score
                 ? `confidence ${pct(score.confidence)}`
-                : "held below threshold",
+                : readinessAbstainDetail,
             source: "P(pass) model",
         },
     ] as Signal[];
@@ -238,6 +248,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 <div>
                     <dt>How sure (confidence)</dt>
                     <dd>{score ? pct(score.confidence) : "—"}</dd>
+                </div>
+                <div>
+                    <dt>How accurate past guesses were</dt>
+                    <dd>
+                        {score && score.pastAccuracy > 0
+                            ? pct(score.pastAccuracy)
+                            : "—"}
+                    </dd>
                 </div>
                 <div>
                     <dt>Graded reviews</dt>

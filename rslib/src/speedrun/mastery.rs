@@ -15,6 +15,7 @@ use crate::collection::Collection;
 use crate::error::Result;
 use crate::prelude::CardId;
 use crate::prelude::NoteId;
+use crate::scheduler::queue::DueCard;
 use crate::scheduler::queue::NewCard;
 use crate::timestamp::TimestampSecs;
 
@@ -23,6 +24,15 @@ use crate::timestamp::TimestampSecs;
 /// queue is built exactly as upstream Anki builds it, which keeps the demo path
 /// and the ablation's plain-Anki baseline untouched.
 pub(crate) const MASTERY_SCHEDULER_KEY: &str = "speedrunMasteryScheduler";
+
+/// Config key for the opt-in points-at-stake live review order. Default OFF.
+pub(crate) const POINTS_AT_STAKE_KEY: &str = "speedrunPointsAtStake";
+
+/// Config key holding the per-subtopic importance weights (a JSON object,
+/// subtopic tag -> weight) that Python writes from the topic map, so the live
+/// review reorder can weight by exam importance. Absent -> equal weighting
+/// (weakest-topic-first).
+pub(crate) const SUBTOPIC_WEIGHTS_KEY: &str = "speedrunSubtopicWeights";
 
 /// Pre-registered gate (PRD 8): a subtopic clears when it has been executed
 /// enough times, accurately, and its memory is strong.
@@ -656,12 +666,85 @@ impl Collection {
         }
         Ok(())
     }
+
+    /// Whether the opt-in points-at-stake live review order is enabled. Default
+    /// false, so the review queue is unchanged unless a user turns it on.
+    pub(crate) fn speedrun_points_at_stake_enabled(&self) -> bool {
+        self.get_config_optional::<bool, _>(POINTS_AT_STAKE_KEY)
+            .unwrap_or(false)
+    }
+
+    /// Per-subtopic importance weights from config (written by Python from the
+    /// topic map). Empty when unset, which makes the reorder weight every
+    /// subtopic equally (weakest-topic-first).
+    fn speedrun_subtopic_weights_config(&self) -> HashMap<String, f64> {
+        self.get_config_optional::<HashMap<String, f64>, _>(SUBTOPIC_WEIGHTS_KEY)
+            .unwrap_or_default()
+    }
+
+    /// Reorder already-gathered due review cards by points at stake (topic
+    /// importance weight x measured student weakness), highest-value first, so
+    /// weak-topic cards come back sooner. Only invoked when the flag is on.
+    /// Read-only: it reorders presentation only and never reschedules, so FSRS
+    /// intervals stay valid and undo/integrity are untouched. Cards without a
+    /// syllabus subtopic keep their relative order.
+    pub(crate) fn speedrun_reorder_review_cards(
+        &mut self,
+        review: &mut Vec<DueCard>,
+    ) -> Result<()> {
+        if review.len() < 2 {
+            return Ok(());
+        }
+        let note_subtopics = self.speedrun_note_subtopic_map()?;
+        if !review
+            .iter()
+            .any(|c| note_subtopics.contains_key(&c.note_id))
+        {
+            return Ok(());
+        }
+        let mut seen = std::collections::HashSet::new();
+        let all_subtopics: Vec<String> = note_subtopics
+            .values()
+            .filter(|t| seen.insert((*t).clone()))
+            .cloned()
+            .collect();
+        let stats = self.speedrun_subtopic_stats(&all_subtopics)?;
+        let weakness: HashMap<String, f64> = stats
+            .iter()
+            .map(|s| (s.tag(), subtopic_weakness(s)))
+            .collect();
+        let weights = self.speedrun_subtopic_weights_config();
+
+        let empty = String::new();
+        let cards: Vec<(CardId, String, f64)> = review
+            .iter()
+            .map(|c| {
+                (
+                    c.id,
+                    note_subtopics.get(&c.note_id).unwrap_or(&empty).clone(),
+                    0.0,
+                )
+            })
+            .collect();
+        let ordered = points_at_stake_order(&cards, &weights, &weakness);
+
+        let mut by_id: HashMap<CardId, DueCard> = review.iter().map(|c| (c.id, *c)).collect();
+        let reordered: Vec<DueCard> = ordered
+            .into_iter()
+            .filter_map(|s| by_id.remove(&s.card_id))
+            .collect();
+        if reordered.len() == review.len() {
+            *review = reordered;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::prelude::*;
+    use crate::scheduler::queue::DueCardKind;
     use crate::tests::NoteAdder;
 
     fn stat(unit: &str, sub: &str, reviews: u32, correct: u32, mean_r: f64) -> SubtopicStats {
@@ -1015,5 +1098,75 @@ mod tests {
         let mut s0 = stat("u", "y", 0, 0, 0.0);
         s0.retr_count = 0;
         assert_eq!(subtopic_weakness(&s0), 0.5);
+    }
+
+    // --- topic-aware live review scheduling (points-at-stake queue) ---
+
+    fn review_card(col: &mut Collection, tags: &[&str]) -> DueCard {
+        let (id, note_id) = add_tagged(col, tags);
+        DueCard {
+            id,
+            note_id,
+            mtime: TimestampSecs(0),
+            due: 0,
+            current_deck_id: DeckId(1),
+            original_deck_id: DeckId(0),
+            kind: DueCardKind::Review,
+            reps: 0,
+        }
+    }
+
+    #[test]
+    fn points_at_stake_flag_defaults_off_and_is_settable() {
+        let mut col = Collection::new();
+        assert!(!col.speedrun_points_at_stake_enabled());
+        col.set_config_json(POINTS_AT_STAKE_KEY, &true, false)
+            .unwrap();
+        assert!(col.speedrun_points_at_stake_enabled());
+    }
+
+    #[test]
+    fn points_at_stake_reorders_review_by_weight() {
+        // With configured weights and no FSRS evidence (weakness 0.5 for all),
+        // the heavier topic's card sorts first — high-value weak-topic cards
+        // come back sooner.
+        let mut col = Collection::new();
+        let weights = HashMap::from([
+            ("subtopic::gp::a".to_string(), 9.0f64),
+            ("subtopic::gp::b".to_string(), 1.0f64),
+        ]);
+        col.set_config_json(SUBTOPIC_WEIGHTS_KEY, &weights, false)
+            .unwrap();
+        let b = review_card(&mut col, &["subtopic::gp::b"]);
+        let a = review_card(&mut col, &["subtopic::gp::a"]);
+        let mut review = vec![b, a];
+        col.speedrun_reorder_review_cards(&mut review).unwrap();
+        assert_eq!(review[0].id, a.id);
+        assert_eq!(review[1].id, b.id);
+    }
+
+    #[test]
+    fn points_at_stake_review_reorder_is_noop_without_weights() {
+        // No weights configured + no FSRS retention -> equal stakes -> the
+        // review order is left untouched.
+        let mut col = Collection::new();
+        let a = review_card(&mut col, &["subtopic::gp::a"]);
+        let b = review_card(&mut col, &["subtopic::gp::b"]);
+        let mut review = vec![a, b];
+        let before: Vec<CardId> = review.iter().map(|c| c.id).collect();
+        col.speedrun_reorder_review_cards(&mut review).unwrap();
+        let after: Vec<CardId> = review.iter().map(|c| c.id).collect();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn build_queues_runs_with_points_at_stake_on() {
+        let mut col = Collection::new();
+        add_tagged(&mut col, &["subtopic::gp::a"]);
+        col.set_config_json(POINTS_AT_STAKE_KEY, &true, false)
+            .unwrap();
+        col.set_current_deck(DeckId(1)).unwrap();
+        // Builds a valid queue with the flag on (review queue may be empty).
+        let _ = col.get_queued_cards(5, false).unwrap();
     }
 }

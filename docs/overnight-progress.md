@@ -189,3 +189,21 @@ AI features, and two-way sync.
   a card and checks it comes back with `stakes == weight * weakness`, sorted
   descending.
 - `./ninja check` green (27 speedrun Rust tests + Python).
+
+### Feature B — Topic-aware live review scheduling (done)
+
+- Brings weak-topic due cards back **sooner** in the live review queue: behind an
+  opt-in `speedrunPointsAtStake` flag (default off), `build_queues` reorders the
+  gathered review cards by points at stake (topic weight x weakness). Order-only,
+  so **FSRS intervals stay valid and undo/integrity are untouched**; with the
+  flag off the queue is exactly upstream's.
+- Weights reach the engine via a `speedrunSubtopicWeights` config key that Python
+  writes from the topic map (`apply_subtopic_weights_config`, called by
+  `build_deck`); absent -> equal weighting (weakest-topic-first). Flag + weights
+  are plain config keys, so upstream's `BoolKey` enum is untouched.
+- Rust: `speedrun_reorder_review_cards` + flag/weights helpers (+4 tests: flag
+  default off, reorders by weight, no-op without weights, `build_queues` builds
+  with the flag on). Python test: `build_deck` writes the weights and the live
+  flag still builds a valid queue.
+- Safety gates: full `./ninja check` green (31 speedrun Rust tests + Python; no
+  scheduler regression) and `make crash-test` 20/20 with zero corruption.

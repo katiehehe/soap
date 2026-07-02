@@ -121,3 +121,17 @@ def test_points_at_stake_order_reads_due_cards():
     # Highest stakes first.
     for a, b in zip(cards, cards[1:]):
         assert a.stakes >= b.stakes - 1e-9
+
+
+def test_build_deck_writes_weights_and_points_at_stake_flag_builds():
+    # Topic-aware live scheduling: build_deck writes the per-subtopic weights to
+    # config, and with the points-at-stake flag on the live queue still builds
+    # cleanly (the reorder is order-only, so it can't corrupt anything).
+    col = getEmptyCol()
+    build_deck(col)
+    weights = col.get_config("speedrunSubtopicWeights")
+    assert weights and len(weights) == len(expected_subtopic_tags())
+
+    col.set_config("speedrunPointsAtStake", True)
+    col.decks.select(col.decks.id("SOA Exam P"))
+    assert col.sched.getCard() is not None

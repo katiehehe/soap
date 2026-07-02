@@ -69,6 +69,20 @@ def subtopic_weights(topics: dict[str, Any] | None = None) -> list[tuple[str, fl
     return weights
 
 
+def apply_subtopic_weights_config(
+    col: Any, topics: dict[str, Any] | None = None
+) -> None:
+    """Write the per-subtopic importance weights to collection config.
+
+    The engine's opt-in points-at-stake live review order reads these
+    (``speedrunSubtopicWeights``) so it can weight by exam importance without a
+    request round-trip. Weights only affect review *ordering*; they never touch
+    the honesty/give-up thresholds or any score. Safe to call repeatedly.
+    """
+    weights = {tag: weight for tag, weight in subtopic_weights(topics)}
+    col.set_config("speedrunSubtopicWeights", weights)
+
+
 def expected_subtopic_tags(topics: dict[str, Any] | None = None) -> list[str]:
     """Every subtopic tag in the syllabus (the denominator for coverage)."""
     topics = topics or load_topics()

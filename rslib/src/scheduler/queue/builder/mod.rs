@@ -294,6 +294,12 @@ impl Collection {
         if self.speedrun_mastery_scheduler_enabled() {
             self.speedrun_reorder_new_cards(&mut queues.new)?;
         }
+        // Speedrun: opt-in points-at-stake review order (topic weight x student
+        // weakness). Off by default; read-only, so FSRS intervals stay valid and
+        // undo/integrity are unaffected.
+        if self.speedrun_points_at_stake_enabled() {
+            self.speedrun_reorder_review_cards(&mut queues.review)?;
+        }
 
         let queues = queues.build(self.learn_ahead_secs() as i64);
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple
 
 from anki.speedrun import (
+    apply_subtopic_weights_config,
     difficulty_tag,
     load_topics,
     subtopic_name,
@@ -368,4 +369,7 @@ def build_deck(col: Collection, root: str = ROOT_DECK) -> int:
         note.add_tag(difficulty_tag(card.difficulty))
         col.add_note(note, deck_id)
         added += 1
+    # Make the per-subtopic weights available to the engine's points-at-stake
+    # live review order (ordering only; never affects any score).
+    apply_subtopic_weights_config(col, topics)
     return added

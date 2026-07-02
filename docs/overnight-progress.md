@@ -296,3 +296,22 @@ the mastery scheduler was an invisible reorder of one pile. Commit `f96158f57`.
   the tier banner shows where you are. This shortcut just makes the ideal
   single-subtopic blocked-practice path one click.
 - Full `./ninja check` green; study-map e2e passes.
+
+### Follow-up round 5: tier-aware study flow (`6646dee37`)
+
+Addresses "it's always blocked" — practice now progresses block -> within-unit ->
+cross-unit instead of only recommending blocked.
+
+- Engine: `GetMasteryState` returns a `StudyRecommendation` (new `StudyMode` enum
+  - message): block the weakest uncleared subtopic, then once a unit has >= 2
+    cleared sub-types interleave that unit, then cross-unit once all cleared. A
+    single source of truth for both surfaces; purely from the measured gate state
+    (+3 Rust tests, a Python assertion).
+- UI: the study map shows a tier-labeled "Study next" button (follows the
+  recommendation), an explicit "Study everything (cross-unit review)" button, a
+  per-unit "Study this unit (within-unit interleaving)" button, and the existing
+  per-subtopic blocked button; the toolbar "Study next" opens the recommended
+  tier's deck. All read-only (select + review), so FSRS/undo untouched.
+  `unit_deck_name` + test.
+- Full `./ninja check` green (incl. clippy MSRV); study-map e2e passes; screenshot
+  shows "Study next: blocked practice · Discrete dist." advancing as gates clear.

@@ -124,4 +124,16 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
   stays `NoScore`; nothing fabricated).
 - `compute_readiness` left unchanged: still returns `NoScore` — no number is
   invented before the performance model exists.
-- `./ninja check` green.
+- `./ninja check` green. Commit `5a8880aaf`.
+
+### Specs synced (PRD, vision, checklist)
+
+- `SPEC_CHECKLIST.md`: 7a now `[x]` (live-queue wiring done behind the flag +
+  weighted rollups + priorities); Step 1 / Sunday memory-calibration + score-
+  mapping marked `[~]` with the new harness/doc; ablation switch noted; new files
+  + the queue-builder hook added to the merge log.
+- `docs/vision.md`: live-queue integration marked built; recent additions
+  (weights, weighted rollup, priorities, sized bubbles, calibration) listed.
+- `PRD.md`: §8 status note (live queue + weighting) and §9 pointer to
+  `docs/score-models.md` + the calibration library.
+- `./ninja check` (dprint) green.

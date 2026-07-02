@@ -61,10 +61,10 @@ Desktop (AI):
 
 ## 5. SUNDAY — prove it, ship both
 
-- [ ] Memory model calibrated: calibration chart + Brier/log loss on held-out reviews.
-- [ ] Performance model: accuracy on held-out exam-style questions.
-- [ ] Score mapping written down, with a range.
-- [ ] Study feature tested with 3 builds, equal study time: (1) full three-tier scheduler, (2) within-unit interleaving removed → global mixed pool, (3) plain Anki. Metric pre-registered; nulls reported.
+- [~] Memory model calibrated: reproducible harness built (`make calibration` → FSRS held-out log loss + RMSE(bins); `calibration.py` metrics unit-tested). Produces the chart/numbers on a real review history; abstains honestly otherwise.
+- [ ] Performance model: accuracy on held-out exam-style questions. Method + pipeline fixed (`docs/score-models.md`, seeded split, `calibration.py`); awaiting the disguised-item dataset.
+- [~] Score mapping written down, with a range: `docs/score-models.md` (memory/performance/readiness, give-up rule, honesty bundle). Readiness stays `NoScore` until the performance model is calibrated.
+- [~] Study feature tested with 3 builds, equal study time: (1) full three-tier scheduler, (2) within-unit interleaving removed → global mixed pool, (3) plain Anki. The Full-vs-plain switch now exists as the `speedrunMasteryScheduler` flag (live-queue ordering on/off); the run + pre-registered metric + nulls are still to be executed (`docs/study-feature-ablation.md`).
 - [ ] Honest reporting, including results that did not work.
 - [ ] Packaged desktop installer + packaged phone build (signed APK, or iOS TestFlight/sideload).
 - [ ] Sync conflict handling correct + documented.
@@ -73,7 +73,7 @@ Desktop (AI):
 
 ## 6. Concrete challenges (section 7)
 
-- [~] 7a Rust change: the real three-tier mastery-gated scheduler now exists — mastery model (per-subtopic gate from revlog accuracy + FSRS retrievability), `GetMasteryState` + `GetMasteryOrderedNewCards` RPCs, tier/pool ordering. 14 Rust tests + 4 Python tests; undo/no-corruption covered; mastery query optimised to be revlog-driven (p95 ~0.06ms) and ordered-new-cards p95 cut from ~1.39s → ~155ms on 50k; `docs/rust-change.md` (why Rust) + `docs/upstream-touched.md` (merge note). Remaining: wire ordering into the live queue builder (phone build now verified — engine runs on the emulator).
+- [x] 7a Rust change: the real three-tier mastery-gated scheduler exists AND is wired into the **live** new-card queue behind an opt-in, default-off config flag (`speedrunMasteryScheduler`) in `Collection::build_queues` — read-only, so undo/integrity are untouched, and off by default so upstream behaviour and the ablation's plain-Anki baseline are unchanged. Mastery model (per-subtopic gate from revlog accuracy + FSRS retrievability), `GetMasteryState` (now also **importance-weighted rollups** + a **"what to study next"** ranking) + `GetMasteryOrderedNewCards` RPCs, tier/pool ordering. ~30 Rust tests + Python tests; undo/no-corruption covered (`make crash-test` 20× SIGKILL clean); mastery query revlog-driven (p95 ~0.06ms), ordered-new-cards p95 ~155ms on 50k; `docs/rust-change.md` (why Rust) + `docs/upstream-touched.md` (merge note, incl. the 3-line queue-builder hook).
 - [ ] 7b Sync test: 10 offline phone + 10 offline desktop → all 20 land once; same-card conflict rule picks a clear winner (documented).
 - [x] 7c Coverage map: official 2026-05 P outline in `pylib/anki/speedrun/exam_p_topics.json` (3 units, 19 subtopics from the real learning outcomes); coverage computed in Rust from note tags, weighted by section; % shown on the readiness dashboard; readiness abstains below 50% (give-up rule). An interactive **study map** (`ts/routes/study-map`) renders the syllabus as a concept map (Exam P centre, units on an equilateral triangle, subtopics radiating) with links that fill by mastery via `get_mastery_state`.
 - [ ] 7d Paraphrase test: 30 cards × 2 reworded Qs; recall vs reworded accuracy; gap reported.
@@ -84,9 +84,9 @@ Desktop (AI):
 
 ## 7. Score-model steps (section 9)
 
-- [ ] Step 1 (req): memory calibrated, proven on held-back reviews.
-- [ ] Step 2 (req): predict held-back exam-style question correctness (mastery, difficulty, timing, coverage).
-- [ ] Step 3 (req): turn performance into a score, method written down, range shown.
+- [~] Step 1 (req): memory calibrated, proven on held-back reviews. Reproducible harness built: `make calibration` runs FSRS's held-out (time-series split) log loss + RMSE via the engine, and `pylib/anki/speedrun/calibration.py` (Brier/log loss/ECE/reliability bins, unit-tested) is the reusable metrics layer. Abstains honestly on a thin history (needs a real study history to print numbers).
+- [ ] Step 2 (req): predict held-back exam-style question correctness (mastery, difficulty, timing, coverage). Method fixed in `docs/score-models.md`; awaiting a disguised-item dataset — reads "not yet measured" until then (never fabricated).
+- [~] Step 3 (req): turn performance into a score, method written down (`docs/score-models.md`), range shown. Give-up rule live in Rust; readiness stays `NoScore` until the performance model is calibrated (no invented number).
 - [ ] Step 4 (bonus): validate against real students with study history + practice-test scores.
 
 ## 8. Speed & reliability targets (section 10) — report p50 / p95 / worst
@@ -115,4 +115,5 @@ See `docs/upstream-touched.md` for the full log. Summary of upstream Anki files 
 - `rslib/proto/python.rs` — `import anki.speedrun_pb2` in the generated-header list (1 line) — low/med.
 - `qt/aqt/mediasrv.py` — add `readiness-dashboard` route + expose `compute_readiness` (2 list entries) — med.
 - `qt/aqt/main.py` — add a Tools-menu action + `on_speedrun_readiness` handler — med.
-  New files (no merge risk): `proto/anki/speedrun.proto`, `rslib/src/speedrun/*` (service + mastery), `qt/aqt/speedrun.py`, `ts/routes/readiness-dashboard/+page.svelte`, `ts/routes/study-map/+page.svelte`, `pylib/anki/speedrun/*` (topics, seed, evalsplit), `tools/speedrun/*` (deck builder, bench, crash_test, leakage_scan), `Makefile`, `pylib/tests/test_speedrun*.py`, `ts/tests/e2e/readiness-dashboard.test.ts`, `ts/tests/e2e/study-map.test.ts`, `docs/rust-change.md`, `docs/upstream-touched.md`, `docs/android-build.md`, `docs/fsrs-reference.md`, `docs/vision.md`, `docs/demo-script.md`, `docs/ai-features-prd.md`.
+- `rslib/src/scheduler/queue/builder/mod.rs` — 3-line opt-in hook in `build_queues` that reorders new cards by mastery tier when the `speedrunMasteryScheduler` flag is on (default off; read-only) — low/med.
+  New files (no merge risk): `proto/anki/speedrun.proto`, `rslib/src/speedrun/*` (service + mastery), `qt/aqt/speedrun.py`, `ts/routes/readiness-dashboard/+page.svelte`, `ts/routes/study-map/*` (bubble concept map + geometry lib/tests), `pylib/anki/speedrun/*` (topics + weights, seed, evalsplit, calibration), `tools/speedrun/*` (deck builder, bench, crash_test, leakage_scan, `evals/memory_calibration.py`), `Makefile`, `pylib/tests/test_speedrun*.py`, `ts/tests/e2e/readiness-dashboard.test.ts`, `ts/tests/e2e/study-map.test.ts`, `docs/rust-change.md`, `docs/upstream-touched.md`, `docs/android-build.md`, `docs/fsrs-reference.md`, `docs/vision.md`, `docs/demo-script.md`, `docs/ai-features-prd.md`, `docs/score-models.md`, `docs/overnight-progress.md`.

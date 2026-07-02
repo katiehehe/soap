@@ -32,7 +32,8 @@ subtopics      subtopics        subtopics        <- syllabus outcomes
 
 Cards move up three piles as the student improves. This is Spiky POV 1 and the
 required Rust engine change. **[mastery model + ordering: built in Rust; live
-queue integration: planned]**
+queue integration: built behind a default-off `speedrunMasteryScheduler` flag —
+`build_queues` reorders new cards by tier when it is on]**
 
 1. **Subtopic pile (Blocked)** — a small deck per subtopic, practised in
    isolation until its **mastery gate** clears (enough graded problems, high
@@ -99,7 +100,15 @@ counts:
 ## Build order (suggested next steps)
 
 1. Tap a tree node -> open that subtopic's deck in the reviewer (pycmd bridge).
-2. Live queue: use `get_mastery_ordered_new_cards` in the actual scheduler so the
-   three piles are what the student is served.
+2. ~~Live queue: use the tier order in the actual scheduler~~ **[done]** — the
+   `speedrunMasteryScheduler` flag makes `build_queues` serve new cards in tier
+   order (Blocked -> WithinUnit -> CrossUnit); default off.
 3. Practice-test mode + readiness calibration from held-out practice scores.
+   Memory (FSRS) calibration harness is built (`make calibration`,
+   `docs/score-models.md`); the performance model + practice tests are next.
 4. User-question area (separate), then the opt-in AI subtopic classifier.
+
+Recent additions (built): per-topic **importance weights** (`exam_p_topics.json`),
+an **importance-weighted mastery rollup** and a **"what to study next"** ranking
+in `GetMasteryState`, an **importance-sized bubble concept map** with unit-level
+detail, and the honest **calibration** layer above.

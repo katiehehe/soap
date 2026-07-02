@@ -184,6 +184,8 @@ stateDiagram-v2
 
 Required with the change: a new **protobuf** message called from Python; **≥ 3 Rust unit tests** (tier transitions, the gate condition, and pool ordering) + **1 Python-calling test**; **undo works**, **no corruption**; a one-page `docs/rust-change.md` on why this belongs in Rust; `docs/upstream-touched.md` listing files touched + merge risk. Must be fast enough to power the dashboard on 50k cards.
 
+**Status (built):** the mastery model, RPCs, and tier ordering exist, and the ordering is now wired into the **live** new-card queue (`build_queues`) behind an opt-in, default-off `speedrunMasteryScheduler` flag (read-only, so undo/integrity are untouched; off by default so the ablation's plain-Anki baseline is unchanged). `GetMasteryState` also returns an **importance-weighted mastery rollup** and a **"what to study next"** ranking; the study map renders topics as **importance-sized bubbles** (size = exam weight, colour = measured mastery).
+
 ## 9. The three models & the give-up rule
 
 - **Memory (Step 1, required):** FSRS. Prove it's calibrated on held-back reviews (calibration chart + Brier/log loss).
@@ -191,6 +193,7 @@ Required with the change: a new **protobuf** message called from Python; **≥ 3
 - **Readiness (Step 3, required):** map performance + coverage → **P(pass)** + a projected **0–10 band** + a range. Write the method down. Coverage gates it.
 - **Give-up rule (assertion + test):** below threshold (**e.g. ≥ 200 graded reviews AND ≥ 50% coverage**) return an explicit `NoScore { reason }`; the UI shows the reason, never a number. A deck skipping a high-weight section can't read "ready."
 - Represent every score as a struct with required fields (`point, low, high, coverage_pct, confidence, updated_at, reasons[], next_best_action`) so a bare number can't be emitted.
+- The full method for all three signals is written down in **`docs/score-models.md`** (memory = FSRS + held-out calibration via `make calibration`; performance = a calibrated classifier over a seeded held-out split of disguised items; readiness = the coverage-gated P(pass) mapping). A reusable, unit-tested calibration library (`pylib/anki/speedrun/calibration.py`: Brier, log loss, ECE, reliability bins) enforces the give-up rule on calibration itself. Until the performance model is calibrated, readiness stays `NoScore` — no invented number.
 
 ## 10. Study feature + ablation (section 8 of the spec)
 

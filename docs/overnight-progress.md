@@ -315,3 +315,32 @@ cross-unit instead of only recommending blocked.
   `unit_deck_name` + test.
 - Full `./ninja check` green (incl. clippy MSRV); study-map e2e passes; screenshot
   shows "Study next: blocked practice · Discrete dist." advancing as gates clear.
+
+### Follow-up round 6: "Today's plan" — tiered daily deck list (`GetStudyPlan`)
+
+Addresses "I want each day to show multiple decks to review, by tier" — makes the
+scheduler tiers a visible _daily plan_, not just an invisible reorder.
+
+- Engine: new 6th RPC `GetStudyPlan`. Assigns each subtopic/unit a tier from the
+  measured gate state, then attaches Anki's OWN deck-tree counts for today
+  (daily-limit capped — the same numbers the deck list shows) to the matching
+  subtopic/unit/root deck. Only decks with something due today are returned,
+  ordered blocked -> within-unit -> cross-unit (blocked by exam importance).
+  Tiering is a pure, unit-tested `build_study_plan`; deck attribution uses card
+  tags + the deck tree's own parent structure, so no display-name duplication.
+  Read-only (only reads `deck_tree`), so nothing is rescheduled or fabricated.
+  Counts respect the daily cap, which is why child decks can sum above the
+  parent's "20" — the plan surfaces exactly Anki's numbers, honestly.
+  +6 Rust tests (4 pure tier/filter/order + 2 end-to-end deck-count), +3 Python
+  backend tests (blocked-on-fresh-deck, counts == seeded cards, actionable
+  filter drops a finished subtopic).
+- UI: study-map "Today's plan" panel groups the plan by tier with a colour dot,
+  a one-line rationale, per-deck today counts ("N new · M due"), and a Study
+  button that opens the deck BY ID (new `speedrun-study-deck:` bridge cmd ->
+  `open_deck_by_id`), robust to display names differing from deck names. Pure
+  grouping/label helper `groupPlanByTier`/`tierMeta` in `lib.ts` (+4 vitest).
+- Plumbing: exposed `get_study_plan` / `/_anki/getStudyPlan` in `mediasrv.py`
+  (append-only) so the webview can call it.
+- Verified GREEN: `cargo test -p anki speedrun::` (47 tests), `check:vitest`,
+  `check:svelte`, `check:pytest:pylib`, `check:pytest:aqt`, and full
+  `check:format`/`check:eslint`/`check:ruff`/`check:clippy`.

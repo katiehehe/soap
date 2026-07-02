@@ -300,6 +300,16 @@ impl Collection {
         if self.speedrun_points_at_stake_enabled() {
             self.speedrun_reorder_review_cards(&mut queues.review)?;
         }
+        // Speedrun: when the mastery scheduler is on, blocked practice also
+        // carries through the REVIEW queue until a subtopic clears its gate: due
+        // reviews are tier-ordered (blocked grouped first -> within-unit ->
+        // cross-unit), mirroring the new-card order. Applied after points-at-stake
+        // so the tier is primary and stakes only break ties within a tier.
+        // Read-only (a stable reorder), so FSRS intervals and undo/integrity are
+        // untouched.
+        if self.speedrun_mastery_scheduler_enabled() {
+            self.speedrun_reorder_review_cards_by_tier(&mut queues.review)?;
+        }
 
         let queues = queues.build(self.learn_ahead_secs() as i64);
 

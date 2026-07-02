@@ -1128,6 +1128,66 @@ impl Collection {
         }
         Ok(())
     }
+
+    /// Reorder already-gathered due review cards by mastery tier, so blocked
+    /// practice carries through the REVIEW queue until a subtopic clears its
+    /// gate: a not-yet-mastered subtopic's due cards are grouped and served
+    /// first (blocked drill), then within-unit interleaving, then cross-unit.
+    /// Reuses the exact new-card tier order (`order_new_cards`) and honours the
+    /// same within-unit ablation flag. Only invoked when the mastery scheduler
+    /// flag is on. Read-only: a stable reorder that never reschedules, so FSRS
+    /// intervals and undo/integrity are untouched. Applied after the
+    /// points-at-stake reorder, so the tier is primary and stakes only break
+    /// ties within a tier. Cards without a syllabus subtopic keep their
+    /// relative order at the end.
+    pub(crate) fn speedrun_reorder_review_cards_by_tier(
+        &mut self,
+        review: &mut Vec<DueCard>,
+    ) -> Result<()> {
+        if review.len() < 2 {
+            return Ok(());
+        }
+        let note_subtopics = self.speedrun_note_subtopic_map()?;
+        if !review
+            .iter()
+            .any(|c| note_subtopics.contains_key(&c.note_id))
+        {
+            return Ok(());
+        }
+        // Pools depend on whole-unit mastery, so compute stats over every
+        // syllabus subtopic present, not just the ones due right now.
+        let mut seen = std::collections::HashSet::new();
+        let all_subtopics: Vec<String> = note_subtopics
+            .values()
+            .filter(|t| seen.insert((*t).clone()))
+            .cloned()
+            .collect();
+        let stats = self.speedrun_subtopic_stats(&all_subtopics)?;
+        let pools = compute_pools(&stats);
+        let ablate = self.speedrun_ablate_within_unit();
+
+        let empty = String::new();
+        let cards: Vec<(CardId, String)> = review
+            .iter()
+            .map(|c| {
+                (
+                    c.id,
+                    note_subtopics.get(&c.note_id).unwrap_or(&empty).clone(),
+                )
+            })
+            .collect();
+        let ordered = order_new_cards(&cards, &pools, ablate);
+
+        let mut by_id: HashMap<CardId, DueCard> = review.iter().map(|c| (c.id, *c)).collect();
+        let reordered: Vec<DueCard> = ordered
+            .into_iter()
+            .filter_map(|id| by_id.remove(&id))
+            .collect();
+        if reordered.len() == review.len() {
+            *review = reordered;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -1815,5 +1875,42 @@ mod tests {
         col.set_current_deck(DeckId(1)).unwrap();
         // Builds a valid queue with the flag on (review queue may be empty).
         let _ = col.get_queued_cards(5, false).unwrap();
+    }
+
+    // --- mastery-tier ordering of the REVIEW queue (blocked practice carries
+    // through reviews until a subtopic clears its gate) ---
+
+    #[test]
+    fn review_tier_reorder_groups_blocked_subtopics_and_puts_untagged_last() {
+        // All cards are unreviewed, so every subtopic is Blocked. The review
+        // reorder then groups blocked cards by subtopic (same as new cards), and
+        // cards with no subtopic tag sort last — so a not-yet-mastered subtopic's
+        // due reviews are drilled together rather than scattered.
+        let mut col = Collection::new();
+        let b1 = review_card(&mut col, &["subtopic::gp::b"]);
+        let x1 = review_card(&mut col, &["subtopic::uv::x"]);
+        let b2 = review_card(&mut col, &["subtopic::gp::b"]);
+        let u = review_card(&mut col, &[]); // no subtopic tag
+
+        let mut review = vec![x1, b1, u, b2];
+        col.speedrun_reorder_review_cards_by_tier(&mut review)
+            .unwrap();
+
+        let ids: Vec<CardId> = review.iter().map(|c| c.id).collect();
+        // "subtopic::gp::b" < "subtopic::uv::x", grouped; untagged card last.
+        assert_eq!(ids, vec![b1.id, b2.id, x1.id, u.id]);
+    }
+
+    #[test]
+    fn review_tier_reorder_is_noop_without_syllabus_cards() {
+        let mut col = Collection::new();
+        let c1 = review_card(&mut col, &["leech"]);
+        let c2 = review_card(&mut col, &[]);
+        let mut review = vec![c2, c1];
+        let before: Vec<CardId> = review.iter().map(|c| c.id).collect();
+        col.speedrun_reorder_review_cards_by_tier(&mut review)
+            .unwrap();
+        let after: Vec<CardId> = review.iter().map(|c| c.id).collect();
+        assert_eq!(before, after, "non-syllabus review queues stay untouched");
     }
 }

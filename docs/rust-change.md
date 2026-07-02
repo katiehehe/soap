@@ -76,16 +76,21 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   measured counts + the stored exam date (`compute_pace`, unit-tested); it is a
   _coverage_ pace, never the readiness score. Read-only.
 
-All seven RPCs are called from Python and covered by tests (~51 Rust unit tests
+All seven RPCs are called from Python and covered by tests (~53 Rust unit tests
 across `service.rs` + `mastery.rs`, plus a Python-calling test for every RPC).
 
 The tier order and the points-at-stake order are now wired into the **live**
 queue builder behind two opt-in, default-off config flags:
-`speedrunMasteryScheduler` (reorders new cards by tier) and `speedrunPointsAtStake`
-(reorders due review cards by points at stake). Both reorders are read-only
-(presentation only), so FSRS intervals stay valid and undo/integrity are
-untouched; with the flags off the queue is built exactly as upstream. They are
-also exposed as RPCs so the dashboard/study map can use the same orderings.
+`speedrunMasteryScheduler` and `speedrunPointsAtStake`. The mastery scheduler
+tier-orders **both** the new-card queue AND the due-review queue (blocked
+practice carries through reviews: a not-yet-mastered subtopic's due cards are
+grouped/served first, then within-unit, then cross-unit, and only interleave
+once the subtopic clears its gate). `speedrunPointsAtStake` reorders due reviews
+by points at stake; when both are on the tier is primary and stakes break ties
+within a tier. All reorders are read-only (presentation only), so FSRS intervals
+stay valid and undo/integrity are untouched; with the flags off the queue is
+built exactly as upstream. The orders are also exposed as RPCs so the
+dashboard/study map can use them.
 
 ## How the scheduler is built
 

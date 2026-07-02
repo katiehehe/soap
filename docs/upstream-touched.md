@@ -37,15 +37,18 @@ Format: `path - what changed - merge risk (low/med/high)`.
   methods, so the pages + the recommended-subtopic blocked-practice shortcut are
   first-class toolbar buttons, not only Tools-menu items - med. Append-only.
 - `rslib/src/scheduler/queue/builder/mod.rs` - in `Collection::build_queues`,
-  after `gather_cards`, two small opt-in hooks: reorder the gathered new cards by
-  mastery tier when `speedrunMasteryScheduler` is on, and reorder the due review
-  cards by points-at-stake (topic weight x weakness) when `speedrunPointsAtStake`
-  is on (both default off) - low/med. The reorders live in
+  after `gather_cards`, three small opt-in hooks: when `speedrunMasteryScheduler`
+  is on, reorder the gathered new cards by mastery tier AND reorder the due
+  review cards by the same tier (so blocked practice carries through reviews
+  until a subtopic clears); when `speedrunPointsAtStake` is on, reorder the due
+  review cards by points-at-stake (topic weight x weakness). Both flags default
+  off; when both are on the tier reorder runs after points-at-stake, so the tier
+  is primary and stakes break ties within a tier. The reorders live in
   `rslib/src/speedrun/mastery.rs` (`speedrun_reorder_new_cards`,
-  `speedrun_reorder_review_cards`), are read-only (no writes, so undo/integrity
-  and FSRS intervals are untouched), and the flags use plain string config keys
-  so upstream's `BoolKey` enum is not modified. With the flags off the queue is
-  built exactly as upstream.
+  `speedrun_reorder_review_cards`, `speedrun_reorder_review_cards_by_tier`), are
+  read-only (no writes, so undo/integrity and FSRS intervals are untouched), and
+  the flags use plain string config keys so upstream's `BoolKey` enum is not
+  modified. With the flags off the queue is built exactly as upstream.
 
 Note: `get_study_plan` also _reads_ `Collection::deck_tree` (an existing public
 method) to get Anki's own daily-limit-capped due counts, and `get_study_pace`

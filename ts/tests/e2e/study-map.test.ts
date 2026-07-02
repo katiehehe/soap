@@ -33,6 +33,12 @@ test("study map renders the three-layer topic tree", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Today's plan" })).toBeVisible();
     await expect(page.getByText(/Nothing due today/)).toBeVisible();
 
+    // Exam pace is shown; with no exam date set it prompts for one and is
+    // explicit that it's a coverage pace, not a predicted score.
+    await expect(page.getByRole("heading", { name: "Exam pace" })).toBeVisible();
+    await expect(page.getByText(/Set your exam date/)).toBeVisible();
+    await expect(page.getByText(/coverage pace/)).toBeVisible();
+
     // Tapping a subtopic opens its mastery detail (empty collection -> not started).
     await page.getByText("Order statistics").click();
     const detail = page.locator("section.detail");

@@ -9,12 +9,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import {
         computeReadiness,
         getMasteryState,
+        getStudyPace,
         getStudyPlan,
     } from "@generated/backend";
     import { StudyMode } from "@generated/anki/speedrun_pb";
     import type {
         MasteryState,
         ReadinessResult,
+        StudyPace,
         StudyPlan,
         StudyPlanItem,
         StudyRecommendation,
@@ -22,7 +24,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         UnitMastery,
     } from "@generated/anki/speedrun_pb";
 
-    import type { LeafNode, SubtopicEvidence, UnitNode } from "./lib";
+    import type { LeafNode, PaceView, SubtopicEvidence, UnitNode } from "./lib";
     import {
         COLORS,
         computeLayout,
@@ -31,6 +33,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         hasEnoughEvidence,
         leafProgress,
         MIN_PROBLEMS,
+        paceTone,
         statusLabel,
         subtopicTag,
         TAXONOMY,
@@ -65,6 +68,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let result: MasteryState | null = null;
     let readiness: ReadinessResult | null = null;
     let studyPlan: StudyPlan | null = null;
+    let pace: StudyPace | null = null;
     let loadError = "";
     let selectedLeaf: LeafNode | null = null;
     let selectedUnit: UnitNode | null = null;
@@ -76,7 +80,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     onMount(async () => {
         try {
-            [result, readiness, studyPlan] = await Promise.all([
+            [result, readiness, studyPlan, pace] = await Promise.all([
                 getMasteryState({
                     expectedSubtopics: allTags,
                     units: UNIT_WEIGHTS,
@@ -84,6 +88,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 }),
                 computeReadiness({ expectedSubtopics: allTags, units: UNIT_WEIGHTS }),
                 getStudyPlan({
+                    expectedSubtopics: allTags,
+                    units: UNIT_WEIGHTS,
+                    subtopicWeights: SUBTOPIC_WEIGHTS,
+                }),
+                getStudyPace({
                     expectedSubtopics: allTags,
                     units: UNIT_WEIGHTS,
                     subtopicWeights: SUBTOPIC_WEIGHTS,
@@ -106,6 +115,25 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // Today's plan: the decks with something due now, grouped by tier. Counts are
     // Anki's own daily-limit-capped numbers, so they match the deck list.
     $: planGroups = groupPlanByTier(studyPlan?.items ?? []);
+
+    // Exam-coverage pace (are you introducing new cards fast enough?). All values
+    // are measured counts / arithmetic — a coverage pace, never a score.
+    $: paceView = pace
+        ? ({
+              hasExamDate: pace.hasExamDate,
+              daysLeft: Number(pace.daysLeft),
+              remainingNew: pace.remainingNew,
+              currentNewPerDay: pace.currentNewPerDay,
+              recommendedNewPerDay: pace.recommendedNewPerDay,
+              projectedDaysToFinish: pace.projectedDaysToFinish,
+              onTrack: pace.onTrack,
+          } satisfies PaceView)
+        : null;
+    $: paceState = paceView ? paceTone(paceView) : "none";
+    // Noon-anchored timestamp -> the exam day is stable across time zones.
+    $: examIso = paceView?.hasExamDate
+        ? new Date(Number(pace!.examTimestamp) * 1000).toISOString().slice(0, 10)
+        : "";
 
     // Honest readiness give-up state — never a fabricated number. The score
     // itself lives on the Readiness page; here we only surface why it's withheld.
@@ -234,6 +262,26 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         return parts.join(" · ");
     }
+    // Exam-pace actions (all go through the desktop bridge).
+    function onExamDateInput(e: Event): void {
+        const value = (e.currentTarget as HTMLInputElement).value;
+        if (value) {
+            bridgeCommand("speedrun-set-exam-date:" + value);
+        } else {
+            bridgeCommand("speedrun-clear-exam-date");
+        }
+    }
+    function clearExamDate(): void {
+        bridgeCommand("speedrun-clear-exam-date");
+    }
+    function raiseNewPerDay(n: number): void {
+        // Permanent "get on track" lever: raise the exam deck's daily new limit.
+        bridgeCommand("speedrun-set-new-per-day:" + n);
+    }
+    function studyMore(): void {
+        // "Go ahead" beyond today's quota: extend today's new limit and study.
+        bridgeCommand("speedrun-extend-new:20");
+    }
     function recStudyLabel(rec: StudyRecommendation): string {
         switch (rec.mode) {
             case StudyMode.BLOCKED:
@@ -312,6 +360,74 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     Counts are today's cards after Anki's daily limits — the same
                     numbers as the deck list. Blocked rows show a subtopic's own cards;
                     higher tiers unlock as you clear gates.
+                </p>
+            {/if}
+            <button class="plan-more" on:click={studyMore}>
+                Study more today (+20 new cards)
+            </button>
+        </section>
+    {/if}
+
+    {#if pace}
+        <section class="pace" aria-label="Exam pace">
+            <div class="pace-head">
+                <h2>Exam pace</h2>
+                {#if paceState === "ok"}
+                    <span class="pace-badge ok">On track</span>
+                {:else if paceState === "behind"}
+                    <span class="pace-badge behind">Behind</span>
+                {:else if paceState === "past"}
+                    <span class="pace-badge past">Date passed</span>
+                {/if}
+            </div>
+
+            <div class="pace-row">
+                <label class="pace-date">
+                    Exam date
+                    <input type="date" value={examIso} on:change={onExamDateInput} />
+                </label>
+                {#if paceView?.hasExamDate}
+                    <button class="pace-clear" on:click={clearExamDate}>Clear</button>
+                {/if}
+            </div>
+
+            {#if paceView && paceView.hasExamDate}
+                {#if paceState === "past"}
+                    <p class="pace-detail">
+                        Your exam date has passed — set a new one to track pace.
+                    </p>
+                {:else}
+                    <p class="pace-detail">
+                        <b>{paceView.daysLeft}</b>
+                        days left ·
+                        <b>{paceView.remainingNew}</b>
+                        new cards left · at your current
+                        <b>{paceView.currentNewPerDay}/day</b>
+                        you'd finish introducing them in
+                        <b>{paceView.projectedDaysToFinish || "—"}</b>
+                        days.
+                    </p>
+                    {#if !paceView.onTrack && paceView.remainingNew > 0}
+                        <p class="pace-fix">
+                            To cover everything in time, aim for about
+                            <b>{paceView.recommendedNewPerDay}/day</b>
+                            .
+                            <button
+                                class="pace-raise"
+                                on:click={() =>
+                                    raiseNewPerDay(paceView.recommendedNewPerDay)}
+                            >
+                                Raise daily new to {paceView.recommendedNewPerDay}
+                            </button>
+                        </p>
+                    {/if}
+                {/if}
+            {:else}
+                <p class="pace-detail">
+                    Set your exam date to see if you're introducing new cards fast
+                    enough to cover the syllabus in time. This is a
+                    <b>coverage pace</b>
+                    , not a predicted score.
                 </p>
             {/if}
         </section>
@@ -833,6 +949,118 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 0.78rem;
         line-height: 1.4;
         color: var(--fg-subtle, #9ca3af);
+    }
+    .plan-more {
+        margin-top: 0.8rem;
+        padding: 0.4rem 0.85rem;
+        border: 1px dashed var(--border, #c7c7cc);
+        border-radius: 7px;
+        background: transparent;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.82rem;
+        cursor: pointer;
+        color: var(--fg, #33373d);
+    }
+    .plan-more:hover {
+        background: var(--canvas-inset, #f0f1f3);
+    }
+
+    /* Exam pace */
+    .pace {
+        border: 1px solid var(--border, #e2e2e5);
+        border-radius: 10px;
+        padding: 0.9rem 1.1rem 1rem;
+        margin: 0.25rem 0 1.25rem;
+        background: var(--canvas-elevated, #fbfbfc);
+    }
+    .pace-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+    .pace-head h2 {
+        margin: 0;
+        font-size: 1.05rem;
+    }
+    .pace-badge {
+        border-radius: 999px;
+        padding: 0.15rem 0.6rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .pace-badge.ok {
+        background: #57a37c22;
+        color: #3f8a63;
+    }
+    .pace-badge.behind {
+        background: #e0a55226;
+        color: #b9791f;
+    }
+    .pace-badge.past {
+        background: var(--canvas-inset, #ececef);
+        color: var(--fg-subtle, #6b7280);
+    }
+    .pace-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 0.75rem;
+        margin: 0.7rem 0 0;
+    }
+    .pace-date {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        font-size: 0.78rem;
+        color: var(--fg-subtle, #6b7280);
+    }
+    .pace-date input {
+        font: inherit;
+        padding: 0.3rem 0.4rem;
+        border: 1px solid var(--border, #c7c7cc);
+        border-radius: 6px;
+        background: var(--canvas, #fff);
+        color: inherit;
+    }
+    .pace-clear {
+        padding: 0.35rem 0.7rem;
+        border: 1px solid var(--border, #c7c7cc);
+        border-radius: 6px;
+        background: transparent;
+        font: inherit;
+        font-size: 0.8rem;
+        cursor: pointer;
+    }
+    .pace-detail {
+        margin: 0.7rem 0 0;
+        font-size: 0.86rem;
+        line-height: 1.5;
+        color: var(--fg, #33373d);
+    }
+    .pace-fix {
+        margin: 0.5rem 0 0;
+        font-size: 0.86rem;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        color: var(--fg-subtle, #4b5563);
+    }
+    .pace-raise {
+        padding: 0.3rem 0.75rem;
+        border: 1px solid #6486bf;
+        border-radius: 7px;
+        background: transparent;
+        color: #6486bf;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.82rem;
+        cursor: pointer;
+    }
+    .pace-raise:hover {
+        background: #6486bf14;
     }
 
     /* Concept map */

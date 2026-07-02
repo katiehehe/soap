@@ -69,8 +69,14 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   `deck_tree`, so it never reschedules or fabricates a score. The tiering itself
   is a pure, unit-tested function (`build_study_plan`). This makes the scheduler
   tiers visible as a _daily plan_ rather than an invisible reorder.
+- `GetStudyPace` - coverage pace vs the user's exam date: counts the new
+  (unstudied) syllabus cards, reads the exam deck's new-cards/day limit, and
+  works out the pace needed to introduce them all before the exam
+  (recommended/day, projected finish, on-track/behind). Pure arithmetic over
+  measured counts + the stored exam date (`compute_pace`, unit-tested); it is a
+  _coverage_ pace, never the readiness score. Read-only.
 
-All six RPCs are called from Python and covered by tests (~47 Rust unit tests
+All seven RPCs are called from Python and covered by tests (~51 Rust unit tests
 across `service.rs` + `mastery.rs`, plus a Python-calling test for every RPC).
 
 The tier order and the points-at-stake order are now wired into the **live**

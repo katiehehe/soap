@@ -42,6 +42,12 @@ pub(crate) const SUBTOPIC_WEIGHTS_KEY: &str = "speedrunSubtopicWeights";
 /// 3 is plain Anki (mastery scheduler off).
 pub(crate) const ABLATE_WITHIN_UNIT_KEY: &str = "speedrunAblateWithinUnit";
 
+/// Config key holding the target exam date as a unix timestamp (local noon of
+/// the exam day; noon so day-counting is robust to timezones / Anki's day
+/// rollover). Written by Python from the study map's date picker. Absent -> no
+/// pace is shown (we never invent a deadline).
+pub(crate) const EXAM_DATE_KEY: &str = "speedrunExamDate";
+
 /// Pre-registered gate (PRD 8): a subtopic clears when it has been executed
 /// enough times, accurately, and its memory is strong.
 pub(crate) const MIN_PROBLEMS: u32 = 10;
@@ -574,6 +580,57 @@ pub(crate) fn build_study_plan(
     items
 }
 
+/// Coverage-pace arithmetic: given the new cards still to introduce, the
+/// current new-cards/day limit, and days until the exam, work out the pace
+/// needed and whether the current pace makes it in time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Pace {
+    pub recommended_new_per_day: u32,
+    pub projected_days_to_finish: u32,
+    pub on_track: bool,
+}
+
+/// Pure pace maths (no I/O), so it can be unit-tested. Everything is a plain
+/// function of MEASURED counts + the user's date; it is a syllabus-coverage
+/// pace, never a predicted exam score. With nothing left to introduce the user
+/// is trivially "on track". `recommended` is ceil(remaining / days_left) (or
+/// all of them if the exam is today/past); `projected` is how many days the
+/// current pace needs; `on_track` is true only with an exam date, a known
+/// pace, and days remaining, when the projection lands on/before the exam.
+pub(crate) fn compute_pace(
+    remaining_new: u32,
+    current_new_per_day: u32,
+    days_left: i64,
+    has_exam_date: bool,
+) -> Pace {
+    if remaining_new == 0 {
+        return Pace {
+            recommended_new_per_day: 0,
+            projected_days_to_finish: 0,
+            on_track: true,
+        };
+    }
+    let recommended_new_per_day = if days_left > 0 {
+        (remaining_new as f64 / days_left as f64).ceil() as u32
+    } else {
+        remaining_new
+    };
+    let projected_days_to_finish = if current_new_per_day > 0 {
+        (remaining_new as f64 / current_new_per_day as f64).ceil() as u32
+    } else {
+        0
+    };
+    let on_track = has_exam_date
+        && current_new_per_day > 0
+        && days_left > 0
+        && (projected_days_to_finish as i64) <= days_left;
+    Pace {
+        recommended_new_per_day,
+        projected_days_to_finish,
+        on_track,
+    }
+}
+
 /// Order new cards by tier: blocked subtopics first (grouped so each is
 /// practised in isolation), then within-unit interleaving, then cross-unit
 /// interleaving. Cards whose subtopic is unknown sort last, preserving their
@@ -870,6 +927,43 @@ impl Collection {
             }
         }
         Ok(best.into_iter().map(|(tag, (did, _))| (tag, did)).collect())
+    }
+
+    /// The new-cards/day limit on the syllabus root deck (the first path
+    /// segment of any subtopic deck's name, e.g. "SOA Exam P"). This is the
+    /// intake cap the coverage pace projects against. `None` when no
+    /// syllabus deck exists. Read-only.
+    pub(crate) fn speedrun_root_new_per_day(
+        &mut self,
+        expected_subtopics: &[String],
+    ) -> Result<Option<u32>> {
+        let tag_deck = self.speedrun_subtopic_deck_ids(expected_subtopics)?;
+        let Some(&sub_did) = tag_deck.values().next() else {
+            return Ok(None);
+        };
+        let names: HashMap<i64, String> = self
+            .storage
+            .get_all_deck_names()?
+            .into_iter()
+            .map(|(id, name)| (id.0, name))
+            .collect();
+        let Some(full) = names.get(&sub_did) else {
+            return Ok(None);
+        };
+        let root_name = full.split("::").next().unwrap_or(full);
+        let Some(root_id) = self.get_deck_id(root_name)? else {
+            return Ok(None);
+        };
+        let Some(deck) = self.get_deck(root_id)? else {
+            return Ok(None);
+        };
+        let Some(config_id) = deck.config_id() else {
+            return Ok(None);
+        };
+        let Some(config) = self.get_deck_config(config_id, true)? else {
+            return Ok(None);
+        };
+        Ok(Some(config.inner.new_per_day))
     }
 
     /// Whether the opt-in three-tier mastery scheduler is enabled. Reads a
@@ -1452,6 +1546,51 @@ mod tests {
         assert_eq!(plan.len(), 1);
         assert_eq!(plan[0].tier, StudyMode::Blocked);
         assert_eq!(plan[0].subtopic_tag.as_deref(), Some("subtopic::gp::b"));
+    }
+
+    // --- coverage pace vs exam date ---
+
+    #[test]
+    fn pace_on_track_when_current_rate_finishes_in_time() {
+        // 100 new left, 20/day -> finish in 5 days; exam in 10 -> on track.
+        let p = compute_pace(100, 20, 10, true);
+        assert_eq!(p.recommended_new_per_day, 10); // ceil(100/10)
+        assert_eq!(p.projected_days_to_finish, 5); // ceil(100/20)
+        assert!(p.on_track);
+    }
+
+    #[test]
+    fn pace_behind_needs_a_higher_rate() {
+        // 100 new left, 20/day -> finish in 5 days; exam in 3 -> behind, and the
+        // recommended rate rises to clear them in time.
+        let p = compute_pace(100, 20, 3, true);
+        assert_eq!(p.recommended_new_per_day, 34); // ceil(100/3)
+        assert_eq!(p.projected_days_to_finish, 5);
+        assert!(!p.on_track);
+    }
+
+    #[test]
+    fn pace_done_when_nothing_left() {
+        // Nothing new to introduce -> trivially on track, no pace needed.
+        let p = compute_pace(0, 20, 3, true);
+        assert_eq!(p.recommended_new_per_day, 0);
+        assert_eq!(p.projected_days_to_finish, 0);
+        assert!(p.on_track);
+    }
+
+    #[test]
+    fn pace_never_on_track_without_an_exam_date() {
+        // No exam date -> we never claim on/off track (and never invent one).
+        let p = compute_pace(100, 20, 0, false);
+        assert!(!p.on_track);
+    }
+
+    #[test]
+    fn pace_exam_today_or_past_needs_all_now() {
+        // days_left <= 0 -> the honest recommendation is "all of them now".
+        let p = compute_pace(40, 20, 0, true);
+        assert_eq!(p.recommended_new_per_day, 40);
+        assert!(!p.on_track);
     }
 
     #[test]

@@ -17,12 +17,12 @@ Format: `path - what changed - merge risk (low/med/high)`.
   packages must be registered for the Python backend; rarely edited upstream.
 - `qt/aqt/mediasrv.py` - add `"readiness-dashboard"` and `"study-map"` to
   `is_sveltekit_page()`, and `"compute_readiness"` + `"get_mastery_state"` +
-  `"get_study_plan"` to `exposed_backend_list` (5 entries) - med. Also add
-  `"/_anki/computeReadiness"`, `"/_anki/getMasteryState"` and
-  `"/_anki/getStudyPlan"` to the request allow-list in
-  `_check_dynamic_request_permissions()` so the read-only speedrun endpoints
-  have a deterministic authorization path independent of the webview's
-  `Authorization` header injection (3 entries) - med. All append-only additions.
+  `"get_study_plan"` + `"get_study_pace"` to `exposed_backend_list` (6 entries)
+  - med. Also add `"/_anki/computeReadiness"`, `"/_anki/getMasteryState"`,
+    `"/_anki/getStudyPlan"` and `"/_anki/getStudyPace"` to the request allow-list
+    in `_check_dynamic_request_permissions()` so the read-only speedrun endpoints
+    have a deterministic authorization path independent of the webview's
+    `Authorization` header injection (4 entries) - med. All append-only additions.
 - `qt/aqt/main.py` - add two Tools-menu `QAction`s in `setupMenus()`
   (`Exam readiness`, `Study map`) plus `on_speedrun_readiness()` and
   `on_speedrun_study_map()` methods, and one `aqt.speedrun.register_reviewer_banner()`
@@ -48,20 +48,24 @@ Format: `path - what changed - merge risk (low/med/high)`.
   built exactly as upstream.
 
 Note: `get_study_plan` also _reads_ `Collection::deck_tree` (an existing public
-method) to get Anki's own daily-limit-capped due counts. This is a read, not a
-modification of upstream code, so it adds no merge surface.
+method) to get Anki's own daily-limit-capped due counts, and `get_study_pace`
+_reads_ deck config for the exam deck's new/day limit. Both are reads, not
+modifications of upstream code, so they add no merge surface. The "Study more
+today" button calls the existing `Scheduler.extend_limits` from
+`qt/aqt/speedrun.py` (no upstream edit).
 
 ## New files added by the fork (no merge risk)
 
-- `proto/anki/speedrun.proto` - `SpeedrunService` (6 RPCs: `SpeedrunPing`,
+- `proto/anki/speedrun.proto` - `SpeedrunService` (7 RPCs: `SpeedrunPing`,
   `ComputeReadiness`, `GetMasteryState`, `GetMasteryOrderedNewCards`,
-  `GetPointsAtStakeOrder`, `GetStudyPlan`).
+  `GetPointsAtStakeOrder`, `GetStudyPlan`, `GetStudyPace`).
 - `rslib/src/speedrun/mod.rs`, `rslib/src/speedrun/service.rs` - service impl + tests.
 - `qt/aqt/speedrun.py` - the readiness dashboard + study map dialogs (host the pages).
 - `ts/routes/readiness-dashboard/+page.svelte` - dashboard (three signals + honesty).
 - `ts/routes/study-map/*` - the importance-sized bubble concept map (bubble size =
   exam weight, colour = measured mastery) + geometry lib/tests; calls
-  `get_mastery_state` and `get_study_plan` (the "Today's plan" tiered deck list).
+  `get_mastery_state`, `get_study_plan` (the "Today's plan" tiered deck list),
+  and `get_study_pace` (the "Exam pace" card).
 - `pylib/anki/speedrun/__init__.py`, `.../exam_p_topics.json`, `.../seed.py` - topic map
   (official 2026-05 outline), tag helpers, and the tagged deck builder.
 - `tools/speedrun/build_exam_p_deck.py` - CLI to seed the deck / export an importable `.apkg`.

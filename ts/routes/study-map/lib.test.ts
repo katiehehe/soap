@@ -4,6 +4,7 @@
 import { describe, expect, test } from "vitest";
 
 import type { Circle, SubtopicEvidence } from "./lib";
+import type { PaceView } from "./lib";
 import {
     borderPoint,
     computeLayout,
@@ -13,6 +14,7 @@ import {
     leafProgress,
     leafStatus,
     MIN_PROBLEMS,
+    paceTone,
     statusLabel,
     subRadius,
     TAXONOMY,
@@ -215,5 +217,33 @@ describe("today's tiered study plan", () => {
         );
         expect(new Set(labels).size).toBe(3);
         expect(tierMeta(TIER.blocked).label).toMatch(/blocked/i);
+    });
+});
+
+describe("exam-coverage pace", () => {
+    function pace(partial: Partial<PaceView>): PaceView {
+        return {
+            hasExamDate: true,
+            daysLeft: 30,
+            remainingNew: 100,
+            currentNewPerDay: 20,
+            recommendedNewPerDay: 4,
+            projectedDaysToFinish: 5,
+            onTrack: true,
+            ...partial,
+        };
+    }
+
+    test("no exam date -> 'none' (never invent a deadline)", () => {
+        expect(paceTone(pace({ hasExamDate: false }))).toBe("none");
+    });
+
+    test("past exam date -> 'past'", () => {
+        expect(paceTone(pace({ daysLeft: -3 }))).toBe("past");
+    });
+
+    test("on track vs behind reflects the engine's flag", () => {
+        expect(paceTone(pace({ onTrack: true }))).toBe("ok");
+        expect(paceTone(pace({ onTrack: false }))).toBe("behind");
     });
 });

@@ -771,6 +771,7 @@ exposed_backend_list = [
     "compute_readiness",
     "get_mastery_state",
     "get_study_plan",
+    "get_study_pace",
 ]
 
 
@@ -848,6 +849,7 @@ def _check_dynamic_request_permissions():
         "/_anki/computeReadiness",
         "/_anki/getMasteryState",
         "/_anki/getStudyPlan",
+        "/_anki/getStudyPace",
     ):
         pass
     else:

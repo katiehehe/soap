@@ -15,6 +15,7 @@ use anki_proto::speedrun::PointsAtStakeCard;
 use anki_proto::speedrun::PointsAtStakeOrder;
 use anki_proto::speedrun::ReadinessResult;
 use anki_proto::speedrun::SpeedrunPingResponse;
+use anki_proto::speedrun::StudyPace;
 use anki_proto::speedrun::StudyPlan;
 use anki_proto::speedrun::StudyPlanItem;
 use anki_proto::speedrun::StudyPriority;
@@ -25,6 +26,7 @@ use anki_proto::speedrun::UnitMastery;
 use crate::collection::Collection;
 use crate::error;
 use crate::speedrun::mastery::build_study_plan;
+use crate::speedrun::mastery::compute_pace;
 use crate::speedrun::mastery::compute_pools;
 use crate::speedrun::mastery::order_new_cards;
 use crate::speedrun::mastery::parse_subtopic_tag;
@@ -34,6 +36,7 @@ use crate::speedrun::mastery::study_priorities;
 use crate::speedrun::mastery::subtopic_weakness;
 use crate::speedrun::mastery::weighted_mastery;
 use crate::speedrun::mastery::Pool;
+use crate::speedrun::mastery::EXAM_DATE_KEY;
 use crate::timestamp::TimestampSecs;
 
 /// Pre-registered give-up thresholds. Below EITHER of these, readiness returns
@@ -326,6 +329,40 @@ impl crate::services::SpeedrunService for Collection {
             .collect();
         Ok(StudyPlan { items })
     }
+
+    /// Coverage pace vs the user's exam date. Counts the new (unstudied)
+    /// syllabus cards, reads the exam deck's new-cards/day limit, and works out
+    /// the pace needed to introduce them all before the exam. Pure arithmetic
+    /// over measured counts (see `compute_pace`); it is a coverage pace, never
+    /// the readiness score. Read-only.
+    fn get_study_pace(&mut self, input: MasteryRequest) -> error::Result<StudyPace> {
+        let exam_ts = self.get_config_optional::<i64, _>(EXAM_DATE_KEY);
+        let has_exam_date = exam_ts.is_some();
+        let exam_timestamp = exam_ts.unwrap_or(0);
+        let remaining_new = self
+            .speedrun_new_cards_with_subtopic(&input.expected_subtopics)?
+            .len() as u32;
+        let current_new_per_day = self
+            .speedrun_root_new_per_day(&input.expected_subtopics)?
+            .unwrap_or(0);
+        let now = TimestampSecs::now().0;
+        let days_left = if has_exam_date {
+            ((exam_timestamp - now) as f64 / 86_400.0).round() as i64
+        } else {
+            0
+        };
+        let pace = compute_pace(remaining_new, current_new_per_day, days_left, has_exam_date);
+        Ok(StudyPace {
+            has_exam_date,
+            exam_timestamp,
+            days_left,
+            remaining_new,
+            current_new_per_day,
+            recommended_new_per_day: pace.recommended_new_per_day,
+            projected_days_to_finish: pace.projected_days_to_finish,
+            on_track: pace.on_track,
+        })
+    }
 }
 
 /// Flatten a deck tree into per-deck counts `(new, review, learn, total)` and a
@@ -493,6 +530,7 @@ mod tests {
     use anki_proto::speedrun::MasteryRequest;
 
     use crate::collection::Collection;
+    use crate::deckconfig::DeckConfigId;
     use crate::prelude::*;
     use crate::services::SpeedrunService;
     use crate::tests::NoteAdder;
@@ -761,5 +799,88 @@ mod tests {
             })
             .unwrap();
         assert!(plan.items.is_empty());
+    }
+
+    fn pace_req() -> MasteryRequest {
+        MasteryRequest {
+            expected_subtopics: vec![
+                "subtopic::general::a".to_string(),
+                "subtopic::general::b".to_string(),
+            ],
+            units: vec![],
+            subtopic_weights: vec![],
+        }
+    }
+
+    fn seed_two_new_cards(col: &mut Collection) {
+        col.get_or_create_normal_deck("SOA Exam P").unwrap();
+        col.get_or_create_normal_deck("SOA Exam P::General Probability")
+            .unwrap();
+        let a = col
+            .get_or_create_normal_deck("SOA Exam P::General Probability::A")
+            .unwrap();
+        let b = col
+            .get_or_create_normal_deck("SOA Exam P::General Probability::B")
+            .unwrap();
+        add_tagged_note_in_deck(col, &["subtopic::general::a"], a.id);
+        add_tagged_note_in_deck(col, &["subtopic::general::b"], b.id);
+    }
+
+    #[test]
+    fn study_pace_without_exam_date_reports_counts_but_no_track() {
+        // Two new cards, default 20/day, no exam date: we report the measured
+        // counts but never claim on/off track without a deadline.
+        let mut col = Collection::new();
+        seed_two_new_cards(&mut col);
+        let pace = col.get_study_pace(pace_req()).unwrap();
+        assert!(!pace.has_exam_date);
+        assert_eq!(pace.remaining_new, 2);
+        assert_eq!(pace.current_new_per_day, 20); // default deck preset
+        assert!(!pace.on_track);
+    }
+
+    #[test]
+    fn study_pace_with_distant_exam_is_on_track() {
+        let mut col = Collection::new();
+        seed_two_new_cards(&mut col);
+        let now = crate::timestamp::TimestampSecs::now().0;
+        col.set_config_json("speedrunExamDate", &(now + 100 * 86_400), false)
+            .unwrap();
+        let pace = col.get_study_pace(pace_req()).unwrap();
+        assert!(pace.has_exam_date);
+        assert!(pace.days_left >= 99 && pace.days_left <= 100);
+        // 2 new at 20/day finishes in 1 day, well before 100 -> on track.
+        assert_eq!(pace.projected_days_to_finish, 1);
+        assert!(pace.on_track);
+    }
+
+    #[test]
+    fn study_pace_with_imminent_exam_and_many_cards_is_behind() {
+        let mut col = Collection::new();
+        // Root deck with a tiny daily limit + more cards than can fit in 1 day.
+        col.get_or_create_normal_deck("SOA Exam P").unwrap();
+        col.get_or_create_normal_deck("SOA Exam P::General Probability")
+            .unwrap();
+        let a = col
+            .get_or_create_normal_deck("SOA Exam P::General Probability::A")
+            .unwrap();
+        // Shrink the exam deck's new/day to 1 so two new cards can't fit in a day.
+        let mut conf = col
+            .get_deck_config(DeckConfigId(1), false)
+            .unwrap()
+            .unwrap();
+        conf.inner.new_per_day = 1;
+        col.add_or_update_deck_config(&mut conf).unwrap();
+        add_tagged_note_in_deck(&mut col, &["subtopic::general::a"], a.id);
+        add_tagged_note_in_deck(&mut col, &["subtopic::general::b"], a.id);
+
+        let now = crate::timestamp::TimestampSecs::now().0;
+        col.set_config_json("speedrunExamDate", &(now + 86_400), false)
+            .unwrap(); // exam ~tomorrow
+        let pace = col.get_study_pace(pace_req()).unwrap();
+        assert_eq!(pace.current_new_per_day, 1);
+        assert_eq!(pace.remaining_new, 2);
+        assert!(!pace.on_track); // 2 cards at 1/day can't finish by tomorrow
+        assert!(pace.recommended_new_per_day >= 2);
     }
 }

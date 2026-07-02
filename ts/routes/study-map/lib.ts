@@ -404,3 +404,36 @@ export function groupPlanByTier<T extends TieredItem>(items: T[]): PlanGroup<T>[
         }))
         .filter((group) => group.items.length > 0);
 }
+
+// ---------------------------------------------------------------------------
+// Exam-coverage pace
+//
+// The engine (GetStudyPace) reports whether the student is introducing new
+// cards fast enough to cover the syllabus before their exam. paceTone is the
+// pure decision (no exam date / date passed / on track / behind) so it can be
+// unit-tested; the component turns it into colour + copy.
+// ---------------------------------------------------------------------------
+
+export interface PaceView {
+    hasExamDate: boolean;
+    daysLeft: number;
+    remainingNew: number;
+    currentNewPerDay: number;
+    recommendedNewPerDay: number;
+    projectedDaysToFinish: number;
+    onTrack: boolean;
+}
+
+export type PaceTone = "none" | "past" | "ok" | "behind";
+
+/** Which state to show the pace card in. "none" = no exam date set yet;
+ * "past" = the date is behind us; otherwise on track / behind. */
+export function paceTone(p: PaceView): PaceTone {
+    if (!p.hasExamDate) {
+        return "none";
+    }
+    if (p.daysLeft < 0) {
+        return "past";
+    }
+    return p.onTrack ? "ok" : "behind";
+}

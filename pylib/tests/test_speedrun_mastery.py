@@ -1,9 +1,15 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+from datetime import date, timedelta
+
 from anki import speedrun_pb2
 from anki.speedrun import (
+    clear_exam_date,
+    exam_date_iso,
+    exam_timestamp_for_iso,
     expected_subtopic_tags,
+    set_exam_date,
     subtopic_tag,
     subtopic_weights,
     unit_weights,
@@ -230,6 +236,57 @@ def test_study_plan_drops_decks_with_nothing_due():
     tags = {it.subtopic_tag for it in items}
     assert target not in tags, "a subtopic with nothing due today must be dropped"
     assert len(tags) >= 1, "other subtopics still have new cards due"
+
+
+def test_exam_date_round_trips_through_config():
+    col = getEmptyCol()
+    assert exam_date_iso(col) is None
+    assert exam_timestamp_for_iso("not-a-date") is None
+    assert set_exam_date(col, "2026-08-15") is True
+    assert exam_date_iso(col) == "2026-08-15"
+    assert set_exam_date(col, "garbage") is False  # unchanged on bad input
+    assert exam_date_iso(col) == "2026-08-15"
+    clear_exam_date(col)
+    assert exam_date_iso(col) is None
+
+
+def test_study_pace_without_exam_date():
+    # No deadline set: report the measured counts but never claim on/off track.
+    col = getEmptyCol()
+    build_deck(col)
+    pace = col._backend.get_study_pace(
+        expected_subtopics=expected_subtopic_tags(), units=[], subtopic_weights=[]
+    )
+    assert pace.has_exam_date is False
+    assert pace.remaining_new == len(SEED_CARDS)  # all seeded cards are new
+    assert pace.current_new_per_day == 20  # default deck preset
+    assert pace.on_track is False
+
+
+def test_study_pace_on_track_and_behind_with_exam_date():
+    col = getEmptyCol()
+    build_deck(col)
+
+    # A distant exam: the default 20/day clears the ~42 new cards with room to
+    # spare, so we're on track.
+    far = (date.today() + timedelta(days=365)).isoformat()
+    assert set_exam_date(col, far)
+    pace = col._backend.get_study_pace(
+        expected_subtopics=expected_subtopic_tags(), units=[], subtopic_weights=[]
+    )
+    assert pace.has_exam_date is True
+    assert pace.days_left >= 360
+    assert pace.on_track is True
+
+    # An imminent exam: can't introduce everything by tomorrow at 20/day, so
+    # we're behind and the recommended pace rises above the current one.
+    soon = (date.today() + timedelta(days=1)).isoformat()
+    assert set_exam_date(col, soon)
+    pace = col._backend.get_study_pace(
+        expected_subtopics=expected_subtopic_tags(), units=[], subtopic_weights=[]
+    )
+    assert pace.on_track is False
+    assert pace.recommended_new_per_day > pace.current_new_per_day
 
 
 def test_ablation_build_configs_build_a_valid_queue():

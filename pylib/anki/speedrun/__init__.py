@@ -12,10 +12,15 @@ curriculum is never hardcoded in the engine.
 from __future__ import annotations
 
 import json
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any
 
 _TOPICS_PATH = Path(__file__).parent / "exam_p_topics.json"
+
+# Config key holding the target exam date (unix seconds, local noon of the day).
+# Mirrors EXAM_DATE_KEY in rslib/src/speedrun/mastery.rs.
+EXAM_DATE_KEY = "speedrunExamDate"
 
 
 def load_topics() -> dict[str, Any]:
@@ -105,6 +110,43 @@ def unit_deck_name(
         return "::".join([root, unit_name(unit_id, topics)])
     except KeyError:
         return None
+
+
+def exam_timestamp_for_iso(iso: str) -> int | None:
+    """Unix seconds at local noon of an ISO ``YYYY-MM-DD`` exam date, or None if
+    it can't be parsed. Noon (not midnight) so the whole-days-left count the
+    engine computes is robust to timezones and Anki's day rollover.
+    """
+    try:
+        day = date.fromisoformat(iso.strip())
+    except (ValueError, AttributeError):
+        return None
+    return int(datetime.combine(day, time(12, 0)).timestamp())
+
+
+def set_exam_date(col: Any, iso: str) -> bool:
+    """Store the target exam date (from an ISO ``YYYY-MM-DD`` string) so the
+    engine can report coverage pace. Returns False if the date is unparseable.
+    Only affects the pace read-out; never touches any score or the give-up rule.
+    """
+    ts = exam_timestamp_for_iso(iso)
+    if ts is None:
+        return False
+    col.set_config(EXAM_DATE_KEY, ts)
+    return True
+
+
+def clear_exam_date(col: Any) -> None:
+    """Remove the stored exam date (pace goes back to 'no deadline set')."""
+    col.remove_config(EXAM_DATE_KEY)
+
+
+def exam_date_iso(col: Any) -> str | None:
+    """The stored exam date as an ISO ``YYYY-MM-DD`` string, or None if unset."""
+    ts = col.get_config(EXAM_DATE_KEY, None)
+    if ts is None:
+        return None
+    return datetime.fromtimestamp(ts).date().isoformat()
 
 
 def apply_subtopic_weights_config(

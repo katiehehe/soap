@@ -47,6 +47,13 @@ service SpeedrunService {
   // the deck list already shows (MEASURED scheduler state), attributed to a
   // tier from real gate state; it never fabricates a score.
   rpc GetStudyPlan(MasteryRequest) returns (StudyPlan);
+
+  // Coverage pace vs a target exam date: how many new (unstudied) syllabus
+  // cards remain, the current new-cards/day limit, and the pace needed to
+  // introduce them all before the exam. Pure arithmetic over MEASURED counts +
+  // the user's exam date (config key speedrunExamDate); this is a *coverage*
+  // pace, never the readiness score (that stays behind the give-up rule).
+  rpc GetStudyPace(MasteryRequest) returns (StudyPace);
 }
 
 // Empty: every SpeedrunService method is collection-scoped, so codegen
@@ -286,4 +293,30 @@ message StudyPlanItem {
 // nothing is due (the honest "you're caught up" state).
 message StudyPlan {
   repeated StudyPlanItem items = 1;
+}
+
+// Coverage pace vs a target exam date. All fields are MEASURED counts or plain
+// arithmetic over them + the user's exam date; this is a syllabus-coverage
+// pace, NOT a predicted exam score.
+message StudyPace {
+  // Whether the user has set an exam date (config key speedrunExamDate).
+  bool has_exam_date = 1;
+  // The exam date as a unix timestamp (local noon of the day), echoed back.
+  int64 exam_timestamp = 2;
+  // Whole days from now to the exam (can be negative if the date has passed).
+  int64 days_left = 3;
+  // New (unstudied) syllabus cards still to be introduced.
+  uint32 remaining_new = 4;
+  // The current new-cards/day limit on the exam deck (0 if unknown).
+  uint32 current_new_per_day = 5;
+  // New cards/day needed to introduce all remaining before the exam
+  // (ceil(remaining / days_left)); equals remaining when the exam is
+  // today/past.
+  uint32 recommended_new_per_day = 6;
+  // Days to finish introducing all new cards at the current pace
+  // (ceil(remaining / current_new_per_day)); 0 when the pace is unknown.
+  uint32 projected_days_to_finish = 7;
+  // True when, at the current pace, all new cards are introduced on/before the
+  // exam (or nothing is left to introduce). Always false without an exam date.
+  bool on_track = 8;
 }

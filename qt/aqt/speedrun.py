@@ -100,6 +100,19 @@ class StudyMapDialog(QDialog):
         elif cmd.startswith("speedrun-study:"):
             tag = cmd[len("speedrun-study:") :]
             self._deferred(lambda: open_subtopic_deck(self.mw, tag))
+        elif cmd.startswith("speedrun-set-exam-date:"):
+            iso = cmd[len("speedrun-set-exam-date:") :]
+            self._apply_and_reload(lambda: set_exam_date_cmd(self.mw, iso))
+        elif cmd == "speedrun-clear-exam-date":
+            self._apply_and_reload(lambda: clear_exam_date_cmd(self.mw))
+        elif cmd.startswith("speedrun-set-new-per-day:"):
+            n = _parse_positive_int(cmd[len("speedrun-set-new-per-day:") :])
+            if n is not None:
+                self._apply_and_reload(lambda: set_new_per_day(self.mw, n))
+        elif cmd.startswith("speedrun-extend-new:"):
+            n = _parse_positive_int(cmd[len("speedrun-extend-new:") :])
+            if n is not None:
+                self._deferred(lambda: extend_new_and_study(self.mw, n))
 
     def _deferred(self, open_fn: Callable[[], bool]) -> None:
         def start() -> None:
@@ -107,6 +120,15 @@ class StudyMapDialog(QDialog):
             open_fn()
 
         QTimer.singleShot(0, start)
+
+    def _apply_and_reload(self, action: Callable[[], object]) -> None:
+        # Mutate config/limits, then reload the page so the pace card re-reads it.
+        # Deferred so we don't reload the webview from inside its own callback.
+        def run() -> None:
+            action()
+            self.web.load_sveltekit_page("study-map")
+
+        QTimer.singleShot(0, run)
 
     def reject(self) -> None:
         if self.web:
@@ -167,6 +189,56 @@ def open_deck_by_id(mw: aqt.main.AnkiQt, deck_id: int) -> bool:
     if mw.col.decks.get(DeckId(deck_id), default=False) is None:
         return False
     _start_review(mw, DeckId(deck_id))
+    return True
+
+
+def _parse_positive_int(raw: str) -> int | None:
+    try:
+        n = int(raw)
+    except ValueError:
+        return None
+    return n if n >= 1 else None
+
+
+def set_exam_date_cmd(mw: aqt.main.AnkiQt, iso: str) -> None:
+    """Store the target exam date (ISO YYYY-MM-DD) so the pace card can show
+    whether the student is on track. Only affects the pace read-out."""
+    from anki.speedrun import set_exam_date
+
+    set_exam_date(mw.col, iso)
+
+
+def clear_exam_date_cmd(mw: aqt.main.AnkiQt) -> None:
+    from anki.speedrun import clear_exam_date
+
+    clear_exam_date(mw.col)
+
+
+def set_new_per_day(mw: aqt.main.AnkiQt, n: int) -> None:
+    """Set the exam deck's steady new-cards/day limit (the 'get on track' lever).
+    Note: if the exam deck shares the default preset, this changes that preset."""
+    from anki.speedrun.seed import ROOT_DECK
+
+    did = mw.col.decks.id_for_name(ROOT_DECK)
+    if did is None:
+        return
+    conf = mw.col.decks.config_dict_for_deck_id(did)
+    conf["new"]["perDay"] = int(n)
+    mw.col.decks.update_config(conf)
+
+
+def extend_new_and_study(mw: aqt.main.AnkiQt, n: int) -> bool:
+    """'Study more today': raise TODAY's new-card allowance on the exam deck by
+    n and open it for review, so a heavy study day isn't blocked by the daily
+    quota. Today-only (uses extend_limits); the steady limit is untouched."""
+    from anki.speedrun.seed import ROOT_DECK
+
+    did = mw.col.decks.id_for_name(ROOT_DECK)
+    if did is None:
+        return False
+    mw.col.decks.select(did)
+    mw.col.sched.extend_limits(n, 0)
+    _start_review(mw, did)
     return True
 
 

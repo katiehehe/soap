@@ -280,3 +280,19 @@ the mastery scheduler was an invisible reorder of one pile. Commit `f96158f57`.
 - pylib helper `deck_name_for_subtopic_tag` + test; docs (vision build-order step
   1 now done, merge log). Full `./ninja check` green; study-map e2e passes;
   screenshot shows the button.
+
+### Follow-up round 4: "Study recommended subtopic" shortcut (`477bf4c78`)
+
+- Steers users to the good path in one click regardless of how they'd otherwise
+  pick a deck: a "Study recommended subtopic (blocked practice)" button on the
+  study map + a "Study next" toolbar link both open the highest-priority
+  not-yet-cleared subtopic using the engine's `GetMasteryState.priorities[0]`
+  (never fabricated; abstains when all mastered).
+- Refactored the deck-open flow into `open_subtopic_deck()` +
+  `recommended_subtopic_tag()`/`study_recommended()`. Read-only (select + review),
+  so FSRS/undo are untouched. Toolbar entry logged in the merge note.
+- Note: picking a deck directly never corrupts mastery (it's measured from the
+  revlog); with the mastery scheduler on, the tier order holds for any deck, and
+  the tier banner shows where you are. This shortcut just makes the ideal
+  single-subtopic blocked-practice path one click.
+- Full `./ninja check` green; study-map e2e passes.

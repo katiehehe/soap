@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import aqt
 import aqt.main
-from aqt.qt import QDialog, Qt, QVBoxLayout, qconnect
+from aqt.qt import QDialog, Qt, QVBoxLayout
 from aqt.utils import disable_help_button, restoreGeom, saveGeom
 from aqt.webview import AnkiWebView, AnkiWebViewKind
 

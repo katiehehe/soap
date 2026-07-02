@@ -66,9 +66,7 @@ def main() -> None:
     test = [(i, id_to_text[i]) for i in test_ids]
     leaks = find_leaks(train, test, args.threshold)
 
-    print(
-        f"seed={args.seed} items={len(items)} train={len(train)} test={len(test)}"
-    )
+    print(f"seed={args.seed} items={len(items)} train={len(train)} test={len(test)}")
     if leaks:
         print(f"LEAKAGE: {len(leaks)} test item(s) found in training:")
         for leak in leaks:

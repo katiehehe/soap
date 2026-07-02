@@ -29,4 +29,6 @@ def test_leakage_detects_exact_and_near_copies_and_passes_clean():
     # Near-copy leak (high token overlap).
     assert find_leaks(train, [("x2", "the binomial mean is np")], threshold=0.7)
     # Clean: an unrelated test item is not flagged.
-    assert find_leaks(train, [("x3", "exponential variance is 1 / lambda squared")]) == []
+    assert (
+        find_leaks(train, [("x3", "exponential variance is 1 / lambda squared")]) == []
+    )

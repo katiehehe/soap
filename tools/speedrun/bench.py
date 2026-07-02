@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import statistics
 import sys
 import time
 
@@ -40,9 +39,7 @@ from anki.speedrun import (  # noqa: E402
 
 def generate_deck(col: Collection, n_cards: int) -> None:
     topics = load_topics()
-    subs = [
-        (u["id"], s["id"]) for u in topics["units"] for s in u["subtopics"]
-    ]
+    subs = [(u["id"], s["id"]) for u in topics["units"] for s in u["subtopics"]]
     notetype = col.models.by_name("Basic")
     assert notetype is not None
     difficulties = ["easy", "medium", "hard"]
@@ -101,7 +98,6 @@ def main() -> None:
     print(f"  generated in {time.perf_counter() - t0:.1f}s\n")
 
     expected = expected_subtopic_tags()
-    units = None
     from anki import speedrun_pb2
 
     weight_msgs = [

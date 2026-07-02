@@ -44,13 +44,23 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
 - `ComputeReadiness` - returns a protobuf `oneof { NoScore, ReadinessScore }`, so a
   bare readiness number literally cannot be emitted. The give-up rule is a
   pre-registered Rust assertion: below `>= 200 graded reviews AND >= 50% coverage`
-  it returns `NoScore { reason, ... }`. This is the honesty/give-up rule as code.
+  (coverage weighted by the SOA section weights) it returns `NoScore { reason, ... }`.
+  This is the honesty/give-up rule as code.
+- **The three-tier mastery model** (`rslib/src/speedrun/mastery.rs`): per subtopic,
+  the gate is computed from real revlog accuracy + FSRS retrievability
+  (`>= 80% accuracy AND >= 0.90 retrievability over >= 10 problems`); each subtopic
+  is Blocked, WithinUnit, or CrossUnit, and a unit only opens the cross-unit pool
+  once all its subtopics clear. Exposed via `GetMasteryState` and, for the
+  topic-aware order, `GetMasteryOrderedNewCards` (block -> within-unit ->
+  cross-unit). 11 Rust tests + 4 Python tests.
 
-These two RPCs establish exactly the plumbing (new proto message + Rust trait impl
-
-- Python/TS codegen) that the scheduler change needs.
+These RPCs are the required mastery query + tier/gate ordering logic. The one
+remaining step is wiring the ordering into the live queue builder (hook points
+below); it is exposed as an RPC today so the app and dashboard can already use it.
 
 ## How the scaffold grows into the scheduler
+
+(Items 1-2 below are implemented; item 3 - live queue-builder wiring - is next.)
 
 1. **Mastery model (new, in `rslib/src/speedrun/`).** Per subtopic tag
    (`subtopic::...`), compute gate state from recent parameterized reviews:

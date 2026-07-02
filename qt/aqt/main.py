@@ -1456,9 +1456,7 @@ title="{}" {}>{}</button>""".format(
         # Tools: SOA Exam P readiness dashboard (Speedrun fork)
         self.action_speedrun_readiness = QAction("Exam readiness (Speedrun)", self)
         m.menuTools.addAction(self.action_speedrun_readiness)
-        qconnect(
-            self.action_speedrun_readiness.triggered, self.on_speedrun_readiness
-        )
+        qconnect(self.action_speedrun_readiness.triggered, self.on_speedrun_readiness)
 
         # View
         qconnect(

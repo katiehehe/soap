@@ -2,13 +2,19 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 // Pure geometry for the study-map concept map. Kept out of the Svelte component
-// so the layout can be unit-tested: nodes must never overlap, every node must
-// fit inside the canvas, and every edge must touch the borders of the two nodes
-// it connects (no floating line ends, no gaps).
+// so the layout can be unit-tested: bubbles must never overlap, every bubble
+// must fit inside the canvas, every edge must touch the borders of the two
+// bubbles it connects, and a bubble's radius must grow with its exam-importance
+// weight (size = importance; the fill colour, added in the component, = measured
+// mastery — the two are never conflated).
 
 export interface SubtopicDef {
     id: string;
     name: string;
+    // Relative exam-importance weight. Mirrors the "weight" field in
+    // pylib/anki/speedrun/exam_p_topics.json (an editable emphasis estimate;
+    // each unit's subtopic weights sum to its official section midpoint).
+    weight: number;
 }
 export interface UnitDef {
     id: string;
@@ -17,43 +23,44 @@ export interface UnitDef {
 }
 
 // Mirrors pylib/anki/speedrun/exam_p_topics.json (official 2026-05 outline).
-// Names are kept short so they fit two lines inside a node box.
+// Names are kept short so they read well beneath a bubble; weights mirror the
+// JSON so the map sizes bubbles from the same source the engine weights by.
 export const TAXONOMY: UnitDef[] = [
     {
         id: "general",
         name: "General Probability",
         subtopics: [
-            { id: "sets_axioms", name: "Sets & axioms" },
-            { id: "combinatorics", name: "Combinatorics" },
-            { id: "independence", name: "Independence" },
-            { id: "add_mult_rules", name: "Addition & mult. rules" },
-            { id: "conditional", name: "Conditional prob." },
-            { id: "bayes", name: "Bayes' theorem" },
+            { id: "sets_axioms", name: "Sets & axioms", weight: 3.5 },
+            { id: "combinatorics", name: "Combinatorics", weight: 4.5 },
+            { id: "independence", name: "Independence", weight: 4.0 },
+            { id: "add_mult_rules", name: "Addition & mult. rules", weight: 4.0 },
+            { id: "conditional", name: "Conditional prob.", weight: 5.25 },
+            { id: "bayes", name: "Bayes' theorem", weight: 5.25 },
         ],
     },
     {
         id: "univariate",
         name: "Univariate RVs",
         subtopics: [
-            { id: "rv_basics", name: "PDFs & CDFs" },
-            { id: "expectation", name: "Expectation & moments" },
-            { id: "variance", name: "Variance & SD" },
-            { id: "discrete_dists", name: "Discrete dist." },
-            { id: "continuous_dists", name: "Continuous dist." },
-            { id: "insurance_apps", name: "Insurance apps" },
+            { id: "rv_basics", name: "PDFs & CDFs", weight: 6.5 },
+            { id: "expectation", name: "Expectation & moments", weight: 8.5 },
+            { id: "variance", name: "Variance & SD", weight: 7.0 },
+            { id: "discrete_dists", name: "Discrete dist.", weight: 9.0 },
+            { id: "continuous_dists", name: "Continuous dist.", weight: 9.0 },
+            { id: "insurance_apps", name: "Insurance apps", weight: 7.0 },
         ],
     },
     {
         id: "multivariate",
         name: "Multivariate RVs",
         subtopics: [
-            { id: "joint_distributions", name: "Joint distributions" },
-            { id: "marginal_conditional", name: "Marginal & cond." },
-            { id: "joint_moments", name: "Joint moments" },
-            { id: "covariance_correlation", name: "Covariance & corr." },
-            { id: "order_statistics", name: "Order statistics" },
-            { id: "linear_combinations", name: "Linear combos" },
-            { id: "clt", name: "Central limit thm." },
+            { id: "joint_distributions", name: "Joint distributions", weight: 4.25 },
+            { id: "marginal_conditional", name: "Marginal & cond.", weight: 4.25 },
+            { id: "joint_moments", name: "Joint moments", weight: 3.5 },
+            { id: "covariance_correlation", name: "Covariance & corr.", weight: 4.25 },
+            { id: "order_statistics", name: "Order statistics", weight: 2.75 },
+            { id: "linear_combinations", name: "Linear combos", weight: 3.75 },
+            { id: "clt", name: "Central limit thm.", weight: 3.75 },
         ],
     },
 ];
@@ -66,45 +73,80 @@ export const COLORS = {
     accent: "#6486bf", // the central node
 };
 
-// Node box sizes. These are also applied inline in the component so the DOM
-// boxes match the geometry exactly (which is what makes the edges touch).
-export const SIZE = {
-    center: { w: 118, h: 50 },
-    unit: { w: 152, h: 56 },
-    leaf: { w: 132, h: 54 },
-};
+/** Total importance weight of a unit = the sum of its subtopic weights (which,
+ * by construction in the topic map, equals the unit's official section
+ * midpoint). */
+export function unitWeight(u: UnitDef): number {
+    return u.subtopics.reduce((sum, s) => sum + s.weight, 0);
+}
+
+// Bubble radii. Importance maps to radius through the observed weight ranges so
+// the biggest exam topics read as the biggest bubbles. Radii are capped well
+// below the spacing between bubble centres (see the radial constants) so no two
+// bubbles can overlap — verified by lib.test.ts.
+export const CENTER_R = 52;
+const UNIT_R_MIN = 44;
+const UNIT_R_MAX = 58;
+const SUB_R_MIN = 26;
+const SUB_R_MAX = 46;
+
+const SUB_WEIGHTS = TAXONOMY.flatMap((u) => u.subtopics.map((s) => s.weight));
+const SUB_W_MIN = Math.min(...SUB_WEIGHTS);
+const SUB_W_MAX = Math.max(...SUB_WEIGHTS);
+const UNIT_WEIGHTS = TAXONOMY.map(unitWeight);
+const UNIT_W_MIN = Math.min(...UNIT_WEIGHTS);
+const UNIT_W_MAX = Math.max(...UNIT_WEIGHTS);
+
+function clamp01(t: number): number {
+    return Math.max(0, Math.min(1, t));
+}
+function lerp(t: number, lo: number, hi: number): number {
+    return lo + (hi - lo) * clamp01(t);
+}
+function norm(x: number, lo: number, hi: number): number {
+    return hi > lo ? (x - lo) / (hi - lo) : 0.5;
+}
+
+/** Bubble radius for a subtopic, increasing with its importance weight. */
+export function subRadius(weight: number): number {
+    return lerp(norm(weight, SUB_W_MIN, SUB_W_MAX), SUB_R_MIN, SUB_R_MAX);
+}
+/** Bubble radius for a unit, increasing with its total importance weight. */
+export function unitRadius(weight: number): number {
+    return lerp(norm(weight, UNIT_W_MIN, UNIT_W_MAX), UNIT_R_MIN, UNIT_R_MAX);
+}
 
 // Radial layout constants. Two rings (near/far) per unit halve the number of
-// nodes competing for angular space. The inner ring must clear the unit nodes,
-// and the outer ring must clear the inner ring, which is what sets the radii.
-// Values verified by lib.test.ts (no overlaps, everything inside the canvas).
-const R_UNIT = 190;
-const R_IN = 372;
-const R_OUT = 540;
+// bubbles competing for angular space; the generous radii leave room for the
+// largest bubbles without overlap (verified by lib.test.ts).
+const R_UNIT = 210;
+const R_IN = 384;
+const R_OUT = 552;
 const STEP_DEG = 16; // angular gap between consecutive subtopics of a unit
 const UNIT_ANGLES_DEG = [-90, 30, 150]; // upward-pointing equilateral triangle
-const MARGIN = 46;
+const MARGIN = 26;
 const DEG = Math.PI / 180;
 
-export interface Box {
+export interface Circle {
     x: number; // centre
     y: number;
-    w: number;
-    h: number;
+    r: number;
 }
-export interface LeafNode extends Box {
+export interface LeafNode extends Circle {
     id: string;
     name: string;
     tag: string;
     unitId: string;
+    weight: number;
 }
-export interface UnitNode extends Box {
+export interface UnitNode extends Circle {
     id: string;
     name: string;
+    weight: number;
     subs: LeafNode[];
 }
 export interface Layout {
-    center: Box;
+    center: Circle;
     units: UnitNode[];
     width: number;
     height: number;
@@ -114,11 +156,11 @@ export function subtopicTag(unitId: string, subId: string): string {
     return `subtopic::${unitId}::${subId}`;
 }
 
-/** Compute absolute node positions with the whole diagram shifted into a
+/** Compute absolute bubble positions with the whole diagram shifted into a
  * positive, margin-padded canvas. */
 export function computeLayout(): Layout {
-    // 1. lay out around origin (0,0 = centre node)
-    const center: Box = { x: 0, y: 0, ...SIZE.center };
+    // 1. lay out around origin (0,0 = centre bubble)
+    const center: Circle = { x: 0, y: 0, r: CENTER_R };
     const units: UnitNode[] = TAXONOMY.map((u, i) => {
         const base = UNIT_ANGLES_DEG[i];
         const ux = R_UNIT * Math.cos(base * DEG);
@@ -132,24 +174,26 @@ export function computeLayout(): Layout {
                 name: s.name,
                 tag: subtopicTag(u.id, s.id),
                 unitId: u.id,
+                weight: s.weight,
                 x: r * Math.cos(angle),
                 y: r * Math.sin(angle),
-                ...SIZE.leaf,
+                r: subRadius(s.weight),
             };
         });
-        return { id: u.id, name: u.name, x: ux, y: uy, ...SIZE.unit, subs };
+        const w = unitWeight(u);
+        return { id: u.id, name: u.name, weight: w, x: ux, y: uy, r: unitRadius(w), subs };
     });
 
-    // 2. measure bounds over every box
+    // 2. measure bounds over every bubble (centre +/- radius)
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    const measure = (b: Box) => {
-        minX = Math.min(minX, b.x - b.w / 2);
-        maxX = Math.max(maxX, b.x + b.w / 2);
-        minY = Math.min(minY, b.y - b.h / 2);
-        maxY = Math.max(maxY, b.y + b.h / 2);
+    const measure = (c: Circle) => {
+        minX = Math.min(minX, c.x - c.r);
+        maxX = Math.max(maxX, c.x + c.r);
+        minY = Math.min(minY, c.y - c.r);
+        maxY = Math.max(maxY, c.y + c.r);
     };
     measure(center);
     for (const u of units) {
@@ -160,9 +204,9 @@ export function computeLayout(): Layout {
     // 3. shift into positive space with a margin
     const dx = MARGIN - minX;
     const dy = MARGIN - minY;
-    const shift = (b: Box) => {
-        b.x += dx;
-        b.y += dy;
+    const shift = (c: Circle) => {
+        c.x += dx;
+        c.y += dy;
     };
     shift(center);
     for (const u of units) {
@@ -183,17 +227,16 @@ export interface Point {
     y: number;
 }
 
-/** Point where the ray from a box centre towards (tx,ty) crosses the box border. */
-export function borderPoint(box: Box, tx: number, ty: number): Point {
-    const dx = tx - box.x;
-    const dy = ty - box.y;
-    if (dx === 0 && dy === 0) {
-        return { x: box.x, y: box.y };
+/** Point where the ray from a circle's centre towards (tx,ty) crosses the
+ * circle's border. */
+export function borderPoint(c: Circle, tx: number, ty: number): Point {
+    const dx = tx - c.x;
+    const dy = ty - c.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist === 0) {
+        return { x: c.x, y: c.y };
     }
-    const sx = dx !== 0 ? box.w / 2 / Math.abs(dx) : Infinity;
-    const sy = dy !== 0 ? box.h / 2 / Math.abs(dy) : Infinity;
-    const t = Math.min(sx, sy);
-    return { x: box.x + dx * t, y: box.y + dy * t };
+    return { x: c.x + (dx / dist) * c.r, y: c.y + (dy / dist) * c.r };
 }
 
 export interface EdgeGeom {
@@ -203,9 +246,9 @@ export interface EdgeGeom {
     y2: number;
 }
 
-/** An edge that starts on box A's border and ends on box B's border, so it
- * visually touches both nodes. */
-export function edgeBetween(a: Box, b: Box): EdgeGeom {
+/** An edge that starts on circle A's border and ends on circle B's border, so
+ * it visually touches both bubbles. */
+export function edgeBetween(a: Circle, b: Circle): EdgeGeom {
     const start = borderPoint(a, b.x, b.y);
     const end = borderPoint(b, a.x, a.y);
     return { x1: start.x, y1: start.y, x2: end.x, y2: end.y };

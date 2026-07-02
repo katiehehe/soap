@@ -62,4 +62,24 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
 - `get_mastery_state` returns the ranked priorities.
 - Python test: a fresh weighted deck yields 19 priorities, top = a univariate
   weight-9 subtopic, each with a human-readable reason.
-- `./ninja check` green (~112s; proto change triggered a fuller rebuild).
+- `./ninja check` green (~112s; proto change triggered a fuller rebuild). Commit
+  `834aa2714`.
+
+### Phase 2.4 — importance-sized bubble concept map + unit detail (done)
+
+- The study map is now a bubble concept map: every topic is a circle whose SIZE =
+  its exam-importance weight (units by section weight, subtopics by their emphasis)
+  and whose FILL colour = measured mastery (grey/amber/green). A legend states
+  "size = importance, colour = mastery" and keeps the honesty framing.
+- `lib.ts` rewritten for circle geometry (radius from weight; circle border/edge
+  math; generous radial spacing that provably avoids overlap). `lib.test.ts`
+  updated to circle invariants (no-overlap by centre distance, inside-canvas by
+  radius, edges touch circle borders) + a new "radius grows with weight" test.
+- `+page.svelte`: bubbles with labels beneath; tappable UNIT bubbles open a new
+  unit detail (mastered count, exam importance, mastery-by-weight, interleaving
+  tier); subtopic detail gains its weight; overall panel shows "% by exam weight"
+  and a "Study next" suggestion from the engine's priorities; calm hover/selection
+  transitions that honour `prefers-reduced-motion`. Passes real unit + subtopic
+  weights to `getMasteryState`.
+- Green: svelte-check, eslint, prettier, vitest geometry, full `./ninja check`,
+  and the study-map Playwright e2e (screenshot `out/study-map.png`).

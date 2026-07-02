@@ -10,9 +10,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         MasteryState,
         ReadinessResult,
         SubtopicMastery,
+        UnitMastery,
     } from "@generated/anki/speedrun_pb";
 
-    import type { LeafNode, SubtopicEvidence } from "./lib";
+    import type { LeafNode, SubtopicEvidence, UnitNode } from "./lib";
     import {
         COLORS,
         computeLayout,
@@ -21,19 +22,29 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         leafProgress,
         MIN_PROBLEMS,
         statusLabel,
+        subtopicTag,
+        TAXONOMY,
     } from "./lib";
 
     const layout = computeLayout();
     const { center, units } = layout;
     const allTags = units.flatMap((u) => u.subs.map((s) => s.tag));
 
-    // Official SOA P section weights (range midpoints), matching the readiness
-    // dashboard so the give-up rule evaluates identical coverage here.
-    const UNIT_WEIGHTS = [
-        { unitId: "general", weight: 26.5 },
-        { unitId: "univariate", weight: 47 },
-        { unitId: "multivariate", weight: 26.5 },
-    ];
+    // Weights mirror pylib/anki/speedrun/exam_p_topics.json, passed to the engine
+    // so the weighted mastery rollup and the study priorities line up with the
+    // bubble sizes the map draws. Bubble SIZE = importance; bubble FILL = mastery.
+    const UNIT_WEIGHTS = TAXONOMY.map((u) => ({
+        unitId: u.id,
+        weight: u.subtopics.reduce((a, s) => a + s.weight, 0),
+    }));
+    const SUBTOPIC_WEIGHTS = TAXONOMY.flatMap((u) =>
+        u.subtopics.map((s) => ({ tag: subtopicTag(u.id, s.id), weight: s.weight })),
+    );
+    const NAME_BY_TAG = new Map(
+        TAXONOMY.flatMap((u) =>
+            u.subtopics.map((s) => [subtopicTag(u.id, s.id), s.name]),
+        ),
+    );
 
     const GREY = COLORS.grey;
     const AMBER = COLORS.amber;
@@ -43,12 +54,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let result: MasteryState | null = null;
     let readiness: ReadinessResult | null = null;
     let loadError = "";
-    let selected: LeafNode | null = null;
+    let selectedLeaf: LeafNode | null = null;
+    let selectedUnit: UnitNode | null = null;
 
-    // Scale the fixed-size diagram to fit the available width (never upscaling),
-    // keeping labels readable. A uniform scale preserves the (verified)
-    // non-overlapping geometry; the page scrolls if the map is taller than the
-    // dialog.
+    // Scale the fixed-size diagram to fit the available width (never upscaling).
+    // A uniform scale preserves the (verified) non-overlapping geometry.
     let viewportWidth = 0;
     $: scale = viewportWidth > 0 ? Math.min(1, viewportWidth / layout.width) : 1;
 
@@ -58,7 +68,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 getMasteryState({
                     expectedSubtopics: allTags,
                     units: UNIT_WEIGHTS,
-                    subtopicWeights: [],
+                    subtopicWeights: SUBTOPIC_WEIGHTS,
                 }),
                 computeReadiness({ expectedSubtopics: allTags, units: UNIT_WEIGHTS }),
             ]);
@@ -70,8 +80,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: subMap = new Map<string, SubtopicMastery>(
         (result?.subtopics ?? []).map((s) => [s.tag, s]),
     );
-    $: unitMap = new Map((result?.units ?? []).map((u) => [u.unitId, u]));
+    $: unitMap = new Map<string, UnitMastery>(
+        (result?.units ?? []).map((u) => [u.unitId, u]),
+    );
     $: overall = result?.overall ?? null;
+    $: priorities = result?.priorities ?? [];
 
     // Honest readiness give-up state — never a fabricated number. The score
     // itself lives on the Readiness page; here we only surface why it's withheld.
@@ -141,8 +154,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         return total > 0 ? `${(n / total) * 100}%` : "0%";
     }
 
-    function select(node: LeafNode): void {
-        selected = node;
+    function selectLeaf(node: LeafNode): void {
+        selectedLeaf = node;
+        selectedUnit = null;
+    }
+    function selectUnit(node: UnitNode): void {
+        selectedUnit = node;
+        selectedLeaf = null;
     }
 </script>
 
@@ -151,13 +169,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <h1>Study map</h1>
         <p class="exam">SOA Exam P · Probability</p>
         <p class="subtitle">
-            Tap a subtopic to see its mastery. Each link fills as you clear its gate:
-            <span class="key" style="color:{GREY}">■</span>
+            Each bubble is a topic. Its <b>size</b>
+            is that topic's weight on the exam; its
+            <b>colour</b>
+            fills as you clear its mastery gate:
+            <span class="key" style="color:{GREY}">●</span>
             not started,
-            <span class="key" style="color:{AMBER}">■</span>
-            gathering data / in progress,
-            <span class="key" style="color:{GREEN}">■</span>
-            mastered. Mastery is measured from real reviews, never guessed.
+            <span class="key" style="color:{AMBER}">●</span>
+            in progress,
+            <span class="key" style="color:{GREEN}">●</span>
+            mastered. Colour is measured from real reviews, never guessed.
         </p>
     </header>
 
@@ -221,12 +242,26 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     {overall.unitsMastered} / {overall.unitsTotal} units mastered
                 </span>
                 <span class="sep">·</span>
-                <span>{overall.totalReviews} reviews logged</span>
+                <span>
+                    <b>{pct(overall.weightedMasteryPct)}</b>
+                    by exam weight
+                </span>
             </div>
+            {#if priorities.length > 0}
+                <p class="focus">
+                    <span class="focus-label">Study next</span>
+                    <b>
+                        {NAME_BY_TAG.get(priorities[0].tag) ?? priorities[0].subtopicId}
+                    </b>
+                    — {priorities[0].reason}
+                </p>
+            {/if}
             <p class="overall-note">
                 This is <b>demonstrated mastery</b>
                 — only subtopics you've proven with real reviews (≥ {MIN_PROBLEMS} problems,
-                ≥ 80% accurate, ≥ 90% retained) count. It is
+                ≥ 80% accurate, ≥ 90% retained) count, and "{pct(
+                    overall.weightedMasteryPct,
+                )} by exam weight" weights them by section importance. It is
                 <b>not</b>
                 a predicted exam score.
                 {#if noScore}
@@ -269,7 +304,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         stroke={GREY}
                         stroke-width="2.5"
                         stroke-linecap="round"
-                        opacity="0.45"
+                        opacity="0.4"
                     />
                     {#if e.progress > 0}
                         <line
@@ -278,7 +313,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                             x2={e.x1 + e.progress * (e.x2 - e.x1)}
                             y2={e.y1 + e.progress * (e.y2 - e.y1)}
                             stroke={e.color}
-                            stroke-width="3.5"
+                            stroke-width="4"
                             stroke-linecap="round"
                         />
                     {/if}
@@ -287,16 +322,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
             <!-- centre -->
             <div
-                class="node center"
-                style="left:{center.x - center.w / 2}px; top:{center.y -
-                    center.h / 2}px;
-                       width:{center.w}px; height:{center.h}px;
+                class="bubble center"
+                style="left:{center.x - center.r}px; top:{center.y - center.r}px;
+                       width:{center.r * 2}px; height:{center.r * 2}px;
                        border-color:{ACCENT}; --tint:{ACCENT}1f;"
             >
                 <span class="node-title">Exam P</span>
                 {#if overall}
                     <span class="node-sub">
-                        {overall.subtopicsMastered}/{overall.subtopicsTotal} mastered
+                        {overall.subtopicsMastered}/{overall.subtopicsTotal}
                     </span>
                 {/if}
             </div>
@@ -305,50 +339,94 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             {#each units as u}
                 {@const up = unitProgress(u.id)}
                 {@const uc = colorFor(up, unitMap.get(u.id)?.mastered ?? false)}
-                <div
-                    class="node unit"
-                    style="left:{u.x - u.w / 2}px; top:{u.y - u.h / 2}px;
-                           width:{u.w}px; height:{u.h}px;
+                <button
+                    class="bubble unit"
+                    class:selected={selectedUnit?.id === u.id}
+                    style="left:{u.x - u.r}px; top:{u.y - u.r}px;
+                           width:{u.r * 2}px; height:{u.r * 2}px;
                            border-color:{uc}; --tint:{uc}1f;"
+                    on:click={() => selectUnit(u)}
                 >
                     <span class="node-title">{u.name}</span>
                     <span class="node-sub">
                         {unitMap.get(u.id)?.subtopicsCleared ?? 0}/{u.subs.length} mastered
                     </span>
-                </div>
+                </button>
             {/each}
 
-            <!-- subtopics -->
+            <!-- subtopics: bubble sized by weight, name label beneath -->
             {#each units as u}
                 {#each u.subs as s}
                     {@const p = leafProgress(ev(s.tag))}
                     {@const c = colorFor(p, leafCleared(s.tag))}
                     <button
-                        class="node leaf"
-                        class:selected={selected?.tag === s.tag}
-                        style="left:{s.x - s.w / 2}px; top:{s.y - s.h / 2}px;
-                               width:{s.w}px; height:{s.h}px;
-                               border-color:{c}; --tint:{c}1a;"
-                        on:click={() => select(s)}
+                        class="leaf"
+                        class:selected={selectedLeaf?.tag === s.tag}
+                        style="left:{s.x - 48}px; top:{s.y - s.r}px; width:96px;"
+                        title="{s.name} · exam weight {s.weight.toFixed(1)}"
+                        on:click={() => selectLeaf(s)}
                     >
-                        <span class="node-title">{s.name}</span>
-                        <span class="node-sub">{statusLabel(ev(s.tag))}</span>
+                        <span
+                            class="leaf-bubble"
+                            style="width:{s.r * 2}px; height:{s.r * 2}px;
+                                   border-color:{c}; --tint:{c}1a;"
+                        ></span>
+                        <span class="caption">{s.name}</span>
                     </button>
                 {/each}
             {/each}
         </div>
     </div>
 
-    {#if selected}
-        {@const m = ev(selected.tag)}
-        {@const c = colorFor(leafProgress(m), leafCleared(selected.tag))}
+    {#if selectedUnit}
+        {@const um = unitMap.get(selectedUnit.id)}
+        {@const uc = colorFor(unitProgress(selectedUnit.id), um?.mastered ?? false)}
+        <section class="detail">
+            <div class="detail-head">
+                <div>
+                    <h2>{selectedUnit.name}</h2>
+                    <p class="detail-unit">Unit · one of the three exam sections</p>
+                </div>
+                <span class="pill" style="background:{uc}22; color:{uc};">
+                    {um?.subtopicsCleared ?? 0}/{um?.subtopicsTotal ??
+                        selectedUnit.subs.length} mastered
+                </span>
+            </div>
+            <dl class="stats">
+                <div>
+                    <dt>Subtopics mastered</dt>
+                    <dd>{um?.subtopicsCleared ?? 0} / {um?.subtopicsTotal ?? 0}</dd>
+                </div>
+                <div>
+                    <dt>Exam importance</dt>
+                    <dd>{(um?.weight ?? selectedUnit.weight).toFixed(1)} of 100</dd>
+                </div>
+                <div>
+                    <dt>Mastery by weight</dt>
+                    <dd>{pct(um?.weightedMasteryPct ?? 0)}</dd>
+                </div>
+                <div>
+                    <dt>Interleaving tier</dt>
+                    <dd>{um?.mastered ? "cross-unit (spacing)" : "within-unit"}</dd>
+                </div>
+            </dl>
+            <p class="hint">
+                "Mastery by weight" is the share of this unit's exam importance you've
+                demonstrably mastered — measured from real reviews, not a predicted
+                score.
+            </p>
+        </section>
+    {:else if selectedLeaf}
+        {@const m = ev(selectedLeaf.tag)}
+        {@const c = colorFor(leafProgress(m), leafCleared(selectedLeaf.tag))}
         {@const enough = hasEnoughEvidence(m)}
         <section class="detail">
             <div class="detail-head">
                 <div>
-                    <h2>{selected.name}</h2>
+                    <h2>{selectedLeaf.name}</h2>
                     <p class="detail-unit">
-                        {units.find((u) => u.id === selected?.unitId)?.name}
+                        {units.find((u) => u.id === selectedLeaf?.unitId)?.name} · exam weight
+                        {selectedLeaf.weight.toFixed(1)}
                     </p>
                 </div>
                 <span class="pill" style="background:{c}22; color:{c};">
@@ -405,7 +483,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </section>
     {:else}
         <p class="empty-hint">
-            Select a subtopic in the map to see its mastery detail.
+            Select a unit or subtopic in the map to see its mastery detail.
         </p>
     {/if}
 </div>
@@ -438,7 +516,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 0.9rem;
     }
     .key {
-        font-size: 0.9rem;
+        font-size: 0.95rem;
+        vertical-align: middle;
     }
     .notice.error {
         border: 1px solid #d9534f;
@@ -493,12 +572,32 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .overall-legend .sep {
         color: var(--border, #cfcfd3);
     }
+    .focus {
+        margin: 0.7rem 0 0;
+        font-size: 0.86rem;
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+    .focus-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--fg-subtle, #6b7280);
+        background: var(--canvas-inset, #ececef);
+        border-radius: 999px;
+        padding: 0.1rem 0.5rem;
+    }
     .overall-note {
         margin: 0.7rem 0 0;
         font-size: 0.82rem;
         line-height: 1.4;
         color: var(--fg-subtle, #6b7280);
     }
+
+    /* Concept map */
     .viewport {
         position: relative;
         width: 100%;
@@ -515,52 +614,101 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         left: 0;
         pointer-events: none;
     }
-    .node {
+
+    /* Round bubbles (centre + units) */
+    .bubble {
         position: absolute;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 2px;
-        border: 2px solid var(--border, #e2e2e5);
-        border-radius: 12px;
-        padding: 4px 8px;
+        gap: 1px;
+        border: 2.5px solid var(--border, #e2e2e5);
+        border-radius: 50%;
+        padding: 4px;
         text-align: center;
         font: inherit;
         color: inherit;
         overflow: hidden;
         background:
             linear-gradient(var(--tint), var(--tint)), var(--canvas-elevated, #fbfbfc);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
     }
     .node-title {
         font-weight: 600;
-        font-size: 0.8rem;
-        line-height: 1.12;
+        font-size: 0.78rem;
+        line-height: 1.1;
     }
     .node-sub {
-        font-size: 0.67rem;
+        font-size: 0.64rem;
         color: var(--fg-subtle, #6b7280);
     }
-    .node.center .node-title {
+    .bubble.center .node-title {
         font-size: 1rem;
         font-weight: 700;
     }
-    .node.unit .node-title {
-        font-size: 0.88rem;
-    }
-    button.node.leaf {
+    .bubble.unit {
         cursor: pointer;
-        transition: box-shadow 0.1s ease;
+        transition:
+            box-shadow 0.12s ease,
+            transform 0.12s ease;
     }
-    button.node.leaf:hover {
+    .bubble.unit .node-title {
+        font-size: 0.82rem;
+    }
+    .bubble.unit:hover {
         box-shadow:
             0 0 0 3px var(--tint),
-            0 1px 3px rgba(0, 0, 0, 0.08);
+            0 2px 6px rgba(0, 0, 0, 0.1);
     }
-    button.node.leaf.selected {
+    .bubble.unit.selected {
         box-shadow: 0 0 0 3px var(--fg-subtle, #6b7280);
+    }
+
+    /* Subtopic: a circular bubble with the name beneath it */
+    .leaf {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+    }
+    .leaf-bubble {
+        box-sizing: border-box;
+        border: 2.5px solid var(--border, #e2e2e5);
+        border-radius: 50%;
+        background:
+            linear-gradient(var(--tint), var(--tint)), var(--canvas-elevated, #fbfbfc);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        transition:
+            box-shadow 0.12s ease,
+            transform 0.12s ease;
+    }
+    .leaf:hover .leaf-bubble {
+        box-shadow:
+            0 0 0 3px var(--tint),
+            0 2px 6px rgba(0, 0, 0, 0.1);
+        transform: scale(1.04);
+    }
+    .leaf.selected .leaf-bubble {
+        box-shadow: 0 0 0 3px var(--fg-subtle, #6b7280);
+    }
+    .caption {
+        font-size: 0.68rem;
+        line-height: 1.12;
+        text-align: center;
+        color: var(--fg, #33373d);
+        max-width: 96px;
+    }
+    .leaf.selected .caption {
+        font-weight: 600;
     }
 
     /* detail */
@@ -632,5 +780,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin-top: 1.25rem;
         color: var(--fg-subtle, #6b7280);
         font-size: 0.9rem;
+    }
+
+    /* Calm by default: honour reduced-motion preferences. */
+    @media (prefers-reduced-motion: reduce) {
+        .bubble.unit,
+        .leaf-bubble {
+            transition: none;
+        }
+        .leaf:hover .leaf-bubble {
+            transform: none;
+        }
     }
 </style>

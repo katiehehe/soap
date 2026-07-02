@@ -40,6 +40,21 @@ server** and verify reviews flow both ways without loss.
   duplicates, zero losses.
 - One paragraph documenting the same-card conflict winner and why.
 
+## Status (built)
+
+- **Scripted 7b test built + passing:** `make sync-test`
+  (`tools/speedrun/sync_test.py`) starts Anki's built-in sync server, uploads the
+  Exam P deck, downloads it to two client collections, reviews 10 different cards
+  offline on each, syncs, and asserts all 20 land once (desktop 20 | phone 20,
+  none lost/doubled). It also runs a same-card conflict and asserts both revlog
+  rows are kept and both sides converge to a deterministic winner.
+- **Conflict rule documented:** `docs/sync-conflict-rule.md`.
+- **Phone score surface:** `docs/phone-scores.md` (shared engine computes all
+  three signals on-device; native screen is the remaining UI).
+- **On-device phone↔desktop recording:** manual, per `docs/demo-script.md` (the
+  phone runs the same engine, so the scripted desktop↔desktop test exercises the
+  identical sync code path).
+
 ## Notes / risks
 
 - Keep the sync server local and disposable; never point at AnkiWeb for tests.

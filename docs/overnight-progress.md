@@ -232,3 +232,33 @@ coverage abstains; weakness measured). Fixed the concrete findings:
   "harness" -> pre-registered plan; leakage scan "wired to CI" -> run in
   `./ninja check`).
 - `./ninja check` green throughout.
+
+## Follow-up round 2: ablation variant + performance model (requested)
+
+### Study-feature ablation variant — build 2 (done, `75fa2e5f4`)
+
+- `order_new_cards` gained an `ablate_within_unit` parameter: Full (build 1) keeps
+  Blocked -> within-unit (grouped by unit = the interleaving) -> cross-unit;
+  Ablated (build 2) collapses every cleared subtopic into one global mixed pool,
+  removing the within-unit tier. Driven by the `speedrunAblateWithinUnit` config
+  key (default off). The three builds are now selectable: build 1 = scheduler on +
+  ablate off, build 2 = both on, build 3 = scheduler off (plain Anki).
+- Rust tests for the Full-vs-Ablated ordering difference + the flag; a Python
+  build-config smoke test; `docs/study-feature-ablation.md` updated. The RUN
+  itself (equal study time, metric, nulls) remains a Sunday task.
+
+### Performance model pipeline — Step 2 (done, `4e65af0ff`)
+
+- `pylib/anki/speedrun/performance.py`: a self-contained, deterministic,
+  calibrated logistic-regression model (no external ML deps) predicting P(correct)
+  on a new exam-style question from mastery / difficulty / timing / coverage, with
+  a seeded held-out split, `calibration.py` metrics, a majority-class baseline,
+  and an insufficient-data give-up.
+- `make performance` (`tools/speedrun/evals/performance_eval.py`) validates the
+  whole pipeline on a **clearly-labelled synthetic fixture**: seeded split,
+  leakage scan clean, calibrated, beats the baseline (e.g. acc 0.78 / AUC 0.83 vs
+  0.69 baseline). Honest: the numbers are synthetic (not a real student result),
+  and the app still abstains ("performance: not yet measured") on real data until
+  a labelled disguised-item dataset exists.
+- 6 unit tests; `docs/score-models.md` + checklist Step 2 updated.
+- Verified: full `./ninja check` green, `make crash-test` 20/20, e2e 4/4.

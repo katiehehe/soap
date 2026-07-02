@@ -4,7 +4,9 @@
 from anki.speedrun import (
     deck_name_for_subtopic_tag,
     expected_subtopic_tags,
+    load_topics,
     subtopic_tag,
+    unit_deck_name,
 )
 from anki.speedrun.seed import SEED_CARDS, build_deck
 from tests.shared import getEmptyCol
@@ -22,6 +24,17 @@ def test_deck_name_for_subtopic_tag_matches_built_decks():
     # malformed / unknown tags resolve to None (never a wrong deck)
     assert deck_name_for_subtopic_tag("not-a-tag") is None
     assert deck_name_for_subtopic_tag("subtopic::nope::nope") is None
+
+
+def test_unit_deck_name_matches_built_decks():
+    # Within-unit interleaving opens a unit's deck by name.
+    col = getEmptyCol()
+    build_deck(col)
+    for unit in load_topics()["units"]:
+        name = unit_deck_name(unit["id"])
+        assert name is not None and name.startswith("SOA Exam P::")
+        assert col.decks.by_name(name) is not None, name
+    assert unit_deck_name("nope") is None
 
 
 def test_build_deck_covers_all_three_units():

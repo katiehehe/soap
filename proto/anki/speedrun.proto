@@ -202,6 +202,25 @@ message StudyPriority {
   string reason = 6;
 }
 
+// Which tier of practice to recommend next, so study progresses block ->
+// within-unit interleave -> cross-unit interleave rather than staying blocked.
+enum StudyMode {
+  STUDY_MODE_BLOCKED = 0;       // practise one subtopic in isolation
+  STUDY_MODE_WITHIN_UNIT = 1;   // interleave a unit's confusable sub-types
+  STUDY_MODE_CROSS_UNIT = 2;    // interleave across units (spacing)
+  STUDY_MODE_ALL_MASTERED = 3;  // nothing left to clear; review everything
+}
+
+// The single recommended next study action, derived from measured mastery. The
+// target is a subtopic (BLOCKED), a unit (WITHIN_UNIT), or the whole exam
+// (CROSS_UNIT / ALL_MASTERED). Never fabricated: it only reflects the gate
+// state.
+message StudyRecommendation {
+  StudyMode mode = 1;
+  string subtopic_tag = 2;  // set for BLOCKED
+  string unit_id = 3;       // set for WITHIN_UNIT
+}
+
 message MasteryState {
   repeated SubtopicMastery subtopics = 1;
   repeated UnitMastery units = 2;
@@ -209,6 +228,8 @@ message MasteryState {
   // Subtopics still worth studying, highest-impact first (weight x
   // opportunity). Empty once everything is mastered.
   repeated StudyPriority priorities = 4;
+  // The tier-aware "what to study next" recommendation.
+  StudyRecommendation recommendation = 5;
 }
 
 message MasteryOrderedCards {

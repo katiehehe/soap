@@ -83,6 +83,11 @@ def test_get_mastery_state_echoes_weights_and_weighted_rollup():
     assert top.priority_score > 0
     assert top.reason
 
+    # Tier-aware recommendation: a fresh deck (nothing cleared) -> blocked
+    # practice on a specific subtopic (StudyMode.BLOCKED == 0).
+    assert state.recommendation.mode == 0
+    assert state.recommendation.subtopic_tag
+
 
 def test_mastery_ordered_new_cards_returns_blocked_cards():
     col = getEmptyCol()

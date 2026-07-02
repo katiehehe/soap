@@ -15,6 +15,7 @@ use anki_proto::speedrun::PointsAtStakeOrder;
 use anki_proto::speedrun::ReadinessResult;
 use anki_proto::speedrun::SpeedrunPingResponse;
 use anki_proto::speedrun::StudyPriority;
+use anki_proto::speedrun::StudyRecommendation;
 use anki_proto::speedrun::SubtopicMastery;
 use anki_proto::speedrun::UnitMastery;
 
@@ -24,6 +25,7 @@ use crate::speedrun::mastery::compute_pools;
 use crate::speedrun::mastery::order_new_cards;
 use crate::speedrun::mastery::parse_subtopic_tag;
 use crate::speedrun::mastery::points_at_stake_order;
+use crate::speedrun::mastery::recommend_study;
 use crate::speedrun::mastery::study_priorities;
 use crate::speedrun::mastery::subtopic_weakness;
 use crate::speedrun::mastery::weighted_mastery;
@@ -200,11 +202,21 @@ impl crate::services::SpeedrunService for Collection {
             })
             .collect();
 
+        // Tier-aware "what to study next": block the weakest uncleared subtopic,
+        // then interleave a unit once it has >= 2 cleared, then cross-unit.
+        let rec = recommend_study(&stats);
+        let recommendation = Some(StudyRecommendation {
+            mode: study_mode_to_proto(rec.mode) as i32,
+            subtopic_tag: rec.subtopic_tag.unwrap_or_default(),
+            unit_id: rec.unit_id.unwrap_or_default(),
+        });
+
         Ok(MasteryState {
             subtopics,
             units,
             overall,
             priorities,
+            recommendation,
         })
     }
 
@@ -264,6 +276,18 @@ fn pool_to_proto(pool: Pool) -> anki_proto::speedrun::MasteryPool {
         Pool::Blocked => anki_proto::speedrun::MasteryPool::Blocked,
         Pool::WithinUnit => anki_proto::speedrun::MasteryPool::WithinUnit,
         Pool::CrossUnit => anki_proto::speedrun::MasteryPool::CrossUnit,
+    }
+}
+
+fn study_mode_to_proto(
+    mode: crate::speedrun::mastery::StudyMode,
+) -> anki_proto::speedrun::StudyMode {
+    use crate::speedrun::mastery::StudyMode as M;
+    match mode {
+        M::Blocked => anki_proto::speedrun::StudyMode::Blocked,
+        M::WithinUnit => anki_proto::speedrun::StudyMode::WithinUnit,
+        M::CrossUnit => anki_proto::speedrun::StudyMode::CrossUnit,
+        M::AllMastered => anki_proto::speedrun::StudyMode::AllMastered,
     }
 }
 

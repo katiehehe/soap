@@ -11,6 +11,7 @@ RPC, the three-layer topic tree with mastery-coloured edges).
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import aqt
@@ -23,6 +24,7 @@ from aqt.webview import AnkiWebView, AnkiWebViewKind
 if TYPE_CHECKING:
     from anki.cards import Card
     from anki.collection import Collection
+    from anki.decks import DeckId
 
 
 class ReadinessDialog(QDialog):
@@ -79,19 +81,22 @@ class StudyMapDialog(QDialog):
         self.activateWindow()
 
     def _on_bridge_cmd(self, cmd: str) -> None:
-        # The study map requests blocked practice on a subtopic's deck.
-        prefix = "speedrun-study:"
-        if cmd.startswith(prefix):
-            self._study_subtopic(cmd[len(prefix) :])
+        # The study map requests a tier of practice. Defer so we don't tear down
+        # this webview from inside its own bridge callback.
+        if cmd.startswith("speedrun-study-unit:"):
+            unit_id = cmd[len("speedrun-study-unit:") :]
+            self._deferred(lambda: open_unit_deck(self.mw, unit_id))
+        elif cmd == "speedrun-study-all":
+            self._deferred(lambda: open_all_deck(self.mw))
+        elif cmd.startswith("speedrun-study:"):
+            tag = cmd[len("speedrun-study:") :]
+            self._deferred(lambda: open_subtopic_deck(self.mw, tag))
 
-    def _study_subtopic(self, tag: str) -> None:
+    def _deferred(self, open_fn: Callable[[], bool]) -> None:
         def start() -> None:
-            # Close first, then open the subtopic's deck for blocked practice.
             self.close()
-            open_subtopic_deck(self.mw, tag)
+            open_fn()
 
-        # Defer so we don't tear down this webview from inside its own bridge
-        # callback.
         QTimer.singleShot(0, start)
 
     def reject(self) -> None:
@@ -106,51 +111,69 @@ def show_study_map(mw: aqt.main.AnkiQt) -> None:
     StudyMapDialog(mw)
 
 
-def open_subtopic_deck(mw: aqt.main.AnkiQt, tag: str) -> bool:
-    """Select a subtopic's deck and drop into review — i.e. blocked practice on
-    just that subtopic. Returns False if the tag doesn't resolve to a deck."""
-    from anki.speedrun import deck_name_for_subtopic_tag
+def _start_review(mw: aqt.main.AnkiQt, deck_id: DeckId) -> None:
+    mw.col.decks.select(deck_id)
+    mw.col.startTimebox()
+    mw.moveToState("review")
 
-    name = deck_name_for_subtopic_tag(tag)
+
+def _open_named_deck(mw: aqt.main.AnkiQt, name: str | None) -> bool:
     if not name:
         return False
     deck_id = mw.col.decks.id_for_name(name)
     if deck_id is None:
         return False
-    mw.col.decks.select(deck_id)
-    mw.col.startTimebox()
-    mw.moveToState("review")
+    _start_review(mw, deck_id)
     return True
 
 
-def recommended_subtopic_tag(col: Collection) -> str | None:
-    """The highest-priority not-yet-cleared subtopic (importance weight x
-    opportunity), or None when everything is mastered. Uses the engine's
-    study-priority ranking, so it never fabricates a recommendation."""
+def open_subtopic_deck(mw: aqt.main.AnkiQt, tag: str) -> bool:
+    """Blocked practice: study just this subtopic's deck."""
+    from anki.speedrun import deck_name_for_subtopic_tag
+
+    return _open_named_deck(mw, deck_name_for_subtopic_tag(tag))
+
+
+def open_unit_deck(mw: aqt.main.AnkiQt, unit_id: str) -> bool:
+    """Within-unit interleaving: study a whole unit's deck. The scheduler serves
+    its still-blocked subtopics first, then interleaves the cleared ones."""
+    from anki.speedrun import unit_deck_name
+
+    return _open_named_deck(mw, unit_deck_name(unit_id))
+
+
+def open_all_deck(mw: aqt.main.AnkiQt) -> bool:
+    """Cross-unit review: study the whole exam deck."""
+    from anki.speedrun.seed import ROOT_DECK
+
+    return _open_named_deck(mw, ROOT_DECK)
+
+
+def study_recommended(mw: aqt.main.AnkiQt) -> None:
+    """Open the engine's tier-aware recommended next practice in one click:
+    blocked practice on the weakest subtopic, within-unit interleaving of a unit
+    that's underway, or cross-unit review once everything is cleared. Never
+    fabricated — it only reflects the measured gate state."""
     from anki import speedrun_pb2
     from anki.speedrun import expected_subtopic_tags, subtopic_weights, unit_weights
 
-    state = col._backend.get_mastery_state(
+    state = mw.col._backend.get_mastery_state(
         expected_subtopics=expected_subtopic_tags(),
         units=[speedrun_pb2.UnitWeight(unit_id=u, weight=w) for u, w in unit_weights()],
         subtopic_weights=[
             speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in subtopic_weights()
         ],
     )
-    if not state.priorities:
-        return None
-    return state.priorities[0].tag
-
-
-def study_recommended(mw: aqt.main.AnkiQt) -> None:
-    """Open the recommended (highest-priority weak) subtopic for blocked
-    practice — the good path in one click, whatever the user picked before."""
-    tag = recommended_subtopic_tag(mw.col)
-    if tag is None:
-        showInfo("All subtopics are mastered — no recommendation right now.")
-        return
-    if not open_subtopic_deck(mw, tag):
-        showInfo("Couldn't open the recommended subtopic's deck.")
+    rec = state.recommendation
+    # StudyMode: BLOCKED=0, WITHIN_UNIT=1, CROSS_UNIT=2, ALL_MASTERED=3.
+    if rec.mode == 0 and rec.subtopic_tag:
+        ok = open_subtopic_deck(mw, rec.subtopic_tag)
+    elif rec.mode == 1 and rec.unit_id:
+        ok = open_unit_deck(mw, rec.unit_id)
+    else:
+        ok = open_all_deck(mw)
+    if not ok:
+        showInfo("Couldn't open the recommended deck.")
 
 
 # --- Reviewer mastery-tier banner ----------------------------------------

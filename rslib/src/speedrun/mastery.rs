@@ -350,6 +350,84 @@ pub(crate) fn study_priorities(stats: &[SubtopicStats]) -> Vec<StudyPriorityItem
     items
 }
 
+/// The tier of practice to recommend next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StudyMode {
+    Blocked,
+    WithinUnit,
+    CrossUnit,
+    AllMastered,
+}
+
+/// The recommended next study action, so practice progresses through the tiers
+/// instead of staying blocked: block the weakest uncleared subtopic, then once
+/// a unit has >= 2 cleared sub-types interleave that unit, and once everything
+/// is cleared review across units. Purely a function of the measured gate
+/// state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StudyRec {
+    pub mode: StudyMode,
+    pub subtopic_tag: Option<String>,
+    pub unit_id: Option<String>,
+}
+
+pub(crate) fn recommend_study(stats: &[SubtopicStats]) -> StudyRec {
+    let none = StudyRec {
+        mode: StudyMode::AllMastered,
+        subtopic_tag: None,
+        unit_id: None,
+    };
+    if stats.is_empty() {
+        return none;
+    }
+    // Everything cleared -> interleave across units.
+    if stats.iter().all(|s| s.gate_cleared()) {
+        return StudyRec {
+            mode: StudyMode::CrossUnit,
+            ..none
+        };
+    }
+    // A unit with >= 2 cleared sub-types (enough to interleave) that isn't fully
+    // mastered -> recommend within-unit interleaving of that unit. Pick the most
+    // cleared such unit, in first-seen order for determinism.
+    let mut order: Vec<String> = Vec::new();
+    let mut total: HashMap<String, u32> = HashMap::new();
+    let mut cleared: HashMap<String, u32> = HashMap::new();
+    for s in stats {
+        if !total.contains_key(&s.unit_id) {
+            order.push(s.unit_id.clone());
+        }
+        *total.entry(s.unit_id.clone()).or_default() += 1;
+        if s.gate_cleared() {
+            *cleared.entry(s.unit_id.clone()).or_default() += 1;
+        }
+    }
+    let mut best: Option<(&str, u32)> = None;
+    for u in &order {
+        let c = cleared.get(u).copied().unwrap_or(0);
+        let t = total.get(u).copied().unwrap_or(0);
+        if c >= 2 && c < t && best.map_or(true, |(_, bc)| c > bc) {
+            best = Some((u.as_str(), c));
+        }
+    }
+    if let Some((u, _)) = best {
+        return StudyRec {
+            mode: StudyMode::WithinUnit,
+            subtopic_tag: None,
+            unit_id: Some(u.to_string()),
+        };
+    }
+    // Otherwise block the highest-priority uncleared subtopic (procedure first).
+    if let Some(top) = study_priorities(stats).into_iter().next() {
+        return StudyRec {
+            mode: StudyMode::Blocked,
+            subtopic_tag: Some(top.tag),
+            unit_id: None,
+        };
+    }
+    none
+}
+
 /// Order new cards by tier: blocked subtopics first (grouped so each is
 /// practised in isolation), then within-unit interleaving, then cross-unit
 /// interleaving. Cards whose subtopic is unknown sort last, preserving their
@@ -1047,6 +1125,37 @@ mod tests {
         assert_eq!(p[0].subtopic_id, "a");
         assert_eq!(p[1].subtopic_id, "b");
         assert!(p[0].score > 0.0);
+    }
+
+    #[test]
+    fn recommend_blocked_when_nothing_cleared() {
+        let stats = vec![
+            stat_w("gp", "a", 0, 0, 0.0, 3.0),
+            stat_w("gp", "b", 5, 2, 0.5, 5.0),
+        ];
+        let r = recommend_study(&stats);
+        assert_eq!(r.mode, StudyMode::Blocked);
+        assert!(r.subtopic_tag.is_some());
+    }
+
+    #[test]
+    fn recommend_within_unit_when_a_unit_has_two_cleared() {
+        // gp has 2 cleared + 1 uncleared -> interleave gp; uv is untouched.
+        let stats = vec![
+            stat("gp", "a", 12, 12, 0.95),
+            stat("gp", "b", 12, 12, 0.95),
+            stat("gp", "c", 0, 0, 0.0),
+            stat("uv", "x", 0, 0, 0.0),
+        ];
+        let r = recommend_study(&stats);
+        assert_eq!(r.mode, StudyMode::WithinUnit);
+        assert_eq!(r.unit_id.as_deref(), Some("gp"));
+    }
+
+    #[test]
+    fn recommend_cross_unit_when_all_cleared() {
+        let stats = vec![stat("gp", "a", 12, 12, 0.95), stat("uv", "x", 12, 12, 0.95)];
+        assert_eq!(recommend_study(&stats).mode, StudyMode::CrossUnit);
     }
 
     #[test]

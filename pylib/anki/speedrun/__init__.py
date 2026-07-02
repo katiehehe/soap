@@ -95,6 +95,18 @@ def deck_name_for_subtopic_tag(
         return None
 
 
+def unit_deck_name(
+    unit_id: str, root: str = "SOA Exam P", topics: dict[str, Any] | None = None
+) -> str | None:
+    """Deck name for a unit (``root::unit name``), used to open a unit's deck for
+    within-unit interleaving. Returns None for an unknown unit."""
+    topics = topics or load_topics()
+    try:
+        return "::".join([root, unit_name(unit_id, topics)])
+    except KeyError:
+        return None
+
+
 def apply_subtopic_weights_config(
     col: Any, topics: dict[str, Any] | None = None
 ) -> None:

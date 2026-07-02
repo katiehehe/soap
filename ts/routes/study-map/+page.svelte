@@ -7,9 +7,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     import { bridgeCommand } from "@tslib/bridgecommand";
     import { computeReadiness, getMasteryState } from "@generated/backend";
+    import { StudyMode } from "@generated/anki/speedrun_pb";
     import type {
         MasteryState,
         ReadinessResult,
+        StudyRecommendation,
         SubtopicMastery,
         UnitMastery,
     } from "@generated/anki/speedrun_pb";
@@ -46,6 +48,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             u.subtopics.map((s) => [subtopicTag(u.id, s.id), s.name]),
         ),
     );
+    const UNIT_NAME_BY_ID = new Map(TAXONOMY.map((u) => [u.id, u.name]));
 
     const GREY = COLORS.grey;
     const AMBER = COLORS.amber;
@@ -86,6 +89,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     );
     $: overall = result?.overall ?? null;
     $: priorities = result?.priorities ?? [];
+    $: recommendation = result?.recommendation ?? null;
 
     // Honest readiness give-up state — never a fabricated number. The score
     // itself lives on the Readiness page; here we only surface why it's withheld.
@@ -166,6 +170,35 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     function studySubtopic(tag: string): void {
         // Ask the desktop to open this subtopic's deck for blocked practice.
         bridgeCommand("speedrun-study:" + tag);
+    }
+    function studyUnit(unitId: string): void {
+        // Within-unit interleaving: study the whole unit's deck.
+        bridgeCommand("speedrun-study-unit:" + unitId);
+    }
+    function studyAll(): void {
+        // Cross-unit review: study the whole exam deck.
+        bridgeCommand("speedrun-study-all");
+    }
+    function studyRecommended(rec: StudyRecommendation): void {
+        if (rec.mode === StudyMode.BLOCKED) {
+            studySubtopic(rec.subtopicTag);
+        } else if (rec.mode === StudyMode.WITHIN_UNIT) {
+            studyUnit(rec.unitId);
+        } else {
+            studyAll();
+        }
+    }
+    function recStudyLabel(rec: StudyRecommendation): string {
+        switch (rec.mode) {
+            case StudyMode.BLOCKED:
+                return `Study next: blocked practice · ${NAME_BY_TAG.get(rec.subtopicTag) ?? rec.subtopicTag}`;
+            case StudyMode.WITHIN_UNIT:
+                return `Study next: within-unit interleaving · ${UNIT_NAME_BY_ID.get(rec.unitId) ?? rec.unitId}`;
+            case StudyMode.CROSS_UNIT:
+                return "Study next: cross-unit review (everything)";
+            default:
+                return "Review everything (all subtopics mastered)";
+        }
     }
 </script>
 
@@ -254,17 +287,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </div>
             {#if priorities.length > 0}
                 <p class="focus">
-                    <span class="focus-label">Study next</span>
+                    <span class="focus-label">Weakest</span>
                     <b>
                         {NAME_BY_TAG.get(priorities[0].tag) ?? priorities[0].subtopicId}
                     </b>
                     — {priorities[0].reason}
                 </p>
-                <button
-                    class="study-btn"
-                    on:click={() => studySubtopic(priorities[0].tag)}
-                >
-                    Study recommended subtopic (blocked practice)
+            {/if}
+            {#if recommendation}
+                {@const rec = recommendation}
+                <button class="study-btn" on:click={() => studyRecommended(rec)}>
+                    {recStudyLabel(rec)}
+                </button>
+                <button class="study-btn secondary" on:click={studyAll}>
+                    Study everything (cross-unit review)
                 </button>
             {/if}
             <p class="overall-note">
@@ -392,6 +428,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     {#if selectedUnit}
         {@const um = unitMap.get(selectedUnit.id)}
         {@const uc = colorFor(unitProgress(selectedUnit.id), um?.mastered ?? false)}
+        {@const unitId = selectedUnit.id}
         <section class="detail">
             <div class="detail-head">
                 <div>
@@ -426,6 +463,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 demonstrably mastered — measured from real reviews, not a predicted
                 score.
             </p>
+            <button class="study-btn" on:click={() => studyUnit(unitId)}>
+                Study this unit (within-unit interleaving)
+            </button>
         </section>
     {:else if selectedLeaf}
         {@const m = ev(selectedLeaf.tag)}
@@ -805,6 +845,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .study-btn:hover {
         filter: brightness(1.05);
+    }
+    .study-btn.secondary {
+        margin-top: 0.5rem;
+        background: transparent;
+        color: #6486bf;
+        border: 1px solid #6486bf;
     }
     .empty-hint {
         margin-top: 1.25rem;

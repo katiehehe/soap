@@ -8,6 +8,7 @@ import {
     borderPoint,
     computeLayout,
     edgeBetween,
+    groupPlanByTier,
     hasEnoughEvidence,
     leafProgress,
     leafStatus,
@@ -15,6 +16,8 @@ import {
     statusLabel,
     subRadius,
     TAXONOMY,
+    TIER,
+    tierMeta,
     unitRadius,
     unitWeight,
 } from "./lib";
@@ -173,5 +176,44 @@ describe("honest mastery display", () => {
         const mastered = leafProgress(evi(12, 0.95, 0.95, true));
         expect(gathering).toBeLessThan(inProgress);
         expect(inProgress).toBeLessThan(mastered);
+    });
+});
+
+describe("today's tiered study plan", () => {
+    test("groups items into tier sections in blocked -> within -> cross order", () => {
+        const items = [
+            { tier: TIER.crossUnit, id: "all" },
+            { tier: TIER.blocked, id: "b1" },
+            { tier: TIER.withinUnit, id: "w1" },
+            { tier: TIER.blocked, id: "b2" },
+        ];
+        const groups = groupPlanByTier(items);
+        expect(groups.map((g) => g.tier)).toEqual([
+            TIER.blocked,
+            TIER.withinUnit,
+            TIER.crossUnit,
+        ]);
+        // Order within a tier is preserved (engine already ranks the blocked tier).
+        expect(groups[0].items.map((i) => i.id)).toEqual(["b1", "b2"]);
+        expect(groups[1].items.map((i) => i.id)).toEqual(["w1"]);
+        expect(groups[2].items.map((i) => i.id)).toEqual(["all"]);
+    });
+
+    test("drops empty tiers", () => {
+        const groups = groupPlanByTier([{ tier: TIER.blocked, id: "b" }]);
+        expect(groups).toHaveLength(1);
+        expect(groups[0].tier).toBe(TIER.blocked);
+    });
+
+    test("empty plan -> no groups (the caught-up state)", () => {
+        expect(groupPlanByTier([])).toEqual([]);
+    });
+
+    test("each tier has a distinct human label", () => {
+        const labels = [TIER.blocked, TIER.withinUnit, TIER.crossUnit].map(
+            (t) => tierMeta(t).label,
+        );
+        expect(new Set(labels).size).toBe(3);
+        expect(tierMeta(TIER.blocked).label).toMatch(/blocked/i);
     });
 });

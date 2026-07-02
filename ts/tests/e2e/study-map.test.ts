@@ -28,6 +28,11 @@ test("study map renders the three-layer topic tree", async ({ page }) => {
     // The predicted exam score is explicitly withheld (give-up rule), never faked.
     await expect(page.getByText(/projected score stays hidden/)).toBeVisible();
 
+    // Today's plan is shown; on an empty collection nothing is due, so it
+    // honestly reads the caught-up state rather than inventing decks to study.
+    await expect(page.getByRole("heading", { name: "Today's plan" })).toBeVisible();
+    await expect(page.getByText(/Nothing due today/)).toBeVisible();
+
     // Tapping a subtopic opens its mastery detail (empty collection -> not started).
     await page.getByText("Order statistics").click();
     const detail = page.locator("section.detail");

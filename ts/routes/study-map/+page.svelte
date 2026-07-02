@@ -6,11 +6,17 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { onMount } from "svelte";
 
     import { bridgeCommand } from "@tslib/bridgecommand";
-    import { computeReadiness, getMasteryState } from "@generated/backend";
+    import {
+        computeReadiness,
+        getMasteryState,
+        getStudyPlan,
+    } from "@generated/backend";
     import { StudyMode } from "@generated/anki/speedrun_pb";
     import type {
         MasteryState,
         ReadinessResult,
+        StudyPlan,
+        StudyPlanItem,
         StudyRecommendation,
         SubtopicMastery,
         UnitMastery,
@@ -21,6 +27,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         COLORS,
         computeLayout,
         edgeBetween,
+        groupPlanByTier,
         hasEnoughEvidence,
         leafProgress,
         MIN_PROBLEMS,
@@ -57,6 +64,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     let result: MasteryState | null = null;
     let readiness: ReadinessResult | null = null;
+    let studyPlan: StudyPlan | null = null;
     let loadError = "";
     let selectedLeaf: LeafNode | null = null;
     let selectedUnit: UnitNode | null = null;
@@ -68,13 +76,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     onMount(async () => {
         try {
-            [result, readiness] = await Promise.all([
+            [result, readiness, studyPlan] = await Promise.all([
                 getMasteryState({
                     expectedSubtopics: allTags,
                     units: UNIT_WEIGHTS,
                     subtopicWeights: SUBTOPIC_WEIGHTS,
                 }),
                 computeReadiness({ expectedSubtopics: allTags, units: UNIT_WEIGHTS }),
+                getStudyPlan({
+                    expectedSubtopics: allTags,
+                    units: UNIT_WEIGHTS,
+                    subtopicWeights: SUBTOPIC_WEIGHTS,
+                }),
             ]);
         } catch (err) {
             loadError = String(err);
@@ -90,6 +103,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: overall = result?.overall ?? null;
     $: priorities = result?.priorities ?? [];
     $: recommendation = result?.recommendation ?? null;
+    // Today's plan: the decks with something due now, grouped by tier. Counts are
+    // Anki's own daily-limit-capped numbers, so they match the deck list.
+    $: planGroups = groupPlanByTier(studyPlan?.items ?? []);
 
     // Honest readiness give-up state — never a fabricated number. The score
     // itself lives on the Readiness page; here we only surface why it's withheld.
@@ -188,6 +204,36 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             studyAll();
         }
     }
+    // A plan row points at a real deck id, so open it directly (robust to the
+    // display names differing from the deck names).
+    function studyDeck(deckId: bigint): void {
+        bridgeCommand("speedrun-study-deck:" + deckId);
+    }
+    function planLabel(it: StudyPlanItem): string {
+        if (it.tier === StudyMode.BLOCKED) {
+            return NAME_BY_TAG.get(it.subtopicTag) ?? it.deckName;
+        }
+        if (it.tier === StudyMode.WITHIN_UNIT) {
+            return UNIT_NAME_BY_ID.get(it.unitId) ?? it.deckName;
+        }
+        if (it.tier === StudyMode.CROSS_UNIT) {
+            return "Everything (all units)";
+        }
+        return it.deckName;
+    }
+    function planCounts(it: StudyPlanItem): string {
+        const parts: string[] = [];
+        if (it.newCount > 0) {
+            parts.push(`${it.newCount} new`);
+        }
+        if (it.learnCount > 0) {
+            parts.push(`${it.learnCount} learning`);
+        }
+        if (it.reviewCount > 0) {
+            parts.push(`${it.reviewCount} due`);
+        }
+        return parts.join(" · ");
+    }
     function recStudyLabel(rec: StudyRecommendation): string {
         switch (rec.mode) {
             case StudyMode.BLOCKED:
@@ -222,6 +268,53 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     {#if loadError}
         <div class="notice error">Couldn't load mastery: {loadError}</div>
+    {/if}
+
+    {#if studyPlan}
+        <section class="plan" aria-label="Today's study plan">
+            <div class="plan-head">
+                <h2>Today's plan</h2>
+                <span class="plan-sub">the decks to study now, grouped by tier</span>
+            </div>
+            {#if planGroups.length === 0}
+                <p class="plan-empty">
+                    Nothing due today — you're caught up. Add new cards or come back
+                    tomorrow.
+                </p>
+            {:else}
+                {#each planGroups as g}
+                    <div class="tier">
+                        <div class="tier-head">
+                            <span
+                                class="tier-dot"
+                                style="background:{g.meta.color}"
+                            ></span>
+                            <b>{g.meta.label}</b>
+                            <span class="tier-blurb">{g.meta.blurb}</span>
+                        </div>
+                        {#each g.items as it}
+                            <div class="plan-row">
+                                <span class="plan-label">{planLabel(it)}</span>
+                                <span class="plan-count">{planCounts(it)}</span>
+                                <button
+                                    class="plan-study"
+                                    style="border-color:{g.meta.color}; color:{g.meta
+                                        .color};"
+                                    on:click={() => studyDeck(it.deckId)}
+                                >
+                                    Study
+                                </button>
+                            </div>
+                        {/each}
+                    </div>
+                {/each}
+                <p class="plan-note">
+                    Counts are today's cards after Anki's daily limits — the same
+                    numbers as the deck list. Blocked rows show a subtopic's own cards;
+                    higher tiers unlock as you clear gates.
+                </p>
+            {/if}
+        </section>
     {/if}
 
     {#if overall}
@@ -650,6 +743,96 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 0.82rem;
         line-height: 1.4;
         color: var(--fg-subtle, #6b7280);
+    }
+
+    /* Today's plan */
+    .plan {
+        border: 1px solid var(--border, #e2e2e5);
+        border-radius: 10px;
+        padding: 0.9rem 1.1rem 1rem;
+        margin: 0.25rem 0 1.25rem;
+        background: var(--canvas-elevated, #fbfbfc);
+    }
+    .plan-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+    .plan-head h2 {
+        margin: 0;
+        font-size: 1.05rem;
+    }
+    .plan-sub {
+        font-size: 0.8rem;
+        color: var(--fg-subtle, #6b7280);
+    }
+    .plan-empty {
+        margin: 0.6rem 0 0;
+        font-size: 0.88rem;
+        color: var(--fg-subtle, #4b5563);
+    }
+    .tier {
+        margin-top: 0.85rem;
+    }
+    .tier-head {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 0.3rem;
+    }
+    .tier-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        align-self: center;
+    }
+    .tier-blurb {
+        font-size: 0.78rem;
+        color: var(--fg-subtle, #6b7280);
+    }
+    .plan-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid var(--border-subtle, #efeff1);
+    }
+    .tier .plan-row:last-child {
+        border-bottom: none;
+    }
+    .plan-label {
+        flex: 1 1 auto;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .plan-count {
+        flex: 0 0 auto;
+        font-size: 0.8rem;
+        color: var(--fg-subtle, #6b7280);
+        white-space: nowrap;
+    }
+    .plan-study {
+        flex: 0 0 auto;
+        padding: 0.3rem 0.85rem;
+        border: 1px solid var(--border, #c7c7cc);
+        border-radius: 7px;
+        background: transparent;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.82rem;
+        cursor: pointer;
+    }
+    .plan-study:hover {
+        filter: brightness(0.96);
+        background: var(--canvas-inset, #f0f1f3);
+    }
+    .plan-note {
+        margin: 0.8rem 0 0;
+        font-size: 0.78rem;
+        line-height: 1.4;
+        color: var(--fg-subtle, #9ca3af);
     }
 
     /* Concept map */

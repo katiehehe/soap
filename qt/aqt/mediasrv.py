@@ -770,6 +770,7 @@ exposed_backend_list = [
     # SpeedrunService (SOA Exam P readiness)
     "compute_readiness",
     "get_mastery_state",
+    "get_study_plan",
 ]
 
 
@@ -839,12 +840,14 @@ def _check_dynamic_request_permissions():
         "/_anki/congratsInfo",
         # Speedrun (SOA Exam P fork): the readiness dashboard and study map are
         # first-party pages served in a dedicated webview kind, but we also allow
-        # these two read-only endpoints here as a reliable authorization path so
+        # these read-only endpoints here as a reliable authorization path so
         # they never depend on the webview's Authorization header injection.
-        # Both are read-only (compute a score / return mastery stats) and expose
-        # nothing more sensitive than the user's own local study data.
+        # All are read-only (compute a score / return mastery stats / list
+        # today's decks) and expose nothing more sensitive than the user's own
+        # local study data.
         "/_anki/computeReadiness",
         "/_anki/getMasteryState",
+        "/_anki/getStudyPlan",
     ):
         pass
     else:

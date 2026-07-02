@@ -60,8 +60,17 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
 - `GetPointsAtStakeOrder` - a points-at-stake review order: due cards sorted by
   topic importance weight x measured student weakness (1 - retention), highest
   value first. Read-only, so it never reschedules a card.
+- `GetStudyPlan` - today's tiered study plan: the decks to study now, grouped by
+  tier (blocked -> within-unit -> cross-unit), each carrying Anki's own
+  deck-tree counts for today (daily-limit capped, i.e. the same numbers the deck
+  list shows). It reads the measured gate state to assign a tier and attributes
+  the real counts to the matching subtopic/unit/root deck via the deck tree's
+  own structure (no display-name duplication). Read-only: it only reads
+  `deck_tree`, so it never reschedules or fabricates a score. The tiering itself
+  is a pure, unit-tested function (`build_study_plan`). This makes the scheduler
+  tiers visible as a _daily plan_ rather than an invisible reorder.
 
-All five RPCs are called from Python and covered by tests (~31 Rust unit tests
+All six RPCs are called from Python and covered by tests (~47 Rust unit tests
 across `service.rs` + `mastery.rs`, plus a Python-calling test for every RPC).
 
 The tier order and the points-at-stake order are now wired into the **live**

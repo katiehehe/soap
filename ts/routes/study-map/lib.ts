@@ -333,3 +333,74 @@ export function statusLabel(m?: SubtopicEvidence | null): string {
 export function hasEnoughEvidence(m?: SubtopicEvidence | null): boolean {
     return !!m && m.reviews >= MIN_PROBLEMS;
 }
+
+// ---------------------------------------------------------------------------
+// Today's tiered study plan
+//
+// The engine (GetStudyPlan) returns the decks with something due today, each
+// tagged with a tier. These helpers group + label them for display. Tier values
+// mirror StudyMode in proto/anki/speedrun.proto so this module stays pure (no
+// generated imports) and unit-testable.
+// ---------------------------------------------------------------------------
+
+export const TIER = {
+    blocked: 0,
+    withinUnit: 1,
+    crossUnit: 2,
+    allMastered: 3,
+} as const;
+
+export interface TierMeta {
+    label: string;
+    blurb: string;
+    color: string;
+}
+
+/** Human label, one-line rationale, and colour for a tier. */
+export function tierMeta(tier: number): TierMeta {
+    switch (tier) {
+        case TIER.blocked:
+            return {
+                label: "Blocked practice",
+                blurb: "Drill one subtopic in isolation to build the procedure.",
+                color: COLORS.amber,
+            };
+        case TIER.withinUnit:
+            return {
+                label: "Within-unit interleaving",
+                blurb: "Mix a unit's confusable sub-types to train recognition.",
+                color: COLORS.accent,
+            };
+        case TIER.crossUnit:
+            return {
+                label: "Cross-unit review",
+                blurb: "Interleave across units for spacing.",
+                color: COLORS.green,
+            };
+        default:
+            return { label: "Review", blurb: "", color: COLORS.grey };
+    }
+}
+
+export interface TieredItem {
+    tier: number;
+}
+
+export interface PlanGroup<T extends TieredItem> {
+    tier: number;
+    meta: TierMeta;
+    items: T[];
+}
+
+/** Group plan items into tier sections (blocked -> within-unit -> cross-unit),
+ * dropping empty tiers. Order within a tier is preserved (the engine already
+ * ranks the blocked tier by exam importance). */
+export function groupPlanByTier<T extends TieredItem>(items: T[]): PlanGroup<T>[] {
+    return [TIER.blocked, TIER.withinUnit, TIER.crossUnit]
+        .map((tier) => ({
+            tier,
+            meta: tierMeta(tier),
+            items: items.filter((i) => i.tier === tier),
+        }))
+        .filter((group) => group.items.length > 0);
+}

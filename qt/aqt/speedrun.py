@@ -83,7 +83,16 @@ class StudyMapDialog(QDialog):
     def _on_bridge_cmd(self, cmd: str) -> None:
         # The study map requests a tier of practice. Defer so we don't tear down
         # this webview from inside its own bridge callback.
-        if cmd.startswith("speedrun-study-unit:"):
+        if cmd.startswith("speedrun-study-deck:"):
+            # Today's-plan row: open a specific deck by id (robust to display
+            # names differing from deck names).
+            raw = cmd[len("speedrun-study-deck:") :]
+            try:
+                did = int(raw)
+            except ValueError:
+                return
+            self._deferred(lambda: open_deck_by_id(self.mw, did))
+        elif cmd.startswith("speedrun-study-unit:"):
             unit_id = cmd[len("speedrun-study-unit:") :]
             self._deferred(lambda: open_unit_deck(self.mw, unit_id))
         elif cmd == "speedrun-study-all":
@@ -147,6 +156,18 @@ def open_all_deck(mw: aqt.main.AnkiQt) -> bool:
     from anki.speedrun.seed import ROOT_DECK
 
     return _open_named_deck(mw, ROOT_DECK)
+
+
+def open_deck_by_id(mw: aqt.main.AnkiQt, deck_id: int) -> bool:
+    """Open a specific deck (by id) for review, for a Today's-plan row. Uses the
+    id the engine returned, so it's robust to display names differing from deck
+    names. Returns False if the deck no longer exists."""
+    from anki.decks import DeckId
+
+    if mw.col.decks.get(DeckId(deck_id), default=False) is None:
+        return False
+    _start_review(mw, DeckId(deck_id))
+    return True
 
 
 def study_recommended(mw: aqt.main.AnkiQt) -> None:

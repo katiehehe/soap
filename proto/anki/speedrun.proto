@@ -40,6 +40,13 @@ service SpeedrunService {
   // review queue can also use it behind a flag. Weakness is measured from real
   // reviews, so this never fabricates a score.
   rpc GetPointsAtStakeOrder(MasteryRequest) returns (PointsAtStakeOrder);
+
+  // Today's tiered study plan: the decks to study now, grouped by mastery tier
+  // (blocked -> within-unit -> cross-unit), each annotated with Anki's own
+  // due/new/learn counts for today. Counts are the daily-limit-capped numbers
+  // the deck list already shows (MEASURED scheduler state), attributed to a
+  // tier from real gate state; it never fabricates a score.
+  rpc GetStudyPlan(MasteryRequest) returns (StudyPlan);
 }
 
 // Empty: every SpeedrunService method is collection-scoped, so codegen
@@ -253,4 +260,30 @@ message PointsAtStakeCard {
 // more-urgent card). This is the "highest-value cards first" review order.
 message PointsAtStakeOrder {
   repeated PointsAtStakeCard cards = 1;
+}
+
+// One deck to study now, at a given tier, carrying today's real counts from
+// Anki's deck tree (daily-limit capped, i.e. the same numbers the deck list
+// shows). The tier comes from the measured gate state, so the plan never
+// invents a score. new/review/learn are today's due counts; total is the
+// deck's whole-subtree size for context.
+message StudyPlanItem {
+  StudyMode tier = 1;
+  int64 deck_id = 2;
+  string deck_name = 3;
+  // Set for BLOCKED (a single subtopic's deck).
+  string subtopic_tag = 4;
+  // Set for WITHIN_UNIT (a whole unit's deck).
+  string unit_id = 5;
+  uint32 new_count = 6;
+  uint32 review_count = 7;
+  uint32 learn_count = 8;
+  uint32 total_including_children = 9;
+}
+
+// The tiered "what to study today" plan: the decks with something due today,
+// grouped by tier and ordered blocked -> within-unit -> cross-unit. Empty when
+// nothing is due (the honest "you're caught up" state).
+message StudyPlan {
+  repeated StudyPlanItem items = 1;
 }

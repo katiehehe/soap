@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 
+use anki_proto::decks::DeckTreeNode;
 use anki_proto::speedrun::readiness_result;
 use anki_proto::speedrun::ComputeReadinessRequest;
 use anki_proto::speedrun::MasteryOrderedCards;
@@ -14,6 +15,8 @@ use anki_proto::speedrun::PointsAtStakeCard;
 use anki_proto::speedrun::PointsAtStakeOrder;
 use anki_proto::speedrun::ReadinessResult;
 use anki_proto::speedrun::SpeedrunPingResponse;
+use anki_proto::speedrun::StudyPlan;
+use anki_proto::speedrun::StudyPlanItem;
 use anki_proto::speedrun::StudyPriority;
 use anki_proto::speedrun::StudyRecommendation;
 use anki_proto::speedrun::SubtopicMastery;
@@ -21,6 +24,7 @@ use anki_proto::speedrun::UnitMastery;
 
 use crate::collection::Collection;
 use crate::error;
+use crate::speedrun::mastery::build_study_plan;
 use crate::speedrun::mastery::compute_pools;
 use crate::speedrun::mastery::order_new_cards;
 use crate::speedrun::mastery::parse_subtopic_tag;
@@ -30,6 +34,7 @@ use crate::speedrun::mastery::study_priorities;
 use crate::speedrun::mastery::subtopic_weakness;
 use crate::speedrun::mastery::weighted_mastery;
 use crate::speedrun::mastery::Pool;
+use crate::timestamp::TimestampSecs;
 
 /// Pre-registered give-up thresholds. Below EITHER of these, readiness returns
 /// NoScore. These are code, not a UI hint (PRD 9).
@@ -269,6 +274,82 @@ impl crate::services::SpeedrunService for Collection {
                 .collect(),
         })
     }
+
+    /// Today's tiered study plan. Sorts each subtopic/unit into a tier from the
+    /// measured gate state (blocked -> within-unit -> cross-unit), then
+    /// attaches Anki's own deck-tree counts for today (daily-limit capped,
+    /// the same numbers the deck list shows) to the matching deck. Only
+    /// decks with something due today are returned. Read-only reporting —
+    /// it never reschedules or fabricates a score; the tiering itself is
+    /// the pure, unit-tested `build_study_plan`.
+    fn get_study_plan(&mut self, input: MasteryRequest) -> error::Result<StudyPlan> {
+        let mut stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
+        let sub_weights: HashMap<String, f64> = input
+            .subtopic_weights
+            .iter()
+            .map(|w| (w.tag.clone(), w.weight))
+            .collect();
+        for s in &mut stats {
+            s.weight = sub_weights.get(&s.tag()).copied().unwrap_or(0.0);
+        }
+        let pools = compute_pools(&stats);
+
+        // Which deck holds each subtopic's cards (so we can read its counts).
+        let tag_deck = self.speedrun_subtopic_deck_ids(&input.expected_subtopics)?;
+
+        // Today's due counts from Anki's own deck tree (daily-limit capped), plus
+        // the tree's parent links so we can walk subtopic -> unit -> root deck.
+        let tree = self.deck_tree(Some(TimestampSecs::now()))?;
+        let mut counts: HashMap<i64, (u32, u32, u32, u32)> = HashMap::new();
+        let mut parent: HashMap<i64, i64> = HashMap::new();
+        collect_tree(&tree, 0, &mut counts, &mut parent);
+        let name_by_id: HashMap<i64, String> = self
+            .storage
+            .get_all_deck_names()?
+            .into_iter()
+            .map(|(id, name)| (id.0, name))
+            .collect();
+
+        let items = build_study_plan(&stats, &pools, &tag_deck, &counts, &parent)
+            .into_iter()
+            .map(|p| StudyPlanItem {
+                tier: study_mode_to_proto(p.tier) as i32,
+                deck_id: p.deck_id,
+                deck_name: name_by_id.get(&p.deck_id).cloned().unwrap_or_default(),
+                subtopic_tag: p.subtopic_tag.unwrap_or_default(),
+                unit_id: p.unit_id.unwrap_or_default(),
+                new_count: p.new,
+                review_count: p.review,
+                learn_count: p.learn,
+                total_including_children: p.total,
+            })
+            .collect();
+        Ok(StudyPlan { items })
+    }
+}
+
+/// Flatten a deck tree into per-deck counts `(new, review, learn, total)` and a
+/// child -> parent map. The top node has deck id 0, so a level-1 deck's parent
+/// is 0.
+fn collect_tree(
+    node: &DeckTreeNode,
+    parent_id: i64,
+    counts: &mut HashMap<i64, (u32, u32, u32, u32)>,
+    parent: &mut HashMap<i64, i64>,
+) {
+    counts.insert(
+        node.deck_id,
+        (
+            node.new_count,
+            node.review_count,
+            node.learn_count,
+            node.total_including_children,
+        ),
+    );
+    parent.insert(node.deck_id, parent_id);
+    for child in &node.children {
+        collect_tree(child, node.deck_id, counts, parent);
+    }
 }
 
 fn pool_to_proto(pool: Pool) -> anki_proto::speedrun::MasteryPool {
@@ -409,6 +490,7 @@ fn below_threshold_no_score(graded_reviews: u32, coverage_pct: f64) -> Readiness
 mod tests {
     use anki_proto::speedrun::readiness_result::Value;
     use anki_proto::speedrun::ComputeReadinessRequest;
+    use anki_proto::speedrun::MasteryRequest;
 
     use crate::collection::Collection;
     use crate::prelude::*;
@@ -610,5 +692,74 @@ mod tests {
             }
             Value::Score(_) => panic!("must not score below threshold"),
         }
+    }
+
+    fn add_tagged_note_in_deck(col: &mut Collection, tags: &[&str], deck: DeckId) {
+        let mut note = NoteAdder::basic(col).note();
+        note.tags = tags.iter().map(|s| s.to_string()).collect();
+        col.add_note(&mut note, deck).unwrap();
+    }
+
+    #[test]
+    fn study_plan_reads_real_deck_counts_for_blocked_subtopics() {
+        // End-to-end: the plan attributes Anki's own deck-tree counts to the
+        // right subtopic decks. All cards are new, so both subtopics are blocked
+        // and each subtopic deck shows its new card as due today.
+        let mut col = Collection::new();
+        let _root = col.get_or_create_normal_deck("SOA Exam P").unwrap();
+        let _unit = col
+            .get_or_create_normal_deck("SOA Exam P::General Probability")
+            .unwrap();
+        let a = col
+            .get_or_create_normal_deck("SOA Exam P::General Probability::A")
+            .unwrap();
+        let b = col
+            .get_or_create_normal_deck("SOA Exam P::General Probability::B")
+            .unwrap();
+        add_tagged_note_in_deck(&mut col, &["subtopic::general::a"], a.id);
+        add_tagged_note_in_deck(&mut col, &["subtopic::general::b"], b.id);
+
+        let plan = col
+            .get_study_plan(MasteryRequest {
+                expected_subtopics: vec![
+                    "subtopic::general::a".to_string(),
+                    "subtopic::general::b".to_string(),
+                ],
+                units: vec![],
+                subtopic_weights: vec![],
+            })
+            .unwrap();
+
+        assert_eq!(plan.items.len(), 2, "two blocked subtopic decks due today");
+        for it in &plan.items {
+            assert_eq!(
+                it.tier,
+                anki_proto::speedrun::StudyMode::Blocked as i32,
+                "all-new cards are blocked practice"
+            );
+            assert!(it.new_count >= 1, "each subtopic deck has a new card due");
+            assert!(
+                it.deck_name
+                    .starts_with("SOA Exam P::General Probability::"),
+                "points at the subtopic deck: {}",
+                it.deck_name
+            );
+        }
+        let ids: std::collections::HashSet<i64> = plan.items.iter().map(|i| i.deck_id).collect();
+        assert!(ids.contains(&a.id.0) && ids.contains(&b.id.0));
+    }
+
+    #[test]
+    fn study_plan_empty_when_nothing_due() {
+        // No cards anywhere -> nothing is actionable -> the honest empty plan.
+        let mut col = Collection::new();
+        let plan = col
+            .get_study_plan(MasteryRequest {
+                expected_subtopics: vec!["subtopic::general::a".to_string()],
+                units: vec![],
+                subtopic_weights: vec![],
+            })
+            .unwrap();
+        assert!(plan.items.is_empty());
     }
 }

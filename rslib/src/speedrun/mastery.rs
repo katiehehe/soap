@@ -428,6 +428,152 @@ pub(crate) fn recommend_study(stats: &[SubtopicStats]) -> StudyRec {
     none
 }
 
+/// One deck in the tiered "today" study plan, decoupled from proto so the
+/// tiering + actionable filter can be unit-tested without a live collection.
+/// Counts are today's real (daily-limit capped) deck-tree numbers.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PlanItem {
+    pub tier: StudyMode,
+    pub deck_id: i64,
+    pub subtopic_tag: Option<String>,
+    pub unit_id: Option<String>,
+    pub new: u32,
+    pub review: u32,
+    pub learn: u32,
+    pub total: u32,
+}
+
+/// Deck counts tuple `(new, review, learn, total_including_children)`.
+type Counts = (u32, u32, u32, u32);
+
+fn is_actionable(c: Counts) -> bool {
+    c.0 + c.1 + c.2 > 0
+}
+
+/// Build today's tiered study plan from measured gate state + real deck counts.
+///
+/// - BLOCKED: every uncleared subtopic (highest exam-importance first),
+///   pointing at its own subtopic deck — drill it in isolation.
+/// - WITHIN_UNIT: units that aren't fully mastered but have >= 2 cleared
+///   sub-types to interleave, pointing at the unit deck (the parent of its
+///   subtopic decks).
+/// - CROSS_UNIT: once any unit is mastered, the whole-exam deck (the
+///   grandparent of a subtopic deck) for cross-unit spacing.
+///
+/// Only decks with something due today are returned (`is_actionable`). Pure: it
+/// reorders/labels measured state and never fabricates a score.
+///
+/// `tag_deck` maps a subtopic tag to the deck holding its cards; `counts` maps
+/// a deck id to its today counts; `parent` maps a deck id to its parent (top =
+/// 0).
+pub(crate) fn build_study_plan(
+    stats: &[SubtopicStats],
+    pools: &HashMap<String, Pool>,
+    tag_deck: &HashMap<String, i64>,
+    counts: &HashMap<i64, Counts>,
+    parent: &HashMap<i64, i64>,
+) -> Vec<PlanItem> {
+    let mut items: Vec<PlanItem> = Vec::new();
+
+    // BLOCKED tier, importance order (study_priorities already drops cleared
+    // subtopics and, since uncleared == Blocked pool, this is the blocked set).
+    for p in study_priorities(stats) {
+        if pools.get(&p.tag).copied() != Some(Pool::Blocked) {
+            continue;
+        }
+        if let Some(&did) = tag_deck.get(&p.tag) {
+            if let Some(&c) = counts.get(&did).filter(|c| is_actionable(**c)) {
+                items.push(PlanItem {
+                    tier: StudyMode::Blocked,
+                    deck_id: did,
+                    subtopic_tag: Some(p.tag.clone()),
+                    unit_id: None,
+                    new: c.0,
+                    review: c.1,
+                    learn: c.2,
+                    total: c.3,
+                });
+            }
+        }
+    }
+
+    // Per-unit rollup, first-seen order.
+    let mut unit_order: Vec<String> = Vec::new();
+    let mut total: HashMap<String, u32> = HashMap::new();
+    let mut cleared: HashMap<String, u32> = HashMap::new();
+    let mut sample_deck: HashMap<String, i64> = HashMap::new();
+    for s in stats {
+        if !total.contains_key(&s.unit_id) {
+            unit_order.push(s.unit_id.clone());
+        }
+        *total.entry(s.unit_id.clone()).or_default() += 1;
+        if s.gate_cleared() {
+            *cleared.entry(s.unit_id.clone()).or_default() += 1;
+        }
+        if let Some(&did) = tag_deck.get(&s.tag()) {
+            sample_deck.entry(s.unit_id.clone()).or_insert(did);
+        }
+    }
+
+    // WITHIN_UNIT tier: not fully mastered, >= 2 cleared sub-types to interleave.
+    for unit in &unit_order {
+        let t = total.get(unit).copied().unwrap_or(0);
+        let c = cleared.get(unit).copied().unwrap_or(0);
+        let mastered = t > 0 && c == t;
+        if mastered || c < 2 {
+            continue;
+        }
+        let Some(&sub_did) = sample_deck.get(unit) else {
+            continue;
+        };
+        let unit_did = parent.get(&sub_did).copied().unwrap_or(0);
+        if unit_did == 0 {
+            continue;
+        }
+        if let Some(&cc) = counts.get(&unit_did).filter(|c| is_actionable(**c)) {
+            items.push(PlanItem {
+                tier: StudyMode::WithinUnit,
+                deck_id: unit_did,
+                subtopic_tag: None,
+                unit_id: Some(unit.clone()),
+                new: cc.0,
+                review: cc.1,
+                learn: cc.2,
+                total: cc.3,
+            });
+        }
+    }
+
+    // CROSS_UNIT tier: once a unit is mastered, interleave across units via the
+    // whole-exam deck (grandparent of a subtopic deck).
+    let any_cross = stats
+        .iter()
+        .any(|s| pools.get(&s.tag()).copied() == Some(Pool::CrossUnit));
+    if any_cross {
+        // All subtopics share one root, so any subtopic deck resolves it.
+        let root = sample_deck.values().next().map(|&sub_did| {
+            let unit_did = parent.get(&sub_did).copied().unwrap_or(0);
+            parent.get(&unit_did).copied().unwrap_or(0)
+        });
+        if let Some(root_did) = root.filter(|&d| d != 0) {
+            if let Some(&cc) = counts.get(&root_did).filter(|c| is_actionable(**c)) {
+                items.push(PlanItem {
+                    tier: StudyMode::CrossUnit,
+                    deck_id: root_did,
+                    subtopic_tag: None,
+                    unit_id: None,
+                    new: cc.0,
+                    review: cc.1,
+                    learn: cc.2,
+                    total: cc.3,
+                });
+            }
+        }
+    }
+
+    items
+}
+
 /// Order new cards by tier: blocked subtopics first (grouped so each is
 /// practised in isolation), then within-unit interleaving, then cross-unit
 /// interleaving. Cards whose subtopic is unknown sort last, preserving their
@@ -688,6 +834,42 @@ impl Collection {
             }
         }
         Ok(out)
+    }
+
+    /// Map each syllabus subtopic tag to the deck its cards live in. Used by
+    /// the tiered study plan to look up a subtopic deck's real due counts.
+    /// When a subtopic's cards are split across decks (unusual), the deck
+    /// holding the most of them wins, so the plan points at the deck that
+    /// actually has the cards. Read-only.
+    pub(crate) fn speedrun_subtopic_deck_ids(
+        &mut self,
+        expected_subtopics: &[String],
+    ) -> Result<HashMap<String, i64>> {
+        use std::collections::HashSet;
+        let expected: HashSet<&str> = expected_subtopics.iter().map(String::as_str).collect();
+        let sql = "
+            SELECT c.did, n.tags
+            FROM cards c JOIN notes n ON c.nid = n.id
+            WHERE n.tags LIKE '% subtopic::%'";
+        let mut stmt = self.storage.db.prepare_cached(sql)?;
+        let mut rows = stmt.query([])?;
+        // (tag, deck id) -> number of cards, so we can pick the dominant deck.
+        let mut tally: HashMap<(String, i64), u32> = HashMap::new();
+        while let Some(row) = rows.next()? {
+            let did: i64 = row.get(0)?;
+            let tags: String = row.get(1)?;
+            if let Some(tag) = tags.split_whitespace().find(|t| expected.contains(*t)) {
+                *tally.entry((tag.to_string(), did)).or_default() += 1;
+            }
+        }
+        let mut best: HashMap<String, (i64, u32)> = HashMap::new();
+        for ((tag, did), n) in tally {
+            let entry = best.entry(tag).or_insert((did, 0));
+            if n > entry.1 {
+                *entry = (did, n);
+            }
+        }
+        Ok(best.into_iter().map(|(tag, (did, _))| (tag, did)).collect())
     }
 
     /// Whether the opt-in three-tier mastery scheduler is enabled. Reads a
@@ -1156,6 +1338,120 @@ mod tests {
     fn recommend_cross_unit_when_all_cleared() {
         let stats = vec![stat("gp", "a", 12, 12, 0.95), stat("uv", "x", 12, 12, 0.95)];
         assert_eq!(recommend_study(&stats).mode, StudyMode::CrossUnit);
+    }
+
+    // --- tiered "today" study plan (pure tiering + actionable filter) ---
+
+    #[test]
+    fn study_plan_groups_decks_by_tier() {
+        // gp: a,b cleared + c blocked -> gp within-unit (2 cleared, not mastered).
+        // uv: its only subtopic cleared -> uv mastered -> cross-unit unlocks.
+        let stats = vec![
+            stat("gp", "a", 12, 12, 0.95),
+            stat("gp", "b", 12, 12, 0.95),
+            stat("gp", "c", 0, 0, 0.0),
+            stat("uv", "x", 12, 12, 0.95),
+        ];
+        let pools = compute_pools(&stats);
+        let tag_deck = HashMap::from([
+            ("subtopic::gp::a".to_string(), 101i64),
+            ("subtopic::gp::b".to_string(), 102),
+            ("subtopic::gp::c".to_string(), 103),
+            ("subtopic::uv::x".to_string(), 201),
+        ]);
+        // subtopic decks -> unit decks (10, 20) -> root (1) -> top (0)
+        let parent = HashMap::from([
+            (101i64, 10i64),
+            (102, 10),
+            (103, 10),
+            (201, 20),
+            (10, 1),
+            (20, 1),
+            (1, 0),
+        ]);
+        // Only the blocked deck (103), the gp unit deck (10) and root (1) have
+        // something due today; the rest are present but empty (must be filtered).
+        let counts = HashMap::from([
+            (103i64, (2u32, 0u32, 0u32, 2u32)),
+            (10, (2, 1, 0, 6)),
+            (1, (3, 4, 0, 8)),
+            (101, (0, 0, 0, 2)),
+            (102, (0, 0, 0, 2)),
+            (201, (0, 0, 0, 2)),
+            (20, (0, 0, 0, 2)),
+        ]);
+        let plan = build_study_plan(&stats, &pools, &tag_deck, &counts, &parent);
+        assert_eq!(plan.len(), 3, "one deck per unlocked tier");
+        assert_eq!(plan[0].tier, StudyMode::Blocked);
+        assert_eq!(plan[0].deck_id, 103);
+        assert_eq!(plan[0].subtopic_tag.as_deref(), Some("subtopic::gp::c"));
+        assert_eq!((plan[0].new, plan[0].review), (2, 0));
+        assert_eq!(plan[1].tier, StudyMode::WithinUnit);
+        assert_eq!(plan[1].deck_id, 10);
+        assert_eq!(plan[1].unit_id.as_deref(), Some("gp"));
+        assert_eq!(plan[2].tier, StudyMode::CrossUnit);
+        assert_eq!(plan[2].deck_id, 1);
+    }
+
+    #[test]
+    fn study_plan_omits_decks_with_nothing_due_today() {
+        // A blocked subtopic whose deck has nothing due today must not appear.
+        let stats = vec![stat("gp", "a", 0, 0, 0.0)];
+        let pools = compute_pools(&stats);
+        let tag_deck = HashMap::from([("subtopic::gp::a".to_string(), 101i64)]);
+        let parent = HashMap::from([(101i64, 10i64), (10, 1), (1, 0)]);
+        let counts = HashMap::from([
+            (101i64, (0u32, 0u32, 0u32, 3u32)),
+            (10, (0, 0, 0, 3)),
+            (1, (0, 0, 0, 3)),
+        ]);
+        assert!(build_study_plan(&stats, &pools, &tag_deck, &counts, &parent).is_empty());
+    }
+
+    #[test]
+    fn study_plan_blocked_ordered_by_importance() {
+        // Two blocked subtopics with cards due: the heavier one comes first.
+        let stats = vec![
+            stat_w("gp", "light", 0, 0, 0.0, 1.0),
+            stat_w("gp", "heavy", 0, 0, 0.0, 9.0),
+        ];
+        let pools = compute_pools(&stats);
+        let tag_deck = HashMap::from([
+            ("subtopic::gp::light".to_string(), 201i64),
+            ("subtopic::gp::heavy".to_string(), 202i64),
+        ]);
+        let parent = HashMap::from([(201i64, 10i64), (202, 10), (10, 1), (1, 0)]);
+        let counts = HashMap::from([(201i64, (1u32, 0u32, 0u32, 1u32)), (202, (1, 0, 0, 1))]);
+        let plan = build_study_plan(&stats, &pools, &tag_deck, &counts, &parent);
+        assert_eq!(plan.len(), 2);
+        assert_eq!(plan[0].subtopic_tag.as_deref(), Some("subtopic::gp::heavy"));
+        assert_eq!(plan[1].subtopic_tag.as_deref(), Some("subtopic::gp::light"));
+    }
+
+    #[test]
+    fn study_plan_no_within_unit_with_only_one_cleared() {
+        // One cleared sub-type isn't enough to interleave, so no within-unit tier
+        // (and nothing is mastered, so no cross-unit either).
+        let stats = vec![
+            stat("gp", "a", 12, 12, 0.95), // cleared -> WithinUnit pool
+            stat("gp", "b", 0, 0, 0.0),    // blocked
+        ];
+        let pools = compute_pools(&stats);
+        let tag_deck = HashMap::from([
+            ("subtopic::gp::a".to_string(), 101i64),
+            ("subtopic::gp::b".to_string(), 102i64),
+        ]);
+        let parent = HashMap::from([(101i64, 10i64), (102, 10), (10, 1), (1, 0)]);
+        let counts = HashMap::from([
+            (101i64, (1u32, 0u32, 0u32, 1u32)),
+            (102, (1, 0, 0, 1)),
+            (10, (2, 0, 0, 2)),
+            (1, (2, 0, 0, 2)),
+        ]);
+        let plan = build_study_plan(&stats, &pools, &tag_deck, &counts, &parent);
+        assert_eq!(plan.len(), 1);
+        assert_eq!(plan[0].tier, StudyMode::Blocked);
+        assert_eq!(plan[0].subtopic_tag.as_deref(), Some("subtopic::gp::b"));
     }
 
     #[test]

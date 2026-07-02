@@ -160,6 +160,78 @@ def test_undo_works_with_speedrun_scheduler_flags_on():
     assert col.db.scalar("select count() from revlog") == before
 
 
+def test_study_plan_blocked_on_fresh_deck():
+    # Today's plan: on a fresh deck every subtopic is blocked practice, ordered by
+    # exam importance, each pointing at a real subtopic deck with cards due today.
+    col = getEmptyCol()
+    build_deck(col)
+    weights = subtopic_weights()
+    # Single repeated field -> the generated wrapper returns the list directly.
+    items = col._backend.get_study_plan(
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[
+            speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in weights
+        ],
+    )
+    assert len(items) >= 1
+    # StudyMode.BLOCKED == 0: nothing is cleared, so every row is blocked practice.
+    for it in items:
+        assert it.tier == 0
+        assert it.subtopic_tag
+        assert it.new_count >= 1
+        assert it.deck_id > 0
+        assert it.deck_name.startswith("SOA Exam P::")
+    # Highest exam-importance first: the top blocked deck is a univariate subtopic
+    # (that unit carries the weight-9 distributions).
+    assert items[0].subtopic_tag.startswith("subtopic::univariate::")
+
+
+def test_study_plan_counts_match_seeded_cards():
+    # The plan's counts are Anki's own deck-tree numbers, not fabricated: each
+    # subtopic deck's "new" count equals how many cards the seed put in it (all
+    # new, under the daily cap).
+    from collections import Counter
+
+    col = getEmptyCol()
+    build_deck(col)
+    items = col._backend.get_study_plan(
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[
+            speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in subtopic_weights()
+        ],
+    )
+    want = Counter(subtopic_tag(c.unit_id, c.subtopic_id) for c in SEED_CARDS)
+    got = {it.subtopic_tag: it.new_count for it in items}
+    # Every seeded subtopic appears with exactly its seeded card count.
+    assert set(got) == set(want)
+    for tag, n in want.items():
+        assert got[tag] == n, (tag, got[tag], n)
+
+
+def test_study_plan_drops_decks_with_nothing_due():
+    # Answer every card in one subtopic so it has nothing due today; its deck must
+    # drop out of the plan (the actionable filter), while others remain.
+    col = getEmptyCol()
+    build_deck(col)
+    target = subtopic_tag("general", "sets_axioms")
+    deck_name = "SOA Exam P::General Probability::Sets, sample spaces, and axioms"
+    col.decks.select(col.decks.id(deck_name))
+    col.reset()
+    while (card := col.sched.getCard()) is not None:
+        col.sched.answerCard(card, 3)  # good -> leaves "new", not due again today
+
+    items = col._backend.get_study_plan(
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[],
+    )
+    tags = {it.subtopic_tag for it in items}
+    assert target not in tags, "a subtopic with nothing due today must be dropped"
+    assert len(tags) >= 1, "other subtopics still have new cards due"
+
+
 def test_ablation_build_configs_build_a_valid_queue():
     # The study-feature ablation runs three builds off two config flags. Build 1
     # (Full) and Build 2 (Ablated) differ only by speedrunAblateWithinUnit; both

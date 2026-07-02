@@ -40,7 +40,7 @@ method fixed in advance so no number is ever invented after the fact.
 - **Honest state today:** the seed deck has no reviews, so calibration abstains;
   on a real study history it produces real numbers.
 
-## 2. Performance — "can you solve a NEW exam-style question?" **[planned]**
+## 2. Performance — "can you solve a NEW exam-style question?" **[pipeline built; abstains on real data]**
 
 Per SPOV 1 this measures **procedure** (recognition + recall + setup), the
 application component FSRS cannot see — so it must be allowed to diverge from
@@ -50,14 +50,20 @@ memory where transfer is weak.
   (numbers regenerate each time), not a clean cue.
 - **Features:** subtopic mastery (from the gate: accuracy + FSRS retrievability),
   difficulty tag, response time, and coverage.
-- **Model:** a small **calibrated** classifier (logistic regression / gradient
-  boosting) trained on a **seeded held-out split**
-  (`pylib/anki/speedrun/evalsplit.py`) and scored with `calibration.py`
-  (Brier / log loss / ECE) plus accuracy and AUC.
-- **Data & safety:** requires a held-out set of disguised performance items with
-  correctness labels, kept out of training and verified by the leakage scan
-  (`tools/speedrun/leakage_scan.py`). **Until that dataset exists, performance
-  reads "not yet measured" — never a fabricated number.**
+- **Model (built):** a small **calibrated** logistic-regression classifier in
+  `pylib/anki/speedrun/performance.py` — deterministic seeded SGD, no external ML
+  deps — trained on a **seeded held-out split** (`evalsplit.py`) and scored with
+  `calibration.py` (Brier / log loss / ECE) plus accuracy and AUC, against a
+  majority-class baseline. Unit-tested in `test_speedrun_performance.py`.
+- **Validation:** `make performance` runs the full pipeline on a **clearly
+  labelled synthetic fixture** (`tools/speedrun/evals/performance_eval.py`):
+  seeded split, leakage scan (clean), calibrated, beats the baseline. This proves
+  the pipeline end to end; the numbers are synthetic, **not** a real student
+  result.
+- **Data & safety:** a real result needs a held-out set of disguised performance
+  items with correctness labels, kept out of training and verified by the leakage
+  scan. **Until that dataset exists, performance reads "not yet measured" — never
+  a fabricated number.**
 - **Divergence check:** the paraphrase test (rubric 7d) compares clean-cue recall
   against reworded-question accuracy and reports the gap, confirming performance
   is not just memory in disguise.

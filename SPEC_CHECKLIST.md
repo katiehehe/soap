@@ -62,9 +62,9 @@ Desktop (AI):
 ## 5. SUNDAY — prove it, ship both
 
 - [~] Memory model calibrated: reproducible harness built (`make calibration` → FSRS held-out log loss + RMSE(bins); `calibration.py` metrics unit-tested). Produces the chart/numbers on a real review history; abstains honestly otherwise.
-- [ ] Performance model: accuracy on held-out exam-style questions. Method + pipeline fixed (`docs/score-models.md`, seeded split, `calibration.py`); awaiting the disguised-item dataset.
+- [~] Performance model: accuracy on held-out exam-style questions. Pipeline BUILT — a deterministic calibrated logistic model (`pylib/anki/speedrun/performance.py`) with a seeded held-out split + leakage scan + calibration + majority-class baseline; validated end-to-end on a synthetic fixture via `make performance` (beats baseline, calibrated). Awaiting a real labelled disguised-item dataset; abstains ("not yet measured") until then.
 - [~] Score mapping written down, with a range: `docs/score-models.md` (memory/performance/readiness, give-up rule, honesty bundle). Readiness stays `NoScore` until the performance model is calibrated.
-- [~] Study feature tested with 3 builds, equal study time: (1) full three-tier scheduler, (2) within-unit interleaving removed → global mixed pool, (3) plain Anki. The Full-vs-plain switch now exists as the `speedrunMasteryScheduler` flag (live-queue ordering on/off); the run + pre-registered metric + nulls are still to be executed (`docs/study-feature-ablation.md`).
+- [~] Study feature tested with 3 builds, equal study time: (1) full three-tier scheduler, (2) within-unit interleaving removed → global mixed pool, (3) plain Anki. All three are now selectable via config: build 1 = `speedrunMasteryScheduler` on + `speedrunAblateWithinUnit` off; build 2 = both on; build 3 = scheduler off (plain). The Full-vs-Ablated ordering difference is covered by Rust tests. The RUN + pre-registered metric + nulls are still to be executed (`docs/study-feature-ablation.md`).
 - [ ] Honest reporting, including results that did not work.
 - [ ] Packaged desktop installer + packaged phone build (signed APK, or iOS TestFlight/sideload).
 - [ ] Sync conflict handling correct + documented.
@@ -85,7 +85,7 @@ Desktop (AI):
 ## 7. Score-model steps (section 9)
 
 - [~] Step 1 (req): memory calibrated, proven on held-back reviews. Reproducible harness built: `make calibration` runs FSRS's held-out (time-series split) log loss + RMSE via the engine, and `pylib/anki/speedrun/calibration.py` (Brier/log loss/ECE/reliability bins, unit-tested) is the reusable metrics layer. Abstains honestly on a thin history (needs a real study history to print numbers).
-- [ ] Step 2 (req): predict held-back exam-style question correctness (mastery, difficulty, timing, coverage). Method fixed in `docs/score-models.md`; awaiting a disguised-item dataset — reads "not yet measured" until then (never fabricated).
+- [~] Step 2 (req): predict held-back exam-style question correctness (mastery, difficulty, timing, coverage). Pipeline built (`performance.py` + `make performance`) and validated on a synthetic fixture (seeded, leakage-clean, calibrated, beats baseline); awaiting a real disguised-item dataset — reads "not yet measured" until then (never fabricated).
 - [~] Step 3 (req): turn performance into a score, method written down (`docs/score-models.md`), range shown. Give-up rule live in Rust; readiness stays `NoScore` until the performance model is calibrated (no invented number).
 - [ ] Step 4 (bonus): validate against real students with study history + practice-test scores.
 

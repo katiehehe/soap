@@ -2,8 +2,29 @@
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 from anki import speedrun_pb2
-from anki.speedrun import expected_subtopic_tags, unit_weights
+from anki.speedrun import (
+    expected_subtopic_tags,
+    load_topics,
+    subtopic_weights,
+    unit_weights,
+)
 from tests.shared import getEmptyCol
+
+
+def test_subtopic_weights_sum_to_unit_midpoints():
+    # Per-subtopic importance weights are editable emphasis estimates, but they
+    # stay grounded in the official section weights: each unit's subtopic weights
+    # must sum to that unit's published midpoint (so the whole syllabus sums to
+    # ~100). This guards against the emphasis silently drifting from the exam.
+    topics = load_topics()
+    sw = dict(subtopic_weights(topics))
+    assert len(sw) == len(expected_subtopic_tags(topics))
+    assert all(w > 0 for w in sw.values()), "every subtopic needs a positive weight"
+
+    midpoints = dict(unit_weights(topics))
+    for unit in topics["units"]:
+        total = sum(float(s["weight"]) for s in unit["subtopics"])
+        assert abs(total - midpoints[unit["id"]]) < 1e-9, unit["id"]
 
 
 def test_speedrun_ping_end_to_end():

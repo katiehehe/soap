@@ -49,6 +49,26 @@ def unit_weights(topics: dict[str, Any] | None = None) -> list[tuple[str, float]
     return weights
 
 
+def subtopic_weights(topics: dict[str, Any] | None = None) -> list[tuple[str, float]]:
+    """Relative per-subtopic importance weights, keyed by subtopic tag.
+
+    These are editable emphasis estimates (see ``weights_note`` in the topic
+    map), not official SOA figures: SOA publishes weights only at the unit level,
+    so each unit's subtopic weights are authored to sum to that unit's published
+    section midpoint. Passed to the mastery RPC so the engine can compute an
+    importance-weighted mastery rollup, and used by the study map to size each
+    subtopic bubble. They never affect the honesty/give-up thresholds.
+    """
+    topics = topics or load_topics()
+    weights: list[tuple[str, float]] = []
+    for unit in topics["units"]:
+        for subtopic in unit["subtopics"]:
+            weights.append(
+                (subtopic_tag(unit["id"], subtopic["id"]), float(subtopic["weight"]))
+            )
+    return weights
+
+
 def expected_subtopic_tags(topics: dict[str, Any] | None = None) -> list[str]:
     """Every subtopic tag in the syllabus (the denominator for coverage)."""
     topics = topics or load_topics()

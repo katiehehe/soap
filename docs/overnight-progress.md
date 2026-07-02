@@ -82,4 +82,26 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
   transitions that honour `prefers-reduced-motion`. Passes real unit + subtopic
   weights to `getMasteryState`.
 - Green: svelte-check, eslint, prettier, vitest geometry, full `./ninja check`,
-  and the study-map Playwright e2e (screenshot `out/study-map.png`).
+  and the study-map Playwright e2e (screenshot `out/study-map.png`). Commit
+  `ba5860e7b`.
+
+## Phase 3 — live queue + honest calibration
+
+### Phase 3.1 — opt-in three-tier mastery ordering in the live queue (done)
+
+- The real scheduler change: when the config flag `speedrunMasteryScheduler` is
+  on, `Collection::build_queues` reorders the gathered new cards by mastery tier
+  (Blocked -> WithinUnit -> CrossUnit, blocked grouped by subtopic). OFF by
+  default, so upstream Anki's queue is unchanged unless a user opts in (this flag
+  is also the ablation's Full-vs-plain switch).
+- Implemented in `rslib/src/speedrun/mastery.rs` (`speedrun_reorder_new_cards` +
+  `speedrun_note_subtopic_map` + the flag helper), reusing the already-tested
+  `compute_pools`/`order_new_cards`/`speedrun_subtopic_stats`. Read-only (no DB
+  writes), so undo and integrity are untouched. The flag is a plain string config
+  key, so upstream's `BoolKey` enum is not modified. Upstream hook is 3 lines in
+  `scheduler/queue/builder/mod.rs` (logged in `docs/upstream-touched.md`).
+- Tests (4 new, 23 speedrun rust tests total): flag defaults off + settable;
+  reorder groups blocked subtopics and puts untagged cards last; no-op without
+  syllabus cards; `build_queues` builds a valid 2-card queue with the flag on.
+- Safety gates all passed: full `./ninja check` green (no scheduler regression),
+  and `make crash-test` survived 20 mid-review SIGKILLs with zero corruption.

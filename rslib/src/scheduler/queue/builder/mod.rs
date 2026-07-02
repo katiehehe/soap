@@ -287,6 +287,14 @@ impl Collection {
 
         queues.gather_cards(self)?;
 
+        // Speedrun (SOA Exam P fork): opt-in three-tier mastery ordering of new
+        // cards. Off by default, so upstream behaviour is unchanged unless the
+        // user enables it; read-only, so undo and collection integrity are
+        // unaffected.
+        if self.speedrun_mastery_scheduler_enabled() {
+            self.speedrun_reorder_new_cards(&mut queues.new)?;
+        }
+
         let queues = queues.build(self.learn_ahead_secs() as i64);
 
         Ok(queues)

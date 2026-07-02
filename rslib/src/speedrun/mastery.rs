@@ -14,7 +14,15 @@ use std::collections::HashMap;
 use crate::collection::Collection;
 use crate::error::Result;
 use crate::prelude::CardId;
+use crate::prelude::NoteId;
+use crate::scheduler::queue::NewCard;
 use crate::timestamp::TimestampSecs;
+
+/// Config key (string, so we don't touch upstream's `BoolKey` enum) for the
+/// opt-in three-tier mastery scheduler. Default OFF: with it unset the live
+/// queue is built exactly as upstream Anki builds it, which keeps the demo path
+/// and the ablation's plain-Anki baseline untouched.
+pub(crate) const MASTERY_SCHEDULER_KEY: &str = "speedrunMasteryScheduler";
 
 /// Pre-registered gate (PRD 8): a subtopic clears when it has been executed
 /// enough times, accurately, and its memory is strong.
@@ -463,11 +471,94 @@ impl Collection {
         }
         Ok(out)
     }
+
+    /// Whether the opt-in three-tier mastery scheduler is enabled. Reads a
+    /// plain string config key so upstream's `BoolKey` enum is untouched;
+    /// defaults to false so the live queue is unchanged unless a user
+    /// explicitly turns it on.
+    pub(crate) fn speedrun_mastery_scheduler_enabled(&self) -> bool {
+        self.get_config_optional::<bool, _>(MASTERY_SCHEDULER_KEY)
+            .unwrap_or(false)
+    }
+
+    /// Map each note that carries a `subtopic::` tag to its first such tag.
+    /// Used to attach a subtopic to each gathered new card for tier
+    /// ordering.
+    fn speedrun_note_subtopic_map(&mut self) -> Result<HashMap<NoteId, String>> {
+        let sql = "SELECT id, tags FROM notes WHERE tags LIKE '% subtopic::%'";
+        let mut stmt = self.storage.db.prepare_cached(sql)?;
+        let mut rows = stmt.query([])?;
+        let mut out = HashMap::new();
+        while let Some(row) = rows.next()? {
+            let nid: i64 = row.get(0)?;
+            let tags: String = row.get(1)?;
+            if let Some(tag) = tags
+                .split_whitespace()
+                .find(|t| t.starts_with("subtopic::"))
+            {
+                out.insert(NoteId(nid), tag.to_string());
+            }
+        }
+        Ok(out)
+    }
+
+    /// Reorder already-gathered new cards by mastery tier: Blocked (practise a
+    /// subtopic in isolation) -> WithinUnit (interleave confusable sub-types)
+    /// -> CrossUnit (spacing). Blocked subtopics are grouped so each is
+    /// practised together. Cards without a subtopic tag keep their relative
+    /// order at the end, so non-syllabus decks are unaffected. Read-only
+    /// (no writes, so undo and integrity are untouched); only called when
+    /// the flag is on.
+    pub(crate) fn speedrun_reorder_new_cards(&mut self, new: &mut Vec<NewCard>) -> Result<()> {
+        if new.len() < 2 {
+            return Ok(());
+        }
+        let note_subtopics = self.speedrun_note_subtopic_map()?;
+        // If no gathered new card is a syllabus card, leave the queue untouched.
+        if !new.iter().any(|c| note_subtopics.contains_key(&c.note_id)) {
+            return Ok(());
+        }
+        // Pools depend on whole-unit mastery, so compute stats over every
+        // syllabus subtopic present in the collection, not just the new cards'.
+        let mut seen = std::collections::HashSet::new();
+        let all_subtopics: Vec<String> = note_subtopics
+            .values()
+            .filter(|t| seen.insert((*t).clone()))
+            .cloned()
+            .collect();
+        let stats = self.speedrun_subtopic_stats(&all_subtopics)?;
+        let pools = compute_pools(&stats);
+
+        let empty = String::new();
+        let cards: Vec<(CardId, String)> = new
+            .iter()
+            .map(|c| {
+                (
+                    c.id,
+                    note_subtopics.get(&c.note_id).unwrap_or(&empty).clone(),
+                )
+            })
+            .collect();
+        let ordered = order_new_cards(&cards, &pools);
+
+        let mut by_id: HashMap<CardId, NewCard> = new.iter().map(|c| (c.id, *c)).collect();
+        let reordered: Vec<NewCard> = ordered
+            .into_iter()
+            .filter_map(|id| by_id.remove(&id))
+            .collect();
+        // Only apply if it's a clean permutation (never drop or dupe a card).
+        if reordered.len() == new.len() {
+            *new = reordered;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
+    use crate::tests::NoteAdder;
 
     fn stat(unit: &str, sub: &str, reviews: u32, correct: u32, mean_r: f64) -> SubtopicStats {
         SubtopicStats {
@@ -676,5 +767,84 @@ mod tests {
         );
         assert_eq!(parse_subtopic_tag("unit::univariate"), None);
         assert_eq!(parse_subtopic_tag("subtopic::onlyunit"), None);
+    }
+
+    // --- live-queue integration (the opt-in three-tier mastery scheduler) ---
+
+    fn add_tagged(col: &mut Collection, tags: &[&str]) -> (CardId, NoteId) {
+        let mut note = NoteAdder::basic(col).note();
+        note.tags = tags.iter().map(|s| s.to_string()).collect();
+        col.add_note(&mut note, DeckId(1)).unwrap();
+        let cid: i64 = col
+            .storage
+            .db
+            .query_row("select id from cards where nid = ?", [note.id.0], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        (CardId(cid), note.id)
+    }
+
+    fn nc(id: CardId, note_id: NoteId) -> NewCard {
+        NewCard {
+            id,
+            note_id,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn mastery_scheduler_flag_defaults_off_and_is_settable() {
+        let mut col = Collection::new();
+        assert!(!col.speedrun_mastery_scheduler_enabled());
+        col.set_config_json(MASTERY_SCHEDULER_KEY, &true, false)
+            .unwrap();
+        assert!(col.speedrun_mastery_scheduler_enabled());
+    }
+
+    #[test]
+    fn reorder_groups_blocked_subtopics_and_puts_untagged_last() {
+        // All cards are new/unreviewed, so every subtopic is Blocked. The tier
+        // ordering then groups blocked cards by subtopic tag, and cards with no
+        // subtopic tag sort last (non-syllabus cards are never reordered ahead).
+        let mut col = Collection::new();
+        let (cb1, nb1) = add_tagged(&mut col, &["subtopic::gp::b"]);
+        let (cx1, nx1) = add_tagged(&mut col, &["subtopic::uv::x"]);
+        let (cb2, nb2) = add_tagged(&mut col, &["subtopic::gp::b"]);
+        let (cu, nu) = add_tagged(&mut col, &[]); // no subtopic tag
+
+        let mut new = vec![nc(cx1, nx1), nc(cb1, nb1), nc(cu, nu), nc(cb2, nb2)];
+        col.speedrun_reorder_new_cards(&mut new).unwrap();
+
+        let ids: Vec<CardId> = new.iter().map(|c| c.id).collect();
+        // "subtopic::gp::b" < "subtopic::uv::x", grouped; untagged card last.
+        assert_eq!(ids, vec![cb1, cb2, cx1, cu]);
+    }
+
+    #[test]
+    fn reorder_is_noop_without_syllabus_cards() {
+        let mut col = Collection::new();
+        let (c1, n1) = add_tagged(&mut col, &["leech"]);
+        let (c2, n2) = add_tagged(&mut col, &[]);
+        let mut new = vec![nc(c2, n2), nc(c1, n1)];
+        let before: Vec<CardId> = new.iter().map(|c| c.id).collect();
+        col.speedrun_reorder_new_cards(&mut new).unwrap();
+        let after: Vec<CardId> = new.iter().map(|c| c.id).collect();
+        assert_eq!(before, after, "non-syllabus queues must be left untouched");
+    }
+
+    #[test]
+    fn build_queues_runs_with_mastery_scheduler_on() {
+        // The live hook must build a valid queue (and not drop cards) when the
+        // flag is on. Reordering is read-only, so this also exercises that the
+        // queue build stays intact end to end.
+        let mut col = Collection::new();
+        add_tagged(&mut col, &["subtopic::gp::b"]);
+        add_tagged(&mut col, &["subtopic::uv::x"]);
+        col.set_config_json(MASTERY_SCHEDULER_KEY, &true, false)
+            .unwrap();
+        col.set_current_deck(DeckId(1)).unwrap();
+        let queued = col.get_queued_cards(5, false).unwrap();
+        assert_eq!(queued.cards.len(), 2);
     }
 }

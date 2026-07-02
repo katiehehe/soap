@@ -32,6 +32,13 @@ Format: `path - what changed - merge risk (low/med/high)`.
   `_centerLinks()` plus `_speedrun_readiness_handler()` /
   `_speedrun_study_map_handler()` methods, so the pages are first-class toolbar
   buttons, not only Tools-menu items - med. Append-only additions.
+- `rslib/src/scheduler/queue/builder/mod.rs` - in `Collection::build_queues`,
+  after `gather_cards`, a 3-line opt-in hook that reorders the gathered new cards
+  by mastery tier when the `speedrunMasteryScheduler` config flag is on (default
+  off) - low/med. The reorder itself lives in `rslib/src/speedrun/mastery.rs`
+  (`speedrun_reorder_new_cards`), is read-only (no writes, so undo/integrity are
+  untouched), and the flag uses a plain string config key so upstream's `BoolKey`
+  enum is not modified. With the flag off the queue is built exactly as upstream.
 
 ## New files added by the fork (no merge risk)
 

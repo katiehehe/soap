@@ -26,7 +26,7 @@ class ReadinessDialog(QDialog):
         self.setWindowTitle("Exam readiness (Speedrun)")
         disable_help_button(self)
 
-        self.web = AnkiWebView(kind=AnkiWebViewKind.DEFAULT)
+        self.web = AnkiWebView(kind=AnkiWebViewKind.SPEEDRUN)
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.web)
@@ -58,7 +58,7 @@ class StudyMapDialog(QDialog):
         self.setWindowTitle("Study map (Speedrun)")
         disable_help_button(self)
 
-        self.web = AnkiWebView(kind=AnkiWebViewKind.DEFAULT)
+        self.web = AnkiWebView(kind=AnkiWebViewKind.SPEEDRUN)
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.web)

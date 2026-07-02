@@ -58,7 +58,7 @@ Fork Anki's real, current stack and share its engine across both apps.
 - **Sync:** Anki's built-in sync (self-hostable Rust sync server) reused for two-way sync; conflict rule documented.
 - **Score models (Python, desktop):** memory = FSRS; performance = a small calibrated classifier (e.g. logistic regression / gradient-boosted trees) that predicts correctness on _disguised, parameterized_ exam-style questions from mastery, difficulty, response time, coverage; readiness = a written-down mapping from performance + coverage to P(pass) + a 0–10 band, with a bootstrap range.
 - **AI (Friday):** retrieval-grounded card/explanation generation from **named sources**, a verifier against a gold set, and a keyword/vector baseline to beat. Fails closed when off/offline.
-- **Tests/evals:** `pytest` (Python), `cargo test` (Rust), a seeded held-out split, a leakage-scan script wired to CI, the 3-build ablation harness, and `make bench`.
+- **Tests/evals:** `pytest` (Python), `cargo test` (Rust), a seeded held-out split, a leakage-scan script (run in `./ninja check` via `test_speedrun_split`), the 3-build ablation (pre-registered in `docs/study-feature-ablation.md`; run Sunday), and `make bench`.
 
 ### System architecture
 
@@ -184,7 +184,7 @@ stateDiagram-v2
 
 Required with the change: a new **protobuf** message called from Python; **≥ 3 Rust unit tests** (tier transitions, the gate condition, and pool ordering) + **1 Python-calling test**; **undo works**, **no corruption**; a one-page `docs/rust-change.md` on why this belongs in Rust; `docs/upstream-touched.md` listing files touched + merge risk. Must be fast enough to power the dashboard on 50k cards.
 
-**Status (built):** the mastery model, RPCs, and tier ordering exist, and the ordering is now wired into the **live** new-card queue (`build_queues`) behind an opt-in, default-off `speedrunMasteryScheduler` flag (read-only, so undo/integrity are untouched; off by default so the ablation's plain-Anki baseline is unchanged). `GetMasteryState` also returns an **importance-weighted mastery rollup** and a **"what to study next"** ranking; the study map renders topics as **importance-sized bubbles** (size = exam weight, colour = measured mastery).
+**Status (built):** the mastery model, RPCs, and tier ordering exist, and the ordering is now wired into the **live** new-card queue (`build_queues`) behind an opt-in, default-off `speedrunMasteryScheduler` flag (read-only, so undo/integrity are untouched; off by default so the ablation's plain-Anki baseline is unchanged). `GetMasteryState` also returns an **importance-weighted mastery rollup** and a **"what to study next"** ranking; the study map renders topics as **importance-sized bubbles** (size = exam weight, colour = measured mastery). A fifth RPC `GetPointsAtStakeOrder` (and the opt-in `speedrunPointsAtStake` live review flag) brings weak-topic due cards back sooner by sorting them by topic weight × measured student weakness — order-only, so FSRS intervals stay valid.
 
 ## 9. The three models & the give-up rule
 
@@ -219,7 +219,7 @@ Encode the official Exam P outline as the topic tree (the 3 units and their subt
 
 ## 14. Testing & evals (maps to challenges 7a–7h)
 
-Held-out split with a fixed seed; leakage scan wired to CI (7e); paraphrase test (7d); AI card check (7f); crash + offline (7g); `make bench` on 50k cards (7h). See `SPEC_CHECKLIST.md` §6 and the `testing-evals` rule.
+Held-out split with a fixed seed; leakage scan run in `./ninja check` (7e); paraphrase test (7d); AI card check (7f); crash + offline (7g); `make bench` on 50k cards (7h). See `SPEC_CHECKLIST.md` §6 and the `testing-evals` rule.
 
 ## 15. Speed & reliability targets (section 10)
 

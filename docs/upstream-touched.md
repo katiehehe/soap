@@ -45,12 +45,15 @@ Format: `path - what changed - merge risk (low/med/high)`.
 
 ## New files added by the fork (no merge risk)
 
-- `proto/anki/speedrun.proto` - `SpeedrunService` (`SpeedrunPing`, `ComputeReadiness`).
+- `proto/anki/speedrun.proto` - `SpeedrunService` (5 RPCs: `SpeedrunPing`,
+  `ComputeReadiness`, `GetMasteryState`, `GetMasteryOrderedNewCards`,
+  `GetPointsAtStakeOrder`).
 - `rslib/src/speedrun/mod.rs`, `rslib/src/speedrun/service.rs` - service impl + tests.
 - `qt/aqt/speedrun.py` - the readiness dashboard + study map dialogs (host the pages).
 - `ts/routes/readiness-dashboard/+page.svelte` - dashboard (three signals + honesty).
-- `ts/routes/study-map/+page.svelte` - the three-layer topic tree with mastery-coloured
-  edges (calls `get_mastery_state`).
+- `ts/routes/study-map/*` - the importance-sized bubble concept map (bubble size =
+  exam weight, colour = measured mastery) + geometry lib/tests; calls
+  `get_mastery_state`.
 - `pylib/anki/speedrun/__init__.py`, `.../exam_p_topics.json`, `.../seed.py` - topic map
   (official 2026-05 outline), tag helpers, and the tagged deck builder.
 - `tools/speedrun/build_exam_p_deck.py` - CLI to seed the deck / export an importable `.apkg`.

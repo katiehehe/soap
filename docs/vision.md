@@ -7,7 +7,8 @@ exists today, it is marked **[built]**; planned pieces are **[planned]**.
 ## The core idea: a mastery tree you climb
 
 The home screen is a **three-layer topic tree** of the official SOA Exam P
-syllabus:
+syllabus, now rendered as an **importance-sized bubble concept map** (bubble size
+= a topic's exam weight, colour = measured mastery):
 
 ```
                 Exam P (root)
@@ -86,8 +87,11 @@ counts:
 
 ## What exists today (so we build on it, not around it)
 
-- Rust engine: `SpeedrunService` — `compute_readiness` (give-up rule as a Rust
-  assertion), `get_mastery_state`, `get_mastery_ordered_new_cards`.
+- Rust engine: `SpeedrunService` — `speedrun_ping`, `compute_readiness` (give-up
+  rule as a Rust assertion), `get_mastery_state` (mastery gate + importance-
+  weighted rollups + "what to study next"), `get_mastery_ordered_new_cards`, and
+  `get_points_at_stake_order` (due cards by topic weight × student weakness).
+  Two opt-in live-queue flags: `speedrunMasteryScheduler`, `speedrunPointsAtStake`.
 - Topic map: `pylib/anki/speedrun/exam_p_topics.json` (3 units + subtopics,
   official section weights). Cards are tagged `unit::<u>`, `subtopic::<u>::<s>`,
   `difficulty::<d>`.

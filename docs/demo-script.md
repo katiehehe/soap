@@ -80,8 +80,9 @@ git -C ~/dev/soap log -1 --format='%h  %s'   # name the commit on camera
 Point at `rslib/src/speedrun/service.rs` and `rslib/src/speedrun/mastery.rs` and
 `proto/anki/speedrun.proto`. Say: _"I changed Anki's Rust core — a new
 `SpeedrunService` in the `anki` crate: `compute_readiness`, `get_mastery_state`,
-`get_mastery_ordered_new_cards`, wired proto → Rust → Python → web. Not a wrapper,
-not a JS reimplementation — a JS/Swift rewrite would cap the grade."_
+`get_mastery_ordered_new_cards`, and `get_points_at_stake_order`, plus two opt-in
+live-queue reorders in `build_queues` — wired proto → Rust → Python → web. Not a
+wrapper, not a JS reimplementation — a JS/Swift rewrite would cap the grade."_
 
 ### Beat 3 — Shot 4: three scores with ranges + the give-up rule (1:05–2:05)
 
@@ -107,10 +108,13 @@ count — the review loop is running on the real Rust scheduler.
 ### Beat 5 — The study feature (learning science) (2:45–3:15)
 
 **Tools → Study map (Speedrun).** Exam P at the centre, the 3 units on a triangle,
-subtopics radiating out. Say: _"This is the three-tier, mastery-gated scheduler
-made visible. As a subtopic clears its gate — ≥10 problems, ≥80% accuracy, ≥90%
-retrievability — its link fills grey → amber → green and it moves from Blocked to
-within-unit to cross-unit interleaving."_ Tap a subtopic to show its mastery detail.
+subtopics radiating out as **bubbles sized by exam weight**. Say: _"This is the
+three-tier, mastery-gated scheduler made visible. Bubble size is the topic's exam
+weight; the colour fills grey → amber → green as a subtopic clears its gate (≥10
+problems, ≥80% accuracy, ≥90% retrievability) and moves from Blocked to
+within-unit to cross-unit interleaving. Size is importance, colour is measured
+mastery — never blended."_ Tap a subtopic (or a unit) for its mastery detail, and
+point out the "Study next" suggestion.
 
 ### Beat 6 — Shot 6: test results (3:15–3:55)
 
@@ -251,14 +255,20 @@ since no AI is wired yet. Say that explicitly on camera.
 
 ## What's built vs planned (be honest on camera)
 
-- **Built:** real Rust engine change; three separate signals; give-up rule (Rust
-  `oneof` assertion + test); mastery model + tier ordering; study map with
-  proportional fill; readiness dashboard + honesty bundle; syllabus taxonomy +
-  42-card tagged deck; weighted coverage; **shared engine on the phone**; seeded
-  split + leakage scan + benchmark + crash test; desktop DMG + phone APK.
+- **Built:** real Rust engine change (5 RPCs); three separate signals; give-up
+  rule (Rust `oneof` assertion + test); mastery model + tier ordering **wired into
+  the live queue** (opt-in `speedrunMasteryScheduler`); points-at-stake review
+  order (`GetPointsAtStakeOrder` + opt-in `speedrunPointsAtStake`);
+  importance-weighted mastery rollup + "what to study next"; importance-sized
+  **bubble** study map (size = weight, colour = mastery); readiness dashboard +
+  honesty bundle; FSRS memory-calibration harness (`make calibration`); syllabus
+  taxonomy + weights + 42-card tagged deck; weighted coverage; **shared engine on
+  the phone**; seeded split + leakage scan + benchmark + crash test; desktop DMG +
+  phone APK.
 - **Planned (Friday/Sunday — `docs/vision.md`, `docs/ai-features-prd.md`):**
-  two-way phone↔desktop sync; wiring the tier order into the live queue;
-  practice-test-calibrated readiness; and the AI features (all off by default).
+  two-way phone↔desktop sync; the calibrated performance + readiness models
+  (readiness stays `NoScore` until then); the 3-build ablation run; and the AI
+  features (all off by default).
 
 ## Feature reference (one line each, for Q&A)
 
@@ -266,7 +276,7 @@ since no AI is wired yet. Say that explicitly on camera.
 2. **Three separate scores, never blended** — Memory / Performance / Readiness side by side.
 3. **Honesty + give-up rule** — no readiness number below ≥200 reviews AND ≥50% weighted coverage; enforced as a Rust `oneof`.
 4. **Three-tier, mastery-gated scheduler** — per-subtopic gate from revlog accuracy + FSRS retrievability; `rslib/src/speedrun/mastery.rs`.
-5. **Study map** — concept map whose links fill by mastery (grey → amber → green); `ts/routes/study-map`.
+5. **Study map** — importance-sized bubble concept map (bubble size = exam weight, colour = measured mastery) + "what to study next"; `ts/routes/study-map`.
 6. **Readiness dashboard** — three signals + full honesty bundle; `ts/routes/readiness-dashboard`.
 7. **Syllabus taxonomy + tagged deck** — 3 units, 19 subtopics from the 2026-05 outcomes; `pylib/anki/speedrun/exam_p_topics.json`, `out/SOA-Exam-P.apkg`.
 8. **Weighted coverage** — coverage weighted by official section weights.

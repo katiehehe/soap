@@ -207,3 +207,28 @@ AI features, and two-way sync.
   flag still builds a valid queue.
 - Safety gates: full `./ninja check` green (31 speedrun Rust tests + Python; no
   scheduler regression) and `make crash-test` 20/20 with zero corruption.
+
+### Audit vs docs/project-brief.md + fixes (done)
+
+Ran three parallel read-only subagents auditing (1) the honesty/give-up/no-
+fabrication rules, (2) the Rust change + tests + undo + merge log, (3) doc/spec
+consistency. Verdict: code is compliant on the hard rules (readiness never a bare
+number; three scores separate; bubble size = importance vs colour = mastery;
+coverage abstains; weakness measured). Fixed the concrete findings:
+
+- **Honesty copy:** the readiness dashboard now distinguishes "not enough data"
+  from "data threshold met, model not yet calibrated" (was misreported).
+- **Honesty bundle:** added `ReadinessScore.past_accuracy` + a dashboard row for
+  "how accurate past guesses were" (brief 1 requires it); shows not-yet-available
+  until scores are emitted. (`f14021de8`)
+- **Undo:** added a Python undo test with both live-queue flags on.
+- **README (brief 12 blocker):** replaced the stock-Anki README top with a
+  Speedrun section — exam stated up front, AGPL + Anki credit, build steps for
+  both apps, architecture, the Rust-change note, and the files-touched pointer.
+- **Stale docs reconciled** with the built code (5 RPCs, live-queue flags,
+  bubble map, calibration, 42-card deck): `docs/rust-change.md`,
+  `docs/upstream-touched.md`, `docs/demo-script.md`, `SPEC_CHECKLIST.md`,
+  `docs/vision.md`, `PRD.md` (also softened two PRD overclaims: ablation
+  "harness" -> pre-registered plan; leakage scan "wired to CI" -> run in
+  `./ninja check`).
+- `./ninja check` green throughout.

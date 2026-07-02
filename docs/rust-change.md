@@ -33,7 +33,7 @@ algorithm the memory model is built on, see [fsrs-reference.md](fsrs-reference.m
   collection/undo layer (`rslib/src/undo`, `rslib/src/collection`) so undo keeps
   working and the collection is never corrupted.
 
-## What exists today (Wednesday core, no AI)
+## What exists today
 
 A self-contained `SpeedrunService` (new file `proto/anki/speedrun.proto`,
 implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays small:
@@ -53,17 +53,33 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   the gate is computed from real revlog accuracy + FSRS retrievability
   (`>= 80% accuracy AND >= 0.90 retrievability over >= 10 problems`); each subtopic
   is Blocked, WithinUnit, or CrossUnit, and a unit only opens the cross-unit pool
-  once all its subtopics clear. Exposed via `GetMasteryState` and, for the
-  topic-aware order, `GetMasteryOrderedNewCards` (block -> within-unit ->
-  cross-unit). 11 Rust tests + 4 Python tests.
+  once all its subtopics clear. Exposed via `GetMasteryState` (which also returns
+  an importance-weighted mastery rollup and a "what to study next" ranking) and,
+  for the topic-aware order, `GetMasteryOrderedNewCards` (block -> within-unit ->
+  cross-unit).
+- `GetPointsAtStakeOrder` - a points-at-stake review order: due cards sorted by
+  topic importance weight x measured student weakness (1 - retention), highest
+  value first. Read-only, so it never reschedules a card.
 
-These RPCs are the required mastery query + tier/gate ordering logic. The one
-remaining step is wiring the ordering into the live queue builder (hook points
-below); it is exposed as an RPC today so the app and dashboard can already use it.
+All five RPCs are called from Python and covered by tests (~31 Rust unit tests
+across `service.rs` + `mastery.rs`, plus a Python-calling test for every RPC).
 
-## How the scaffold grows into the scheduler
+The tier order and the points-at-stake order are now wired into the **live**
+queue builder behind two opt-in, default-off config flags:
+`speedrunMasteryScheduler` (reorders new cards by tier) and `speedrunPointsAtStake`
+(reorders due review cards by points at stake). Both reorders are read-only
+(presentation only), so FSRS intervals stay valid and undo/integrity are
+untouched; with the flags off the queue is built exactly as upstream. They are
+also exposed as RPCs so the dashboard/study map can use the same orderings.
 
-(Items 1-2 below are implemented; item 3 - live queue-builder wiring - is next.)
+## How the scheduler is built
+
+(Items 1-3 are implemented. The live-queue integration ships as a post-gather,
+read-only reorder of the gathered new/review cards in `build_queues` behind the
+two flags above, rather than editing `gathering.rs`/`sorting.rs` in place, which
+keeps the upstream diff tiny and undo/integrity trivially safe. The
+`gathering.rs`/`sorting.rs` hook points below remain the route for any future
+deeper integration.)
 
 1. **Mastery model (new, in `rslib/src/speedrun/`).** Per subtopic tag
    (`subtopic::...`), compute gate state from recent parameterized reviews:

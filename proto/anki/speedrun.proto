@@ -33,6 +33,13 @@ service SpeedrunService {
   // first (practised in isolation), then within-unit interleaving, then
   // cross-unit interleaving. This is the topic-aware scheduling order.
   rpc GetMasteryOrderedNewCards(MasteryRequest) returns (MasteryOrderedCards);
+
+  // Points-at-stake review order: due cards sorted by topic importance weight
+  // times measured student weakness (1 - retention), so the highest-value cards
+  // come first. A new review order exposed for the dashboard/reviewer; the live
+  // review queue can also use it behind a flag. Weakness is measured from real
+  // reviews, so this never fabricates a score.
+  rpc GetPointsAtStakeOrder(MasteryRequest) returns (PointsAtStakeOrder);
 }
 
 // Empty: every SpeedrunService method is collection-scoped, so codegen
@@ -200,4 +207,23 @@ message MasteryState {
 
 message MasteryOrderedCards {
   repeated int64 card_ids = 1;
+}
+
+// One due card scored by "points at stake": its subtopic's importance weight
+// times the student's measured weakness on that subtopic (1 - mean retention).
+message PointsAtStakeCard {
+  int64 card_id = 1;
+  string tag = 2;
+  double weight = 3;
+  // Measured weakness in [0, 1]: 1 - mean FSRS retrievability for the subtopic
+  // (0.5 when there is no retention evidence yet). Never a fabricated value.
+  double weakness = 4;
+  // weight * weakness. Higher = more valuable to review now.
+  double stakes = 5;
+}
+
+// Due cards in points-at-stake order, highest stakes first (ties broken by the
+// more-urgent card). This is the "highest-value cards first" review order.
+message PointsAtStakeOrder {
+  repeated PointsAtStakeCard cards = 1;
 }

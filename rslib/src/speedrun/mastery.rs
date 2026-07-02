@@ -372,6 +372,75 @@ pub(crate) fn order_new_cards(
     keyed.into_iter().map(|(_, _, _, cid)| cid).collect()
 }
 
+/// Measured weakness of a subtopic in [0, 1]: `1 - mean FSRS retrievability`.
+/// With no retention evidence yet we return a neutral 0.5 rather than guess, so
+/// weakness is always grounded in real reviews.
+pub(crate) fn subtopic_weakness(s: &SubtopicStats) -> f64 {
+    if s.retr_count == 0 {
+        0.5
+    } else {
+        (1.0 - s.mean_retrievability()).clamp(0.0, 1.0)
+    }
+}
+
+/// A due card scored by "points at stake" = topic importance weight x student
+/// weakness on that topic.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct StakeCard {
+    pub card_id: CardId,
+    pub tag: String,
+    pub weight: f64,
+    pub weakness: f64,
+    pub stakes: f64,
+    pub retrievability: f64,
+}
+
+/// Order due cards by points at stake, highest first. `cards` is
+/// `(card id, subtopic tag, per-card retrievability)`. `weights` maps a
+/// subtopic tag to its importance weight; when it is empty every subtopic is
+/// treated as equally weighted, so the order reduces to weakest-topic-first.
+/// `weakness` maps a subtopic tag to its measured weakness in [0, 1]. Ties in
+/// stakes are broken by the more-urgent card (lower retrievability), then by
+/// the input order, so the result is deterministic. Pure ordering — it never
+/// reschedules a card, so FSRS intervals stay valid.
+pub(crate) fn points_at_stake_order(
+    cards: &[(CardId, String, f64)],
+    weights: &HashMap<String, f64>,
+    weakness: &HashMap<String, f64>,
+) -> Vec<StakeCard> {
+    let use_equal = weights.is_empty();
+    let mut out: Vec<StakeCard> = cards
+        .iter()
+        .map(|(id, tag, retr)| {
+            let weight = if use_equal {
+                1.0
+            } else {
+                weights.get(tag).copied().unwrap_or(0.0)
+            };
+            let wk = weakness.get(tag).copied().unwrap_or(0.5);
+            StakeCard {
+                card_id: *id,
+                tag: tag.clone(),
+                weight,
+                weakness: wk,
+                stakes: weight * wk,
+                retrievability: *retr,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| {
+        b.stakes
+            .partial_cmp(&a.stakes)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(
+                a.retrievability
+                    .partial_cmp(&b.retrievability)
+                    .unwrap_or(std::cmp::Ordering::Equal),
+            )
+    });
+    out
+}
+
 impl Collection {
     /// Accumulate per-subtopic review stats for the expected subtopic tags,
     /// reading real revlog accuracy and FSRS retrievability from the
@@ -467,6 +536,41 @@ impl Collection {
             let tags: String = row.get(1)?;
             if let Some(tag) = tags.split_whitespace().find(|t| expected.contains(*t)) {
                 out.push((CardId(cid), tag.to_string()));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Due cards in the review pipeline (learning, review, interday learning)
+    /// that carry a syllabus subtopic tag, paired with the subtopic and the
+    /// card's FSRS retrievability, for points-at-stake ordering. Read-only.
+    pub(crate) fn speedrun_due_cards_with_subtopic(
+        &mut self,
+        expected_subtopics: &[String],
+    ) -> Result<Vec<(CardId, String, f64)>> {
+        use std::collections::HashSet;
+        let expected: HashSet<&str> = expected_subtopics.iter().map(String::as_str).collect();
+        let timing = self.timing_today()?;
+        let today = timing.days_elapsed as i64;
+        let next_day_at = timing.next_day_at.0;
+        let now = TimestampSecs::now().0;
+        let sql = "
+            SELECT c.id, n.tags,
+                   extract_fsrs_retrievability(
+                       c.data,
+                       case when c.odue != 0 then c.odue else c.due end,
+                       c.ivl, ?1, ?2, ?3)
+            FROM cards c JOIN notes n ON c.nid = n.id
+            WHERE c.queue IN (1, 2, 3) AND n.tags LIKE '% subtopic::%'";
+        let mut stmt = self.storage.db.prepare_cached(sql)?;
+        let mut rows = stmt.query([today, next_day_at, now])?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next()? {
+            let cid: i64 = row.get(0)?;
+            let tags: String = row.get(1)?;
+            let retr: Option<f64> = row.get(2)?;
+            if let Some(tag) = tags.split_whitespace().find(|t| expected.contains(*t)) {
+                out.push((CardId(cid), tag.to_string(), retr.unwrap_or(0.0)));
             }
         }
         Ok(out)
@@ -846,5 +950,70 @@ mod tests {
         col.set_current_deck(DeckId(1)).unwrap();
         let queued = col.get_queued_cards(5, false).unwrap();
         assert_eq!(queued.cards.len(), 2);
+    }
+
+    // --- points-at-stake review order (topic weight x student weakness) ---
+
+    #[test]
+    fn points_at_stake_orders_by_weight_times_weakness() {
+        let weights = HashMap::from([
+            ("subtopic::gp::a".to_string(), 9.0),
+            ("subtopic::gp::b".to_string(), 1.0),
+        ]);
+        let weakness = HashMap::from([
+            ("subtopic::gp::a".to_string(), 0.5), // stakes 9 * 0.5 = 4.5
+            ("subtopic::gp::b".to_string(), 0.9), // stakes 1 * 0.9 = 0.9
+        ]);
+        let cards = vec![
+            (CardId(1), "subtopic::gp::b".to_string(), 0.5),
+            (CardId(2), "subtopic::gp::a".to_string(), 0.5),
+        ];
+        let out = points_at_stake_order(&cards, &weights, &weakness);
+        assert_eq!(out[0].card_id, CardId(2));
+        assert!((out[0].stakes - 4.5).abs() < 1e-9);
+        assert!(out[0].stakes > out[1].stakes);
+    }
+
+    #[test]
+    fn points_at_stake_breaks_ties_by_urgency() {
+        // Same subtopic (same stakes) -> the more-urgent card (lower
+        // retrievability) comes first.
+        let weights = HashMap::from([("subtopic::u::x".to_string(), 5.0)]);
+        let weakness = HashMap::from([("subtopic::u::x".to_string(), 0.4)]);
+        let cards = vec![
+            (CardId(1), "subtopic::u::x".to_string(), 0.9), // less urgent
+            (CardId(2), "subtopic::u::x".to_string(), 0.2), // more urgent
+        ];
+        let out = points_at_stake_order(&cards, &weights, &weakness);
+        assert_eq!(out[0].card_id, CardId(2));
+        assert_eq!(out[1].card_id, CardId(1));
+    }
+
+    #[test]
+    fn points_at_stake_equal_weight_is_weakest_topic_first() {
+        // No weights supplied -> equal weighting -> order by weakness alone,
+        // i.e. the weakest topic's card comes first.
+        let weights = HashMap::new();
+        let weakness = HashMap::from([
+            ("subtopic::u::weak".to_string(), 0.8),
+            ("subtopic::u::strong".to_string(), 0.1),
+        ]);
+        let cards = vec![
+            (CardId(1), "subtopic::u::strong".to_string(), 0.9),
+            (CardId(2), "subtopic::u::weak".to_string(), 0.2),
+        ];
+        let out = points_at_stake_order(&cards, &weights, &weakness);
+        assert_eq!(out[0].card_id, CardId(2));
+    }
+
+    #[test]
+    fn subtopic_weakness_is_measured_or_neutral() {
+        // Retention evidence -> weakness = 1 - mean retrievability.
+        let s = stat_w("u", "x", 12, 12, 0.9, 5.0);
+        assert!((subtopic_weakness(&s) - 0.1).abs() < 1e-9);
+        // No evidence -> neutral 0.5, never a guessed value.
+        let mut s0 = stat("u", "y", 0, 0, 0.0);
+        s0.retr_count = 0;
+        assert_eq!(subtopic_weakness(&s0), 0.5);
     }
 }

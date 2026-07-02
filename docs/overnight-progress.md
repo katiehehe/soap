@@ -173,3 +173,19 @@ importance, colour = measured mastery; no AI; no sync. Undo/integrity verified.
 Not done (by design / out of scope for the unattended run): calibrated
 performance model (needs a disguised-item dataset), the ablation _run_ itself,
 AI features, and two-way sync.
+
+## Follow-up: two more 7a Rust changes (requested)
+
+### Feature A — Points-at-stake review order (new RPC) (done)
+
+- New protobuf message (`PointsAtStakeCard` / `PointsAtStakeOrder`) + RPC
+  `GetPointsAtStakeOrder`, called from Python. Orders due review-pipeline cards
+  by **topic importance weight x measured student weakness** (weakness = 1 - mean
+  FSRS retrievability; a neutral 0.5 when there is no retention evidence),
+  highest stakes first, ties broken by the more-urgent card. Read-only, so it
+  never reschedules a card and FSRS intervals stay valid.
+- Rust: `points_at_stake_order` + `subtopic_weakness` +
+  `speedrun_due_cards_with_subtopic` (+4 unit tests). Python-calling test answers
+  a card and checks it comes back with `stakes == weight * weakness`, sorted
+  descending.
+- `./ninja check` green (27 speedrun Rust tests + Python).

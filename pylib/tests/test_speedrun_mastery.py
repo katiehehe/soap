@@ -93,3 +93,31 @@ def test_mastery_ordered_new_cards_returns_blocked_cards():
     )
     # All seeded cards are new + tagged, so they all come back in the order.
     assert len(card_ids) == len(SEED_CARDS)
+
+
+def test_points_at_stake_order_reads_due_cards():
+    # New protobuf message called from Python: once a card is answered it enters
+    # the review pipeline and comes back in points-at-stake order, with
+    # stakes = weight x measured weakness. Nothing is fabricated.
+    col = getEmptyCol()
+    build_deck(col)
+    col.decks.select(col.decks.id("SOA Exam P"))
+    card = col.sched.getCard()
+    assert card is not None
+    col.sched.answerCard(card, 3)
+
+    # Single repeated field -> the generated wrapper returns the list directly.
+    cards = col._backend.get_points_at_stake_order(
+        expected_subtopics=expected_subtopic_tags(),
+        units=[],
+        subtopic_weights=[
+            speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in subtopic_weights()
+        ],
+    )
+    assert len(cards) >= 1
+    for c in cards:
+        assert abs(c.stakes - c.weight * c.weakness) < 1e-9
+        assert 0.0 <= c.weakness <= 1.0
+    # Highest stakes first.
+    for a, b in zip(cards, cards[1:]):
+        assert a.stakes >= b.stakes - 1e-9

@@ -10,6 +10,8 @@ use anki_proto::speedrun::MasteryOverall;
 use anki_proto::speedrun::MasteryRequest;
 use anki_proto::speedrun::MasteryState;
 use anki_proto::speedrun::NoScore;
+use anki_proto::speedrun::PointsAtStakeCard;
+use anki_proto::speedrun::PointsAtStakeOrder;
 use anki_proto::speedrun::ReadinessResult;
 use anki_proto::speedrun::SpeedrunPingResponse;
 use anki_proto::speedrun::StudyPriority;
@@ -21,7 +23,9 @@ use crate::error;
 use crate::speedrun::mastery::compute_pools;
 use crate::speedrun::mastery::order_new_cards;
 use crate::speedrun::mastery::parse_subtopic_tag;
+use crate::speedrun::mastery::points_at_stake_order;
 use crate::speedrun::mastery::study_priorities;
+use crate::speedrun::mastery::subtopic_weakness;
 use crate::speedrun::mastery::weighted_mastery;
 use crate::speedrun::mastery::Pool;
 
@@ -214,6 +218,41 @@ impl crate::services::SpeedrunService for Collection {
         let ordered = order_new_cards(&cards, &pools);
         Ok(MasteryOrderedCards {
             card_ids: ordered.into_iter().map(|c| c.0).collect(),
+        })
+    }
+
+    /// Points-at-stake review order: due cards sorted by topic importance
+    /// weight times measured student weakness, highest-value first.
+    /// Weakness comes from real reviews (1 - mean retrievability), so
+    /// nothing here is fabricated; this is a read-only ordering that never
+    /// reschedules a card.
+    fn get_points_at_stake_order(
+        &mut self,
+        input: MasteryRequest,
+    ) -> error::Result<PointsAtStakeOrder> {
+        let stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
+        let weights: HashMap<String, f64> = input
+            .subtopic_weights
+            .iter()
+            .map(|w| (w.tag.clone(), w.weight))
+            .collect();
+        let weakness: HashMap<String, f64> = stats
+            .iter()
+            .map(|s| (s.tag(), subtopic_weakness(s)))
+            .collect();
+        let cards = self.speedrun_due_cards_with_subtopic(&input.expected_subtopics)?;
+        let ordered = points_at_stake_order(&cards, &weights, &weakness);
+        Ok(PointsAtStakeOrder {
+            cards: ordered
+                .into_iter()
+                .map(|c| PointsAtStakeCard {
+                    card_id: c.card_id.0,
+                    tag: c.tag,
+                    weight: c.weight,
+                    weakness: c.weakness,
+                    stakes: c.stakes,
+                })
+                .collect(),
         })
     }
 }

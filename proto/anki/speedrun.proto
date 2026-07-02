@@ -96,6 +96,20 @@ message MasteryRequest {
   // Syllabus subtopic tags, e.g. "subtopic::univariate::binomial" (unit is the
   // middle segment). Supplied by the Python topic map.
   repeated string expected_subtopics = 1;
+  // Optional per-unit weights (the official SOA section weights). Used to fall
+  // back on a unit's importance when subtopic weights are absent.
+  repeated UnitWeight units = 2;
+  // Optional per-subtopic relative importance weights (editable emphasis
+  // estimates from the topic map, authored to sum to the section weights). When
+  // present, the engine reports an importance-weighted mastery rollup; when
+  // absent it falls back to a plain cleared/total fraction. Weights never
+  // affect the give-up thresholds.
+  repeated SubtopicWeight subtopic_weights = 3;
+}
+
+message SubtopicWeight {
+  string tag = 1;
+  double weight = 2;
 }
 
 // Which tier a subtopic is in. Blocked -> practise in isolation; WithinUnit ->
@@ -117,6 +131,9 @@ message SubtopicMastery {
   double mean_retrievability = 7;
   bool gate_cleared = 8;
   MasteryPool pool = 9;
+  // Relative importance weight (0 when none supplied). Echoed from the request
+  // so the UI can size this subtopic without a second source of truth.
+  double weight = 10;
 }
 
 message UnitMastery {
@@ -124,6 +141,13 @@ message UnitMastery {
   uint32 subtopics_total = 2;
   uint32 subtopics_cleared = 3;
   bool mastered = 4;
+  // Sum of this unit's subtopic weights (the unit's importance); 0 when none.
+  double weight = 5;
+  // Importance-weighted share of this unit that is gate-cleared: the fraction
+  // of the unit's total weight sitting on mastered subtopics. Falls back to
+  // cleared/total when no weights are supplied. MEASURED, never a predicted
+  // score.
+  double weighted_mastery_pct = 6;
 }
 
 // Honest, evidence-grounded rollup of gate state across the whole syllabus.
@@ -145,6 +169,11 @@ message MasteryOverall {
   uint32 units_mastered = 6;
   // Total graded reviews logged on syllabus subtopic cards (evidence volume).
   uint32 total_reviews = 7;
+  // Importance-weighted share of the whole syllabus that is gate-cleared: the
+  // fraction of total subtopic weight sitting on mastered subtopics. Falls back
+  // to mastered/total when no weights are supplied. MEASURED demonstrated
+  // mastery weighted by exam importance, never a predicted exam score.
+  double weighted_mastery_pct = 8;
 }
 
 message MasteryState {

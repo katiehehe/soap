@@ -41,6 +41,9 @@ pub(crate) struct SubtopicStats {
     pub correct: u32,
     pub retr_sum: f64,
     pub retr_count: u32,
+    /// Relative importance weight from the topic map (0 when none supplied).
+    /// Set by the caller from the request; used only for the weighted rollup.
+    pub weight: f64,
 }
 
 impl SubtopicStats {
@@ -171,6 +174,78 @@ pub(crate) fn mastery_overall(stats: &[SubtopicStats]) -> MasteryOverallCounts {
         units_total: unit_total.len() as u32,
         units_mastered,
         total_reviews: stats.iter().map(|s| s.reviews).sum(),
+    }
+}
+
+/// Importance-weighted mastery rollup. `overall_pct` and each unit's pct are
+/// the share of that group's total weight that sits on gate-cleared subtopics.
+/// When no weights are supplied (total weight 0) it falls back to the plain
+/// cleared/total count fraction, so a caller that omits weights still gets a
+/// sensible number. Every value is MEASURED demonstrated mastery, never a
+/// predicted score.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct WeightedMastery {
+    pub overall_pct: f64,
+    pub overall_weight: f64,
+    /// unit_id -> weighted mastery fraction (0..1)
+    pub per_unit_pct: HashMap<String, f64>,
+    /// unit_id -> sum of the unit's subtopic weights (its importance)
+    pub per_unit_weight: HashMap<String, f64>,
+}
+
+pub(crate) fn weighted_mastery(stats: &[SubtopicStats]) -> WeightedMastery {
+    let mut unit_weight: HashMap<String, f64> = HashMap::new();
+    let mut unit_cleared_weight: HashMap<String, f64> = HashMap::new();
+    let mut unit_total: HashMap<String, u32> = HashMap::new();
+    let mut unit_cleared_count: HashMap<String, u32> = HashMap::new();
+    for s in stats {
+        let cleared = s.gate_cleared();
+        *unit_weight.entry(s.unit_id.clone()).or_default() += s.weight;
+        *unit_total.entry(s.unit_id.clone()).or_default() += 1;
+        if cleared {
+            *unit_cleared_weight.entry(s.unit_id.clone()).or_default() += s.weight;
+            *unit_cleared_count.entry(s.unit_id.clone()).or_default() += 1;
+        }
+    }
+
+    let frac = |cleared_w: f64, total_w: f64, cleared_n: u32, total_n: u32| -> f64 {
+        if total_w > 0.0 {
+            cleared_w / total_w
+        } else if total_n > 0 {
+            cleared_n as f64 / total_n as f64
+        } else {
+            0.0
+        }
+    };
+
+    let per_unit_pct = unit_weight
+        .keys()
+        .map(|unit| {
+            let pct = frac(
+                unit_cleared_weight.get(unit).copied().unwrap_or(0.0),
+                unit_weight.get(unit).copied().unwrap_or(0.0),
+                unit_cleared_count.get(unit).copied().unwrap_or(0),
+                unit_total.get(unit).copied().unwrap_or(0),
+            );
+            (unit.clone(), pct)
+        })
+        .collect();
+
+    let overall_weight: f64 = stats.iter().map(|s| s.weight).sum();
+    let cleared_weight: f64 = stats
+        .iter()
+        .filter(|s| s.gate_cleared())
+        .map(|s| s.weight)
+        .sum();
+    let total_n = stats.len() as u32;
+    let cleared_n = stats.iter().filter(|s| s.gate_cleared()).count() as u32;
+    let overall_pct = frac(cleared_weight, overall_weight, cleared_n, total_n);
+
+    WeightedMastery {
+        overall_pct,
+        overall_weight,
+        per_unit_pct,
+        per_unit_weight: unit_weight,
     }
 }
 
@@ -327,6 +402,21 @@ mod tests {
             correct,
             retr_sum: mean_r * reviews.max(1) as f64,
             retr_count: reviews.max(1),
+            weight: 0.0,
+        }
+    }
+
+    fn stat_w(
+        unit: &str,
+        sub: &str,
+        reviews: u32,
+        correct: u32,
+        mean_r: f64,
+        weight: f64,
+    ) -> SubtopicStats {
+        SubtopicStats {
+            weight,
+            ..stat(unit, sub, reviews, correct, mean_r)
         }
     }
 
@@ -420,6 +510,45 @@ mod tests {
     fn overall_on_empty_syllabus_is_all_zero() {
         let o = mastery_overall(&[]);
         assert_eq!(o, MasteryOverallCounts::default());
+    }
+
+    #[test]
+    fn weighted_mastery_uses_importance_weights() {
+        // Unit "u": a heavy cleared subtopic (weight 9) + a light uncleared one
+        // (weight 1). Weighted mastery = 9/10 = 0.9, not the 0.5 a plain count
+        // would report — importance changes the picture honestly.
+        let stats = vec![
+            stat_w("u", "heavy", 12, 12, 0.95, 9.0), // cleared
+            stat_w("u", "light", 4, 1, 0.50, 1.0),   // not cleared
+        ];
+        let w = weighted_mastery(&stats);
+        assert!(
+            (w.overall_pct - 0.9).abs() < 1e-9,
+            "overall={}",
+            w.overall_pct
+        );
+        assert!((w.per_unit_pct["u"] - 0.9).abs() < 1e-9);
+        assert!((w.per_unit_weight["u"] - 10.0).abs() < 1e-9);
+        assert!((w.overall_weight - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn weighted_mastery_falls_back_to_counts_without_weights() {
+        // No weights supplied (all 0): weighted pct must equal the plain
+        // cleared/total fraction, so callers that omit weights still get a
+        // sensible number rather than a divide-by-zero.
+        let stats = vec![
+            stat("u", "a", 12, 12, 0.95), // cleared
+            stat("u", "b", 0, 0, 0.0),    // not started
+        ];
+        let w = weighted_mastery(&stats);
+        assert!(
+            (w.overall_pct - 0.5).abs() < 1e-9,
+            "overall={}",
+            w.overall_pct
+        );
+        assert!((w.per_unit_pct["u"] - 0.5).abs() < 1e-9);
+        assert_eq!(w.overall_weight, 0.0);
     }
 
     #[test]

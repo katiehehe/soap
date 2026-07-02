@@ -32,6 +32,7 @@ from anki.speedrun import (  # noqa: E402
     expected_subtopic_tags,
     load_topics,
     subtopic_tag,
+    subtopic_weights,
     unit_tag,
     unit_weights,
 )
@@ -103,6 +104,9 @@ def main() -> None:
     weight_msgs = [
         speedrun_pb2.UnitWeight(unit_id=uid, weight=w) for uid, w in unit_weights()
     ]
+    sub_weight_msgs = [
+        speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in subtopic_weights()
+    ]
 
     print(f"Timing actions on a {args.cards}-card collection:\n")
     report(
@@ -112,7 +116,11 @@ def main() -> None:
     report(
         "mastery query",
         bench_action(
-            lambda: col._backend.get_mastery_state(expected_subtopics=expected),
+            lambda: col._backend.get_mastery_state(
+                expected_subtopics=expected,
+                units=weight_msgs,
+                subtopic_weights=sub_weight_msgs,
+            ),
             args.reps,
         ),
     )
@@ -120,7 +128,7 @@ def main() -> None:
         "mastery-ordered new cards",
         bench_action(
             lambda: col._backend.get_mastery_ordered_new_cards(
-                expected_subtopics=expected
+                expected_subtopics=expected, units=[], subtopic_weights=[]
             ),
             args.reps,
         ),

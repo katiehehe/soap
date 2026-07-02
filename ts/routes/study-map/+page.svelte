@@ -55,7 +55,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     onMount(async () => {
         try {
             [result, readiness] = await Promise.all([
-                getMasteryState({ expectedSubtopics: allTags }),
+                getMasteryState({
+                    expectedSubtopics: allTags,
+                    units: UNIT_WEIGHTS,
+                    subtopicWeights: [],
+                }),
                 computeReadiness({ expectedSubtopics: allTags, units: UNIT_WEIGHTS }),
             ]);
         } catch (err) {

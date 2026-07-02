@@ -20,6 +20,7 @@ use crate::error;
 use crate::speedrun::mastery::compute_pools;
 use crate::speedrun::mastery::order_new_cards;
 use crate::speedrun::mastery::parse_subtopic_tag;
+use crate::speedrun::mastery::weighted_mastery;
 use crate::speedrun::mastery::Pool;
 
 /// Pre-registered give-up thresholds. Below EITHER of these, readiness returns
@@ -81,7 +82,26 @@ impl crate::services::SpeedrunService for Collection {
     }
 
     fn get_mastery_state(&mut self, input: MasteryRequest) -> error::Result<MasteryState> {
-        let stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
+        let mut stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
+
+        // Attach each subtopic's importance weight from the request (the
+        // editable topic-map emphasis). Absent weights stay 0, which makes the
+        // weighted rollup fall back to a plain count fraction.
+        let sub_weights: HashMap<String, f64> = input
+            .subtopic_weights
+            .iter()
+            .map(|w| (w.tag.clone(), w.weight))
+            .collect();
+        for s in &mut stats {
+            s.weight = sub_weights.get(&s.tag()).copied().unwrap_or(0.0);
+        }
+        let unit_req_weights: HashMap<String, f64> = input
+            .units
+            .iter()
+            .map(|u| (u.unit_id.clone(), u.weight))
+            .collect();
+        let weighted = weighted_mastery(&stats);
+
         let pools = compute_pools(&stats);
 
         // Per-unit rollup, in first-seen order.
@@ -115,6 +135,7 @@ impl crate::services::SpeedrunService for Collection {
                     mean_retrievability: s.mean_retrievability(),
                     gate_cleared: s.gate_cleared(),
                     pool: pool_to_proto(pool) as i32,
+                    weight: s.weight,
                 }
             })
             .collect();
@@ -124,11 +145,22 @@ impl crate::services::SpeedrunService for Collection {
             .map(|unit| {
                 let total = unit_total.get(&unit).copied().unwrap_or(0);
                 let cleared = unit_cleared.get(&unit).copied().unwrap_or(0);
+                // Prefer the summed subtopic weight; fall back to the unit's own
+                // section weight when subtopic weights weren't supplied.
+                let summed = weighted.per_unit_weight.get(&unit).copied().unwrap_or(0.0);
+                let weight = if summed > 0.0 {
+                    summed
+                } else {
+                    unit_req_weights.get(&unit).copied().unwrap_or(0.0)
+                };
+                let weighted_mastery_pct = weighted.per_unit_pct.get(&unit).copied().unwrap_or(0.0);
                 UnitMastery {
                     unit_id: unit,
                     subtopics_total: total,
                     subtopics_cleared: cleared,
                     mastered: total > 0 && cleared == total,
+                    weight,
+                    weighted_mastery_pct,
                 }
             })
             .collect();
@@ -144,6 +176,7 @@ impl crate::services::SpeedrunService for Collection {
             units_total: o.units_total,
             units_mastered: o.units_mastered,
             total_reviews: o.total_reviews,
+            weighted_mastery_pct: weighted.overall_pct,
         });
 
         Ok(MasteryState {

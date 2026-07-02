@@ -34,4 +34,20 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
 - New `subtopic_weights()` helper in `pylib/anki/speedrun/__init__.py`.
 - Guard test `test_subtopic_weights_sum_to_unit_midpoints`: weights positive, count
   matches the syllabus, and per-unit sums equal the official midpoints.
-- `./ninja check` green.
+- `./ninja check` green. Commit `bc31b4eef`.
+
+### Phase 2.2 — importance-weighted mastery rollup in the engine (done)
+
+- Proto: `MasteryRequest` gains optional `units` + `subtopic_weights` (new
+  `SubtopicWeight`); `SubtopicMastery.weight`; `UnitMastery.weight` +
+  `weighted_mastery_pct`; `MasteryOverall.weighted_mastery_pct`.
+- Rust: `SubtopicStats.weight`; new pure `weighted_mastery()` = weighted share of
+  gate-cleared subtopics, falling back to the plain count fraction when no weights
+  are supplied (+2 unit tests). `get_mastery_state` wires request weights onto the
+  stats, echoes each subtopic's weight, and reports per-unit + overall weighted %.
+- Python-calling test: weights echo, each unit's weight equals its section
+  midpoint, and weighted mastery is honestly 0 with nothing studied.
+- Updated existing callers (mastery tests, `bench.py`) and the study-map RPC call
+  for the now-required request fields.
+- Formatting: rslib via pinned nightly rustfmt, proto via clang-format, py via ruff.
+- `./ninja check` green (~60s).

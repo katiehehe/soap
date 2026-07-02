@@ -12,6 +12,7 @@ use anki_proto::speedrun::MasteryState;
 use anki_proto::speedrun::NoScore;
 use anki_proto::speedrun::ReadinessResult;
 use anki_proto::speedrun::SpeedrunPingResponse;
+use anki_proto::speedrun::StudyPriority;
 use anki_proto::speedrun::SubtopicMastery;
 use anki_proto::speedrun::UnitMastery;
 
@@ -20,6 +21,7 @@ use crate::error;
 use crate::speedrun::mastery::compute_pools;
 use crate::speedrun::mastery::order_new_cards;
 use crate::speedrun::mastery::parse_subtopic_tag;
+use crate::speedrun::mastery::study_priorities;
 use crate::speedrun::mastery::weighted_mastery;
 use crate::speedrun::mastery::Pool;
 
@@ -179,10 +181,26 @@ impl crate::services::SpeedrunService for Collection {
             weighted_mastery_pct: weighted.overall_pct,
         });
 
+        // "What to study next", ranked by importance weight x measured
+        // opportunity. Cleared subtopics drop out; this only reorders measured
+        // state, so it never fabricates a score.
+        let priorities = study_priorities(&stats)
+            .into_iter()
+            .map(|p| StudyPriority {
+                tag: p.tag,
+                unit_id: p.unit_id,
+                subtopic_id: p.subtopic_id,
+                weight: p.weight,
+                priority_score: p.score,
+                reason: p.reason,
+            })
+            .collect();
+
         Ok(MasteryState {
             subtopics,
             units,
             overall,
+            priorities,
         })
     }
 

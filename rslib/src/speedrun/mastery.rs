@@ -249,6 +249,81 @@ pub(crate) fn weighted_mastery(stats: &[SubtopicStats]) -> WeightedMastery {
     }
 }
 
+/// A ranked "what to study next" suggestion.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct StudyPriorityItem {
+    pub tag: String,
+    pub unit_id: String,
+    pub subtopic_id: String,
+    pub weight: f64,
+    pub score: f64,
+    pub reason: String,
+}
+
+/// How much studying a subtopic can still move the needle, in [0, 1]. A cleared
+/// gate is 0 (done); a never-started subtopic is 1 (full opportunity, and it
+/// also grows coverage); a partially-studied one is the honest distance to its
+/// gate. Purely a function of MEASURED review state.
+fn opportunity(s: &SubtopicStats) -> f64 {
+    if s.gate_cleared() {
+        0.0
+    } else if s.reviews == 0 {
+        1.0
+    } else if s.reviews < MIN_PROBLEMS {
+        // Started, but not enough evidence to judge accuracy/retention yet.
+        0.8
+    } else {
+        // Judgeable: how far below the accuracy/retention gate we still sit.
+        let acc = (s.accuracy() / MIN_ACCURACY).min(1.0);
+        let retr = (s.mean_retrievability() / MIN_RETRIEVABILITY).min(1.0);
+        (1.0 - acc.min(retr)).max(0.1)
+    }
+}
+
+fn priority_reason(s: &SubtopicStats) -> String {
+    if s.reviews == 0 {
+        "Not studied yet — start here to cover a high-weight subtopic.".to_string()
+    } else if s.reviews < MIN_PROBLEMS {
+        format!(
+            "Only {}/{} graded reviews — keep practising to build enough evidence.",
+            s.reviews, MIN_PROBLEMS
+        )
+    } else {
+        "Reviewed but not yet mastered — push accuracy to 80% and retention to 90%.".to_string()
+    }
+}
+
+/// Rank the subtopics still worth studying, highest impact first: importance
+/// weight times remaining opportunity. Cleared subtopics drop out. With no
+/// weights supplied, every subtopic is treated as equally weighted so the
+/// ranking still reflects opportunity. Ties keep the input (syllabus) order, so
+/// the output is deterministic. This only reorders measured state by exam
+/// importance; it never fabricates a score.
+pub(crate) fn study_priorities(stats: &[SubtopicStats]) -> Vec<StudyPriorityItem> {
+    let use_equal = stats.iter().map(|s| s.weight).sum::<f64>() <= 0.0;
+    let mut items: Vec<StudyPriorityItem> = stats
+        .iter()
+        .filter(|s| !s.gate_cleared())
+        .map(|s| {
+            let w = if use_equal { 1.0 } else { s.weight };
+            StudyPriorityItem {
+                tag: s.tag(),
+                unit_id: s.unit_id.clone(),
+                subtopic_id: s.subtopic_id.clone(),
+                weight: s.weight,
+                score: w * opportunity(s),
+                reason: priority_reason(s),
+            }
+        })
+        .collect();
+    items.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    items
+}
+
 /// Order new cards by tier: blocked subtopics first (grouped so each is
 /// practised in isolation), then within-unit interleaving, then cross-unit
 /// interleaving. Cards whose subtopic is unknown sort last, preserving their
@@ -549,6 +624,48 @@ mod tests {
         );
         assert!((w.per_unit_pct["u"] - 0.5).abs() < 1e-9);
         assert_eq!(w.overall_weight, 0.0);
+    }
+
+    #[test]
+    fn study_priorities_rank_by_weight_then_drop_cleared() {
+        // Two not-started subtopics: the heavier one ranks first. A cleared one
+        // is dropped entirely (no study priority left).
+        let stats = vec![
+            stat_w("u", "light", 0, 0, 0.0, 1.0),   // not started, weight 1
+            stat_w("u", "heavy", 0, 0, 0.0, 9.0),   // not started, weight 9
+            stat_w("u", "done", 12, 12, 0.95, 5.0), // cleared -> dropped
+        ];
+        let p = study_priorities(&stats);
+        assert_eq!(p.len(), 2, "cleared subtopics are dropped");
+        assert_eq!(p[0].subtopic_id, "heavy");
+        assert_eq!(p[1].subtopic_id, "light");
+        assert!(p[0].score > p[1].score);
+    }
+
+    #[test]
+    fn study_priorities_prefer_not_started_at_equal_weight() {
+        // Equal weight: a not-started subtopic (full opportunity) outranks one
+        // already partway to its gate.
+        let stats = vec![
+            stat_w("u", "started", 20, 15, 0.85, 5.0), // in progress (acc 0.75)
+            stat_w("u", "fresh", 0, 0, 0.0, 5.0),      // not started
+        ];
+        let p = study_priorities(&stats);
+        assert_eq!(p[0].subtopic_id, "fresh");
+        assert_eq!(p[1].subtopic_id, "started");
+    }
+
+    #[test]
+    fn study_priorities_fall_back_to_equal_weight() {
+        // No weights supplied: ranking still works, ordered by opportunity.
+        let stats = vec![
+            stat("u", "a", 0, 0, 0.0), // not started -> opportunity 1.0
+            stat("u", "b", 5, 5, 1.0), // gathering -> opportunity 0.8
+        ];
+        let p = study_priorities(&stats);
+        assert_eq!(p[0].subtopic_id, "a");
+        assert_eq!(p[1].subtopic_id, "b");
+        assert!(p[0].score > 0.0);
     }
 
     #[test]

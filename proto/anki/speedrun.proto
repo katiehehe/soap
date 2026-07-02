@@ -176,10 +176,26 @@ message MasteryOverall {
   double weighted_mastery_pct = 8;
 }
 
+// A ranked "what to study next" suggestion: importance weight times measured
+// opportunity (how far a subtopic is from clearing its gate). Cleared subtopics
+// are omitted. Ranking only reorders MEASURED state by exam importance; it
+// never invents a score.
+message StudyPriority {
+  string tag = 1;
+  string unit_id = 2;
+  string subtopic_id = 3;
+  double weight = 4;
+  double priority_score = 5;
+  string reason = 6;
+}
+
 message MasteryState {
   repeated SubtopicMastery subtopics = 1;
   repeated UnitMastery units = 2;
   MasteryOverall overall = 3;
+  // Subtopics still worth studying, highest-impact first (weight x
+  // opportunity). Empty once everything is mastered.
+  repeated StudyPriority priorities = 4;
 }
 
 message MasteryOrderedCards {

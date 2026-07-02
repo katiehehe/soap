@@ -74,6 +74,15 @@ def test_get_mastery_state_echoes_weights_and_weighted_rollup():
         assert u.weighted_mastery_pct == 0.0
     assert state.overall.weighted_mastery_pct == 0.0
 
+    # "What to study next": nothing is cleared yet, so every subtopic is a
+    # priority, ranked highest-weight first (univariate distributions, weight 9).
+    assert len(state.priorities) == len(sw)
+    top = state.priorities[0]
+    assert top.unit_id == "univariate"
+    assert abs(top.weight - 9.0) < 1e-9
+    assert top.priority_score > 0
+    assert top.reason
+
 
 def test_mastery_ordered_new_cards_returns_blocked_cards():
     col = getEmptyCol()

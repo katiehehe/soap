@@ -50,4 +50,16 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
 - Updated existing callers (mastery tests, `bench.py`) and the study-map RPC call
   for the now-required request fields.
 - Formatting: rslib via pinned nightly rustfmt, proto via clang-format, py via ruff.
-- `./ninja check` green (~60s).
+- `./ninja check` green (~60s). Commit `3c4ce45ef`.
+
+### Phase 2.3 — weighted "what to study next" ranking (done)
+
+- Proto: new `StudyPriority` message + `MasteryState.priorities`.
+- Rust: `study_priorities()` ranks non-cleared subtopics by weight x opportunity
+  (not-started = 1.0, gathering = 0.8, judgeable in-progress = distance to the
+  gate, cleared dropped), with an equal-weight fallback and deterministic ties
+  (+3 unit tests). Purely reorders measured state — never fabricates a score.
+- `get_mastery_state` returns the ranked priorities.
+- Python test: a fresh weighted deck yields 19 priorities, top = a univariate
+  weight-9 subtopic, each with a human-readable reason.
+- `./ninja check` green (~112s; proto change triggered a fuller rebuild).

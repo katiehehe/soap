@@ -67,10 +67,11 @@ Prereqs: Rustup (toolchain auto-pinned by `rust-toolchain.toml`), N2 (`tools/ins
 ## Before you code (every session)
 
 1. Re-read `SPEC_CHECKLIST.md` and state which deadline + which checklist item you are working on.
-2. In Plan mode, propose the change and name the files you'll touch; wait for confirmation before editing.
-3. No AI/model calls, generated cards, or chatbot until the Wednesday core is done.
-4. After a change, confirm: relevant tests pass, undo still works, the collection isn't corrupted.
-5. Update `SPEC_CHECKLIST.md` checkboxes and note any new "files touched (upstream)" for the merge-difficulty log.
+2. Also read `docs/project-brief.md` before coding — it's the official project brief and grading criteria; treat it like the rubric (it wins on conflicts alongside SPEC_CHECKLIST.md).
+3. In Plan mode, propose the change and name the files you'll touch; wait for confirmation before editing.
+4. No AI/model calls, generated cards, or chatbot until the Wednesday core is done.
+5. After a change, confirm: relevant tests pass, undo still works, the collection isn't corrupted.
+6. Update `SPEC_CHECKLIST.md` checkboxes and note any new "files touched (upstream)" for the merge-difficulty log.
 
 ## Layout of this kit
 

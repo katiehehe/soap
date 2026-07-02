@@ -12,14 +12,14 @@ you must replace before the final submission. Do **not** stage either one.
 
 ## The six required shots (§12) → where they are
 
-| #  | Required shot               | Beat below | Status today                                                                                                                |
-| :- | :-------------------------- | :--------- | :-------------------------------------------------------------------------------------------------------------------------- |
-| 1  | A review session            | Beat 4     | ✅ built                                                                                                                    |
-| 2  | Your Rust change in action  | Beat 2     | ✅ built                                                                                                                    |
-| 3  | A card synced phone→desktop | Beat 7     | ⚠️ **not built** — two-way sync is the Friday item. Show _shared engine + phone review_ honestly; do not fake a synced card. |
-| 4  | Three scores with ranges    | Beat 3     | ✅ built (three separate signals + honesty bundle; readiness abstains under threshold)                                      |
-| 5  | Your AI features            | Beat 8     | ⚠️ **not built** — AI is off by default (Friday). Show the app scoring with AI off.                                          |
-| 6  | Your test results           | Beat 6     | ✅ built                                                                                                                    |
+| #  | Required shot               | Beat below | Status today                                                                                                                                 |
+| :- | :-------------------------- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1  | A review session            | Beat 4     | ✅ built                                                                                                                                     |
+| 2  | Your Rust change in action  | Beat 2     | ✅ built                                                                                                                                     |
+| 3  | A card synced phone→desktop | Beat 7     | ✅ two-way sync built + tested (`make sync-test`: 20/20, conflict rule). On-device phone→desktop is a manual recording (same engine).        |
+| 4  | Three scores with ranges    | Beat 3     | ✅ built (three separate signals + honesty bundle; readiness now emits a real band from practice tests, still give-up-gated)                 |
+| 5  | Your AI features            | Beat 8     | ✅ built (off by default): source-traced classifier + generation, gold-eval vs baseline with a pre-set cutoff; app still scores with AI off. |
+| 6  | Your test results           | Beat 6     | ✅ built                                                                                                                                     |
 
 ## What the app is (say this in Beat 1)
 
@@ -96,7 +96,14 @@ Say: _"It refuses to show a readiness number until it has ≥200 graded reviews 
 ≥50% weighted coverage — and that's a **Rust assertion**, not a UI hint. The
 return type is a `oneof`, so a bare number literally can't be emitted below
 threshold."_ Show the honesty bundle: evidence, what's missing, past accuracy, a
-**range** (once calibrated), and the single best next action.
+**range**, and the single best next action.
+
+Then show the flip side: open the demo collection (`make seed-persona` →
+`out/demo-persona.anki2`). With 200+ reviews, 100% coverage, and graded practice
+tests, the **same engine emits a real band** — e.g. projected **5.7 (4.8–6.5),
+P(pass) 23%**, confidence 0.91, next action "focus multivariate." Say: _"This is a
+**synthetic demo persona**, labelled as such and reproducible from a seed —
+computed by the same code a real student hits, never hardcoded."_
 
 ### Beat 4 — Shot 1: a review session on the real engine (2:05–2:45)
 
@@ -130,28 +137,43 @@ Say: _"Seeded train/test split, a leakage scan that flags verbatim and near-copy
 test items, a one-command benchmark, and a crash test with zero corruption —
 anyone can re-run these and get the same numbers."_
 
-### Beat 7 — Shot 3 (honest): the same engine on the phone (3:55–4:35)
+### Beat 7 — Shot 3: two-way sync (3:55–4:35)
 
-Bring the emulator forward — AnkiDroid running on **our** backend. Then prove it
-(see "Prove the engine is yours" below) and review a card on the phone.
+In the terminal, prove sync end to end on Anki's built-in server:
 
-> **Say exactly this, don't overclaim:** _"Desktop and phone run the **same
-> compiled Rust engine** — here's my speedrun source and proto compiled inside the
-> phone binary. I can review on the phone on that shared engine today; **two-way
-> sync is my next milestone**, so I'm not going to fake a synced card."_
+```bash
+make sync-test   # 10 offline reviews on each of two collections -> all 20 land once
+```
 
-**Final-cut TODO:** once two-way sync lands (Friday item 7b), replace this beat
-with a real review on the phone appearing on the desktop after sync.
+Say: _"Desktop and phone run the **same compiled Rust engine**, and they sync
+through Anki's own protocol. Two collections review 10 different cards each
+offline, then sync — all 20 land once, none lost or doubled; a same-card conflict
+keeps both reviews and picks a deterministic winner (`docs/sync-conflict-rule.md`)."_
+Then bring the emulator forward — AnkiDroid on **our** backend — and prove the
+engine is ours (see "Prove the engine is yours" below).
 
-### Beat 8 — Shot 5 (honest): AI is off, and it still scores (4:35–close)
+**Final-cut TODO:** record the on-device version (review on the phone → sync →
+appears on desktop). The scripted test exercises the identical sync code path
+because the phone runs this same engine; the phone recording is the last capture.
 
-Say: _"Per the brief, no AI before the core is solid. AI is **off by default** and
-the app still produces all three signals — you just saw that. The AI features
-(source-traced card generation, checked against a gold set and beating a
-keyword/vector baseline) are the next milestone, specced in
-`docs/ai-features-prd.md`."_
+### Beat 8 — Shot 5: AI features, checked, and still scores with AI off (4:35–close)
 
-**Final-cut TODO:** replace with a live AI feature + its eval once built (Friday).
+In the terminal:
+
+```bash
+make ai-eval     # classifier + generation evals vs their baselines, on held-out gold
+```
+
+Say: _"AI is **off by default** — you just saw all three signals compute without
+it. The AI features are source-traced: every generated card carries its named
+source and is quarantined `ai::unreviewed` until a human approves it, and every
+call is logged. Each feature is checked on a held-out gold set against a simpler
+baseline with a **pre-registered cutoff** — if it doesn't beat the baseline, we
+ship the baseline and say so (`docs/ai-results.md`)."_
+
+(With `OPENAI_API_KEY` set, the eval prints the AI-vs-baseline comparison and
+PASS/FAIL; without one it shows the baselines and that the app still scores with
+AI off.)
 
 ## Run it on the phone emulator (exact commands)
 
@@ -250,25 +272,33 @@ collection and **Tools → Exam readiness / Study map** work — i.e. it runs st
 - A real/clean phone: transfer the APK and sideload (enable "Install unknown
   apps"), **or** `adb install -r` over USB. Then run a review session.
 
-**Both must run with AI switched OFF and still give a score** — which they do,
-since no AI is wired yet. Say that explicitly on camera.
+**Both must run with AI switched OFF and still give a score** — which they do (AI
+is off by default; `test_three_signals_compute_with_ai_off`). Say that explicitly
+on camera.
 
 ## What's built vs planned (be honest on camera)
 
-- **Built:** real Rust engine change (5 RPCs); three separate signals; give-up
-  rule (Rust `oneof` assertion + test); mastery model + tier ordering **wired into
-  the live queue** (opt-in `speedrunMasteryScheduler`); points-at-stake review
-  order (`GetPointsAtStakeOrder` + opt-in `speedrunPointsAtStake`);
-  importance-weighted mastery rollup + "what to study next"; importance-sized
-  **bubble** study map (size = weight, colour = mastery); readiness dashboard +
-  honesty bundle; FSRS memory-calibration harness (`make calibration`); syllabus
-  taxonomy + weights + 42-card tagged deck; weighted coverage; **shared engine on
-  the phone**; seeded split + leakage scan + benchmark + crash test; desktop DMG +
-  phone APK.
-- **Planned (Friday/Sunday — `docs/vision.md`, `docs/ai-features-prd.md`):**
-  two-way phone↔desktop sync; the calibrated performance + readiness models
-  (readiness stays `NoScore` until then); the 3-build ablation run; and the AI
-  features (all off by default).
+- **Built:** real Rust engine change (7 RPCs); three separate signals; give-up
+  rule (Rust `oneof` assertion + test); **readiness band from graded practice
+  tests** (Wilson interval + P(pass), still give-up-gated); mastery model + tier
+  ordering **wired into the live queue** (opt-in `speedrunMasteryScheduler`);
+  points-at-stake review order (`GetPointsAtStakeOrder` + opt-in
+  `speedrunPointsAtStake`); importance-weighted mastery rollup + "what to study
+  next"; importance-sized **bubble** study map; readiness dashboard + honesty
+  bundle; FSRS memory-calibration harness (`make calibration`); **performance
+  model** on a held-out item corpus × synthetic cohort (`make performance
+  ARGS="--persona"`); **practice-test mode** + a seeded **synthetic demo persona**
+  (`make seed-persona`) that makes the three scores show real, reproducible, clearly
+  labelled numbers; **AI layer off by default** (source-traced classifier +
+  generation, gold evals vs baselines with pre-set cutoffs, audit log,
+  `ai::unreviewed` quarantine); **two-way sync tested** (`make sync-test`) +
+  conflict rule; syllabus taxonomy + weights + 42-card tagged deck; weighted
+  coverage; **shared engine on the phone**; seeded split + leakage scan + benchmark
+  - crash test; desktop DMG + phone APK.
+- **Planned (Sunday — `docs/vision.md`):** the on-device phone↔desktop sync
+  recording; a native AnkiDroid score screen (`docs/phone-scores.md`); fusing the
+  per-question performance model into readiness; the 3-build ablation run; the
+  live AI-vs-baseline numbers with a key; validation against real students.
 
 ## Feature reference (one line each, for Q&A)
 

@@ -59,7 +59,10 @@ memory where transfer is weak.
   labelled synthetic fixture** (`tools/speedrun/evals/performance_eval.py`):
   seeded split, leakage scan (clean), calibrated, beats the baseline. This proves
   the pipeline end to end; the numbers are synthetic, **not** a real student
-  result.
+  result. `make performance ARGS="--persona"` additionally runs it on the **real
+  held-out item corpus × a synthetic student cohort**, split **by item** (no item
+  leakage), reporting held-out accuracy/AUC/calibration vs the majority baseline
+  (e.g. acc ~0.76 > baseline ~0.71, ECE ~0.06).
 - **Data & safety:** a real result needs a held-out set of disguised performance
   items with correctness labels, kept out of training and verified by the leakage
   scan. **Until that dataset exists, performance reads "not yet measured" — never
@@ -68,19 +71,63 @@ memory where transfer is weak.
   against reworded-question accuracy and reports the gap, confirming performance
   is not just memory in disguise.
 
-## 3. Readiness — "would you pass today, and how sure are we?" **[planned; give-up rule built]**
+## 3. Readiness — "would you pass today, and how sure are we?" **[built; give-up rule in Rust]**
 
-- **Mapping (written down, applied once the performance model is calibrated):**
-  performance + coverage → **P(pass ≥ 6)** with a confidence band, a projected
-  **0–10 band**, and a **bootstrap range**. Coverage gates it: below the coverage
-  line the app abstains.
-- **Today:** `compute_readiness` meets the data threshold path but returns
-  `NoScore { reason: "…model is not yet calibrated…" }` — we refuse to invent a
-  number before the performance model exists. This is enforced and tested
-  (`meeting_thresholds_still_refuses_a_number_without_models`).
-- **Honesty bundle:** every real `ReadinessScore` carries `point, low, high,
-  coverage_pct, confidence, updated_at, reasons[], next_best_action` — the struct
-  makes a bare number impossible to emit.
+Emitted by the Rust `compute_readiness` (so the honesty bundle is enforced by the
+type system) from graded **practice-test** evidence.
+
+- **Give-up rule (unchanged):** below **≥ 200 graded reviews AND ≥ 50% weighted
+  coverage** it returns `NoScore`. Even above that, a readiness NUMBER also needs
+  **≥ 30 graded practice-test questions** (config `speedrunPracticeStats`, written
+  by `practice_test.record_test`); below that it still abstains. No practice
+  evidence → no number.
+- **Mapping (fixed in advance, in `readiness_from_practice`):** let p̂ = correct /
+  questions over all graded practice-test questions.
+  - **Projected 0–10 band:** scaled ≈ 10 × p̂; the range is 10 × the **95% Wilson
+    interval** on p̂ (robust for small n and near 0/1).
+  - **P(pass):** SOA P passes at scaled ≥ 6, i.e. p ≥ **0.60** under the linear
+    map. P(pass) = Φ((p̂ − 0.60) / se), the normal approximation to the binomial
+    proportion (se = √(p̂(1−p̂)/n)). 0.60 is a stated assumption, recalibratable
+    with real scaled-score data; never tuned to flatter a result.
+  - **Confidence** ∈ [0,1] rises with a tighter band and more coverage.
+  - **Next best action:** the weakest reviewed-but-uncleared subtopic by measured
+    revlog accuracy.
+- **Honesty bundle:** every `ReadinessScore` carries `point, low, high,
+  coverage_pct, confidence, updated_at, reasons[], next_best_action,
+  pass_probability` (+ `past_accuracy`, shown as not-yet-available until there is
+  a history of predictions vs outcomes). The struct makes a bare number
+  impossible to emit. Rust tests: `emits_a_readiness_band_with_practice_evidence`,
+  `meeting_review_gates_still_refuses_without_practice_tests`,
+  `readiness_band_scales_and_bounds`, `wilson_interval_brackets_the_estimate`,
+  `normal_cdf_is_calibrated_at_known_points`.
+- **Demo:** `make seed-persona` / `make practice-test` show a real, reproducible,
+  synthetic-persona readiness band (e.g. projected ~5.7, range ~4.8–6.5,
+  P(pass) ~23%) — computed by this exact code, never hardcoded.
+
+## Synthetic demo persona (honest "reasonable data")
+
+To demo live numbers without a real study history, the fork uses a **seeded,
+clearly-labelled synthetic persona** (`pylib/anki/speedrun/persona.py`), never a
+hardcoded score. The rubric's automatic-fail is _dressing up a guess as a
+measurement_; this does the opposite:
+
+- The persona is a latent **per-subtopic skill** vector, deterministic from a
+  seed. `tools/speedrun/seed_persona.py` turns it into a real collection: it
+  builds the tagged deck, inserts **graded revlog rows** (so coverage and review
+  counts are genuine collection state), and records **graded practice tests**.
+- Every number the app then shows is computed by **exactly the code a real
+  student hits** (the Rust give-up rule, `compute_readiness`, the performance
+  pipeline) — only the input history is synthetic, and it is stamped
+  `synthetic demo persona` everywhere it surfaces.
+- Same seed -> same persona -> same numbers, so anyone can reproduce them
+  (`make seed-persona`, `make practice-test`).
+- The **performance model** is evaluated on a synthetic **cohort**
+  (`synthetic_cohort`) crossed with the real held-out item corpus, split by item
+  so no item leaks. That measures the model, honestly labelled as synthetic.
+
+This keeps the give-up rule and the honesty bundle fully in force: below the
+thresholds the persona still gets `NoScore`, and no persona number is ever
+emitted that the real pipeline didn't compute.
 
 ## Reproducibility
 
@@ -94,8 +141,12 @@ memory where transfer is weak.
 
 ## What is deliberately NOT done yet (stated honestly)
 
-- No calibrated **performance** model yet (needs the disguised-item dataset), so
-  **readiness stays `NoScore`**. The mapping above is fixed in advance so it
-  can't be tuned to flatter the result later.
+- **Readiness** now emits from the graded practice-test proportion. What is NOT
+  yet done: fusing the per-question **performance-model** predictions into
+  readiness, and validating the 0.60 pass map against real SOA scaled scores. The
+  mapping is fixed in advance so it can't be tuned to flatter the result.
+- No calibrated **performance** model on REAL students yet (needs a real labelled
+  disguised-item dataset); it is validated on a synthetic cohort + the held-out
+  item corpus and abstains ("not yet measured") on real data.
 - **Memory** calibration prints numbers only on a real review history; on a fresh
   or seed collection it abstains by design.

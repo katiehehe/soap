@@ -262,3 +262,21 @@ coverage abstains; weakness measured). Fixed the concrete findings:
   a labelled disguised-item dataset exists.
 - 6 unit tests; `docs/score-models.md` + checklist Step 2 updated.
 - Verified: full `./ninja check` green, `make crash-test` 20/20, e2e 4/4.
+
+## Follow-up round 3: study-map front door + review tier banner (requested)
+
+Addresses the "make the tier visible; let the user start from subtopics" gap —
+the mastery scheduler was an invisible reorder of one pile. Commit `f96158f57`.
+
+- **Study map is now a front door:** a "Study this subtopic (blocked practice)"
+  button opens that subtopic's deck via a webview->Python bridge
+  (`set_bridge_command` + `deck_name_for_subtopic_tag`, which maps the tag to the
+  deck `build_deck` created). Studying a leaf subtopic deck _is_ blocked practice.
+- **Review-time tier banner:** `reviewer_did_show_question/answer` hooks show the
+  current card's tier (Blocked / Within-unit / Cross-unit + subtopic), gated by a
+  `speedrunTierBanner` config (default on). Read-only overlay (`web.eval`), so
+  FSRS intervals and undo are untouched. Registered once from `main.py` (the only
+  upstream edit; logged).
+- pylib helper `deck_name_for_subtopic_tag` + test; docs (vision build-order step
+  1 now done, merge log). Full `./ninja check` green; study-map e2e passes;
+  screenshot shows the button.

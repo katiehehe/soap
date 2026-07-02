@@ -103,7 +103,10 @@ counts:
 
 ## Build order (suggested next steps)
 
-1. Tap a tree node -> open that subtopic's deck in the reviewer (pycmd bridge).
+1. ~~Tap a tree node -> open that subtopic's deck in the reviewer (pycmd bridge).~~
+   **[done]** - a "Study this subtopic (blocked practice)" button on the study map
+   opens that subtopic's deck via a webview->Python bridge, and a review-time
+   banner shows the current card's tier (Blocked / Within-unit / Cross-unit).
 2. ~~Live queue: use the tier order in the actual scheduler~~ **[done]** — the
    `speedrunMasteryScheduler` flag makes `build_queues` serve new cards in tier
    order (Blocked -> WithinUnit -> CrossUnit); default off.

@@ -131,9 +131,45 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
 - `SPEC_CHECKLIST.md`: 7a now `[x]` (live-queue wiring done behind the flag +
   weighted rollups + priorities); Step 1 / Sunday memory-calibration + score-
   mapping marked `[~]` with the new harness/doc; ablation switch noted; new files
-  + the queue-builder hook added to the merge log.
+  - the queue-builder hook added to the merge log.
 - `docs/vision.md`: live-queue integration marked built; recent additions
   (weights, weighted rollup, priorities, sized bubbles, calibration) listed.
 - `PRD.md`: §8 status note (live queue + weighting) and §9 pointer to
   `docs/score-models.md` + the calibration library.
 - `./ninja check` (dprint) green.
+
+## Final validation (2026-07-02)
+
+- Full `./ninja check` green (rust_test, pytest pylib+aqt, ruff, mypy, clippy,
+  eslint, svelte, prettier, dprint, minilints, vitest).
+- `make bench` on 50k cards: next-card p95 0.05ms, mastery query p95 0.12ms
+  (weighted rollup + priorities added, still negligible), mastery-ordered new
+  cards p95 148ms, readiness p95 3.78ms — all within the speed targets.
+- `make crash-test`: 20/20 mid-review SIGKILLs, zero corruption.
+- Playwright e2e: 4/4 pass (readiness dashboard, study map, sanity x2).
+
+## Summary of the night
+
+Phase 2 (all committed, all green):
+
+- 2.1 per-subtopic importance weights (`bc31b4eef`)
+- 2.2 importance-weighted mastery rollup in the engine (`3c4ce45ef`)
+- 2.3 weighted "what to study next" ranking (`834aa2714`)
+- 2.4 importance-sized bubble concept map + unit detail (`ba5860e7b`)
+
+Phase 3 (all committed, all green):
+
+- 3.1 opt-in three-tier mastery ordering in the live queue, default off,
+  self-contained + read-only (`368530302`)
+- 3.2 honest calibration: memory (FSRS held-out) + tested metrics library +
+  `docs/score-models.md`; readiness stays `NoScore` (no fabricated number)
+  (`5a8880aaf`)
+- specs synced (`ad3b0dd43`)
+
+Honesty guarantees kept: three scores never blended; give-up rule untouched (no
+threshold weakened); no readiness/performance number invented; bubble size =
+importance, colour = measured mastery; no AI; no sync. Undo/integrity verified.
+
+Not done (by design / out of scope for the unattended run): calibrated
+performance model (needs a disguised-item dataset), the ablation _run_ itself,
+AI features, and two-way sync.

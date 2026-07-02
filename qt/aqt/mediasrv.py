@@ -837,6 +837,14 @@ def _check_dynamic_request_permissions():
         "/_anki/setSchedulingStates",
         "/_anki/i18nResources",
         "/_anki/congratsInfo",
+        # Speedrun (SOA Exam P fork): the readiness dashboard and study map are
+        # first-party pages served in a dedicated webview kind, but we also allow
+        # these two read-only endpoints here as a reliable authorization path so
+        # they never depend on the webview's Authorization header injection.
+        # Both are read-only (compute a score / return mastery stats) and expose
+        # nothing more sensitive than the user's own local study data.
+        "/_anki/computeReadiness",
+        "/_anki/getMasteryState",
     ):
         pass
     else:

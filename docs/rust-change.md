@@ -45,7 +45,10 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   bare readiness number literally cannot be emitted. The give-up rule is a
   pre-registered Rust assertion: below `>= 200 graded reviews AND >= 50% coverage`
   (coverage weighted by the SOA section weights) it returns `NoScore { reason, ... }`.
-  This is the honesty/give-up rule as code.
+  Coverage is **practiced** coverage (PRD 9: "% of syllabus practiced") - the share
+  of subtopics with `>= 1` graded review, not the share you merely own cards for - so
+  a freshly imported full deck reads 0%, not 100% (regression test:
+  `unstudied_cards_do_not_count_as_coverage`). This is the honesty/give-up rule as code.
 - **The three-tier mastery model** (`rslib/src/speedrun/mastery.rs`): per subtopic,
   the gate is computed from real revlog accuracy + FSRS retrievability
   (`>= 80% accuracy AND >= 0.90 retrievability over >= 10 problems`); each subtopic

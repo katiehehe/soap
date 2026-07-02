@@ -123,6 +123,57 @@ pub(crate) fn compute_pools(stats: &[SubtopicStats]) -> HashMap<String, Pool> {
         .collect()
 }
 
+/// Honest, measured rollup of the mastery gate across the whole syllabus. Every
+/// field is a count of demonstrated state, never a predicted score.
+/// `mastered` + `in_progress` + `not_started` always equals `subtopics_total`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct MasteryOverallCounts {
+    pub subtopics_total: u32,
+    pub subtopics_mastered: u32,
+    pub subtopics_in_progress: u32,
+    pub subtopics_not_started: u32,
+    pub units_total: u32,
+    pub units_mastered: u32,
+    pub total_reviews: u32,
+}
+
+/// Roll up per-subtopic stats into honest overall counts. A subtopic is
+/// `not_started` with zero reviews, `mastered` once its gate is cleared, and
+/// `in_progress` otherwise; the three partition the syllabus so nothing is
+/// double-counted or invented. A unit is mastered when it has >= 1 subtopic and
+/// all of them are cleared.
+pub(crate) fn mastery_overall(stats: &[SubtopicStats]) -> MasteryOverallCounts {
+    let subtopics_total = stats.len() as u32;
+    let subtopics_mastered = stats.iter().filter(|s| s.gate_cleared()).count() as u32;
+    let subtopics_not_started = stats.iter().filter(|s| s.reviews == 0).count() as u32;
+    let subtopics_in_progress = subtopics_total
+        .saturating_sub(subtopics_mastered)
+        .saturating_sub(subtopics_not_started);
+
+    let mut unit_total: HashMap<&str, u32> = HashMap::new();
+    let mut unit_cleared: HashMap<&str, u32> = HashMap::new();
+    for s in stats {
+        *unit_total.entry(s.unit_id.as_str()).or_default() += 1;
+        if s.gate_cleared() {
+            *unit_cleared.entry(s.unit_id.as_str()).or_default() += 1;
+        }
+    }
+    let units_mastered = unit_total
+        .iter()
+        .filter(|(u, &tot)| tot > 0 && unit_cleared.get(*u).copied().unwrap_or(0) == tot)
+        .count() as u32;
+
+    MasteryOverallCounts {
+        subtopics_total,
+        subtopics_mastered,
+        subtopics_in_progress,
+        subtopics_not_started,
+        units_total: unit_total.len() as u32,
+        units_mastered,
+        total_reviews: stats.iter().map(|s| s.reviews).sum(),
+    }
+}
+
 /// Order new cards by tier: blocked subtopics first (grouped so each is
 /// practised in isolation), then within-unit interleaving, then cross-unit
 /// interleaving. Cards whose subtopic is unknown sort last, preserving their
@@ -139,23 +190,28 @@ pub(crate) fn order_new_cards(
             None => 3,
         }
     }
-    let mut indexed: Vec<(usize, &(CardId, String))> = cards.iter().enumerate().collect();
-    indexed.sort_by(|(ai, a), (bi, b)| {
-        let ra = rank(pools.get(&a.1).copied());
-        let rb = rank(pools.get(&b.1).copied());
-        // Within Blocked, group by subtopic tag so a subtopic is practised
-        // together; then fall back to stable input order.
-        ra.cmp(&rb)
+    // Precompute each card's tier rank once (a single hash lookup per card)
+    // rather than hashing the subtopic tag inside the O(n log n) comparator,
+    // which keeps ordering fast on a large new-card pool.
+    let mut keyed: Vec<(u8, &str, usize, CardId)> = cards
+        .iter()
+        .enumerate()
+        .map(|(i, (cid, tag))| (rank(pools.get(tag).copied()), tag.as_str(), i, *cid))
+        .collect();
+    keyed.sort_by(|a, b| {
+        // Tier first; within Blocked, group by subtopic tag so a subtopic is
+        // practised together; then fall back to stable input order.
+        a.0.cmp(&b.0)
             .then_with(|| {
-                if ra == 0 {
-                    a.1.cmp(&b.1)
+                if a.0 == 0 {
+                    a.1.cmp(b.1)
                 } else {
                     std::cmp::Ordering::Equal
                 }
             })
-            .then_with(|| ai.cmp(bi))
+            .then_with(|| a.2.cmp(&b.2))
     });
-    indexed.into_iter().map(|(_, c)| c.0).collect()
+    keyed.into_iter().map(|(_, _, _, cid)| cid).collect()
 }
 
 impl Collection {
@@ -186,15 +242,27 @@ impl Collection {
         let next_day_at = timing.next_day_at.0;
         let now = TimestampSecs::now().0;
 
+        // Drive from an aggregated revlog so the scan scales with the number of
+        // *reviewed* cards, not the whole collection: a never-reviewed card has
+        // no graded rows (so it adds 0 reviews) and no FSRS memory state (so its
+        // retrievability is NULL), i.e. it can never change a subtopic's gate.
+        // Skipping those cards keeps the mastery query fast on a 50k-card deck.
         let sql = "
             SELECT n.tags,
                    extract_fsrs_retrievability(
                        c.data,
                        case when c.odue != 0 then c.odue else c.due end,
                        c.ivl, ?1, ?2, ?3),
-                   (select count(*) from revlog where cid = c.id and ease >= 1),
-                   (select count(*) from revlog where cid = c.id and ease >= 2)
-            FROM cards c JOIN notes n ON c.nid = n.id
+                   r.reviews,
+                   r.passes
+            FROM (SELECT cid,
+                         count(*) AS reviews,
+                         sum(case when ease >= 2 then 1 else 0 end) AS passes
+                  FROM revlog
+                  WHERE ease >= 1
+                  GROUP BY cid) r
+            JOIN cards c ON c.id = r.cid
+            JOIN notes n ON n.id = c.nid
             WHERE n.tags LIKE '% subtopic::%'";
 
         let mut stmt = self.storage.db.prepare_cached(sql)?;
@@ -320,6 +388,38 @@ mod tests {
         ];
         let ordered = order_new_cards(&cards, &pools);
         assert_eq!(ordered, vec![CardId(3), CardId(2), CardId(1), CardId(4)]);
+    }
+
+    #[test]
+    fn overall_counts_partition_the_syllabus_and_are_measured() {
+        // gp: one mastered, one untouched -> unit not mastered.
+        // uv: its only subtopic mastered -> unit mastered.
+        // mv: one in-progress (reviews but gate not cleared) -> unit not mastered.
+        let stats = vec![
+            stat("gp", "a", 12, 12, 0.95), // mastered
+            stat("gp", "b", 0, 0, 0.0),    // not started
+            stat("uv", "x", 15, 15, 0.99), // mastered (whole unit)
+            stat("mv", "y", 4, 2, 0.60),   // in progress (too few + inaccurate)
+        ];
+        let o = mastery_overall(&stats);
+        assert_eq!(o.subtopics_total, 4);
+        assert_eq!(o.subtopics_mastered, 2);
+        assert_eq!(o.subtopics_in_progress, 1);
+        assert_eq!(o.subtopics_not_started, 1);
+        // Partition invariant: the three buckets sum to the total.
+        assert_eq!(
+            o.subtopics_mastered + o.subtopics_in_progress + o.subtopics_not_started,
+            o.subtopics_total
+        );
+        assert_eq!(o.units_total, 3);
+        assert_eq!(o.units_mastered, 1); // only uv
+        assert_eq!(o.total_reviews, 31); // 12 + 15 + 4; not-started adds 0
+    }
+
+    #[test]
+    fn overall_on_empty_syllabus_is_all_zero() {
+        let o = mastery_overall(&[]);
+        assert_eq!(o, MasteryOverallCounts::default());
     }
 
     #[test]

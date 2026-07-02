@@ -18,11 +18,22 @@ test("study map renders the three-layer topic tree", async ({ page }) => {
     // Some subtopics (layer 3), including the ones added to match the syllabus.
     await expect(page.getByText("Bayes' theorem")).toBeVisible();
     await expect(page.getByText("Order statistics")).toBeVisible();
-    await expect(page.getByText("Insurance applications")).toBeVisible();
+    await expect(page.getByText("Insurance apps")).toBeVisible();
+
+    // Overall mastery is shown, and on an empty collection it honestly reads
+    // 0 of 19 mastered (a measured count, not a guess).
+    await expect(page.getByRole("heading", { name: "Overall mastery" })).toBeVisible();
+    await expect(page.getByText("0 / 19 subtopics")).toBeVisible();
+    await expect(page.getByText("demonstrated mastery")).toBeVisible();
+    // The predicted exam score is explicitly withheld (give-up rule), never faked.
+    await expect(page.getByText(/projected score stays hidden/)).toBeVisible();
 
     // Tapping a subtopic opens its mastery detail (empty collection -> not started).
     await page.getByText("Order statistics").click();
-    await expect(page.getByText("Graded reviews")).toBeVisible();
+    const detail = page.locator("section.detail");
+    await expect(detail.getByText("Graded reviews", { exact: true })).toBeVisible();
+    // With no reviews, accuracy/retention are withheld rather than guessed.
+    await expect(detail.getByText(/need ≥ 10 reviews/).first()).toBeVisible();
 
     await page.screenshot({ path: "out/study-map.png", fullPage: true });
 });

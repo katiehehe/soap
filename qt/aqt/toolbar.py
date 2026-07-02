@@ -374,6 +374,28 @@ class Toolbar:
             ),
         ]
 
+        # Speedrun (SOA Exam P fork): surface readiness + study map as first-class
+        # toolbar buttons, so they are one click from the main screen rather than
+        # only living in the Tools menu.
+        links.append(
+            self.create_link(
+                "speedrunReadiness",
+                "Readiness",
+                self._speedrun_readiness_handler,
+                tip="SOA Exam P readiness — three scores with ranges + honesty bundle",
+                id="speedrunReadiness",
+            )
+        )
+        links.append(
+            self.create_link(
+                "speedrunStudyMap",
+                "Study map",
+                self._speedrun_study_map_handler,
+                tip="SOA Exam P mastery concept map",
+                id="speedrunStudyMap",
+            )
+        )
+
         links.append(self._create_sync_link())
 
         gui_hooks.top_toolbar_did_init_links(links, self)
@@ -449,6 +471,16 @@ class Toolbar:
 
     def _statsLinkHandler(self) -> None:
         self.mw.onStats()
+
+    def _speedrun_readiness_handler(self) -> None:
+        import aqt.speedrun
+
+        aqt.speedrun.show_readiness_dashboard(self.mw)
+
+    def _speedrun_study_map_handler(self) -> None:
+        import aqt.speedrun
+
+        aqt.speedrun.show_study_map(self.mw)
 
     def _syncLinkHandler(self) -> None:
         self.mw.on_sync_button_clicked()

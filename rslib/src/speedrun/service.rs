@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use anki_proto::speedrun::readiness_result;
 use anki_proto::speedrun::ComputeReadinessRequest;
 use anki_proto::speedrun::MasteryOrderedCards;
+use anki_proto::speedrun::MasteryOverall;
 use anki_proto::speedrun::MasteryRequest;
 use anki_proto::speedrun::MasteryState;
 use anki_proto::speedrun::NoScore;
@@ -13,7 +14,6 @@ use anki_proto::speedrun::ReadinessResult;
 use anki_proto::speedrun::SpeedrunPingResponse;
 use anki_proto::speedrun::SubtopicMastery;
 use anki_proto::speedrun::UnitMastery;
-use unicase::UniCase;
 
 use crate::collection::Collection;
 use crate::error;
@@ -119,7 +119,7 @@ impl crate::services::SpeedrunService for Collection {
             })
             .collect();
 
-        let units = unit_order
+        let units: Vec<UnitMastery> = unit_order
             .into_iter()
             .map(|unit| {
                 let total = unit_total.get(&unit).copied().unwrap_or(0);
@@ -133,7 +133,24 @@ impl crate::services::SpeedrunService for Collection {
             })
             .collect();
 
-        Ok(MasteryState { subtopics, units })
+        // Honest overall rollup, computed in the engine from the same gate as the
+        // scheduler. Measured counts only (demonstrated mastery), never a score.
+        let o = crate::speedrun::mastery::mastery_overall(&stats);
+        let overall = Some(MasteryOverall {
+            subtopics_total: o.subtopics_total,
+            subtopics_mastered: o.subtopics_mastered,
+            subtopics_in_progress: o.subtopics_in_progress,
+            subtopics_not_started: o.subtopics_not_started,
+            units_total: o.units_total,
+            units_mastered: o.units_mastered,
+            total_reviews: o.total_reviews,
+        });
+
+        Ok(MasteryState {
+            subtopics,
+            units,
+            overall,
+        })
     }
 
     fn get_mastery_ordered_new_cards(
@@ -170,11 +187,14 @@ impl Collection {
         Ok(count.max(0) as u32)
     }
 
-    /// Coverage of the expected syllabus, weighted by unit. Each unit's covered
-    /// fraction (subtopics present as a note tag / total subtopics in the unit)
-    /// is combined by the given unit weights (the SOA section weights), so
-    /// skipping a high-weight section can't read as "covered". With no weights,
-    /// units are weighted equally. Returns 0.0 when nothing is expected.
+    /// Practiced coverage of the expected syllabus, weighted by unit. Per PRD
+    /// 9, "coverage = % of syllabus practiced": a subtopic counts only once
+    /// it has at least one graded review. Merely owning a card you have
+    /// never studied does NOT count, so a freshly imported full deck reads
+    /// 0%, not 100%. Each unit's practiced fraction is combined by the
+    /// given unit weights (the SOA section weights), so skipping a
+    /// high-weight section can't read as "covered". With no weights, units
+    /// are weighted equally. Returns 0.0 when nothing is expected.
     fn weighted_coverage(
         &self,
         expected: &[String],
@@ -183,13 +203,13 @@ impl Collection {
         if expected.is_empty() {
             return Ok(0.0);
         }
-        let tags = self.storage.all_tags_in_notes()?;
+        let practiced = self.practiced_subtopics()?;
         let mut total: HashMap<String, u32> = HashMap::new();
         let mut covered: HashMap<String, u32> = HashMap::new();
         for tag in expected {
             if let Some((unit, _sub)) = parse_subtopic_tag(tag) {
                 *total.entry(unit.clone()).or_default() += 1;
-                if tags.contains(&UniCase::new(tag.clone())) {
+                if practiced.contains(&tag.to_ascii_lowercase()) {
                     *covered.entry(unit).or_default() += 1;
                 }
             }
@@ -205,6 +225,29 @@ impl Collection {
             den += weight;
         }
         Ok(if den > 0.0 { num / den } else { 0.0 })
+    }
+
+    /// Subtopic tags (lowercased) with at least one graded review on some card.
+    /// This is the "practiced" set behind coverage: it separates a syllabus you
+    /// have actually studied from one you merely own cards for.
+    fn practiced_subtopics(&self) -> error::Result<std::collections::HashSet<String>> {
+        let sql = "
+            SELECT DISTINCT n.tags
+            FROM cards c JOIN notes n ON c.nid = n.id
+            WHERE n.tags LIKE '% subtopic::%'
+              AND EXISTS (SELECT 1 FROM revlog r WHERE r.cid = c.id AND r.ease > 0)";
+        let mut stmt = self.storage.db.prepare_cached(sql)?;
+        let mut rows = stmt.query([])?;
+        let mut out = std::collections::HashSet::new();
+        while let Some(row) = rows.next()? {
+            let tags: String = row.get(0)?;
+            for t in tags.split_whitespace() {
+                if t.starts_with("subtopic::") {
+                    out.insert(t.to_ascii_lowercase());
+                }
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -313,10 +356,27 @@ mod tests {
         col.add_note(&mut note, DeckId(1)).unwrap();
     }
 
-    fn insert_graded_reviews(col: &mut Collection, n: usize) {
-        let base: i64 = 1_600_000_000_000;
-        let rows: Vec<String> = (0..n)
-            .map(|i| format!("({},1,-1,3,1,1,2500,1000,1)", base + i as i64))
+    /// Add a tagged note and give its card `reviews` graded reviews, so the
+    /// subtopic counts as practiced. Reviews land on the real card id, which is
+    /// what practiced-coverage requires (an unstudied card must not count).
+    fn add_reviewed_note(col: &mut Collection, tags: &[&str], reviews: usize) {
+        let mut note = NoteAdder::basic(col).note();
+        note.tags = tags.iter().map(|s| s.to_string()).collect();
+        col.add_note(&mut note, DeckId(1)).unwrap();
+        let cid: i64 = col
+            .storage
+            .db
+            .query_row("select id from cards where nid = ?", [note.id.0], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        if reviews == 0 {
+            return;
+        }
+        // Space revlog ids per note so primary keys never collide.
+        let base: i64 = 1_600_000_000_000 + note.id.0 * 1_000_000;
+        let rows: Vec<String> = (0..reviews)
+            .map(|i| format!("({},{},-1,3,1,1,2500,1000,1)", base + i as i64, cid))
             .collect();
         let sql = format!(
             "insert into revlog (id,cid,usn,ease,ivl,lastIvl,factor,time,type) values {};",
@@ -341,10 +401,35 @@ mod tests {
     }
 
     #[test]
+    fn unstudied_cards_do_not_count_as_coverage() {
+        // Regression for the "100% before I've done anything" bug: owning a full
+        // deck you have never studied must read 0% coverage. Coverage is
+        // "% of syllabus practiced", not "cards owned".
+        let mut col = Collection::new();
+        for tag in expected() {
+            add_tagged_note(&mut col, &[tag.as_str()]); // cards exist, zero
+                                                        // reviews
+        }
+        match col
+            .compute_readiness(request(expected()))
+            .unwrap()
+            .value
+            .unwrap()
+        {
+            Value::NoScore(no_score) => {
+                assert_eq!(no_score.coverage_pct, 0.0);
+                assert_eq!(no_score.graded_reviews, 0);
+            }
+            Value::Score(_) => panic!("must not score an unstudied deck"),
+        }
+    }
+
+    #[test]
     fn give_up_when_reviews_below_threshold_even_at_full_coverage() {
         let mut col = Collection::new();
         for tag in expected() {
-            add_tagged_note(&mut col, &[tag.as_str()]);
+            add_reviewed_note(&mut col, &[tag.as_str()], 1); // practiced, but
+                                                             // tiny
         }
         let result = col.compute_readiness(request(expected())).unwrap();
         match result.value.unwrap() {
@@ -359,10 +444,11 @@ mod tests {
     #[test]
     fn meeting_thresholds_still_refuses_a_number_without_models() {
         let mut col = Collection::new();
+        // 50 reviews on each of the 4 subtopics: 200 graded reviews AND full
+        // practiced coverage, so both give-up gates are met.
         for tag in expected() {
-            add_tagged_note(&mut col, &[tag.as_str()]); // 100% coverage
+            add_reviewed_note(&mut col, &[tag.as_str()], 50);
         }
-        insert_graded_reviews(&mut col, 200); // >= 200 graded reviews
         let result = col.compute_readiness(request(expected())).unwrap();
         match result.value.unwrap() {
             Value::NoScore(no_score) => {
@@ -382,8 +468,8 @@ mod tests {
     #[test]
     fn coverage_is_weighted_by_unit_weights() {
         let mut col = Collection::new();
-        // Two units, one subtopic each; cover only the heavy unit "b".
-        add_tagged_note(&mut col, &["subtopic::b::y"]);
+        // Two units, one subtopic each; practise only the heavy unit "b".
+        add_reviewed_note(&mut col, &["subtopic::b::y"], 1);
         let req = ComputeReadinessRequest {
             expected_subtopics: vec!["subtopic::a::x".to_string(), "subtopic::b::y".to_string()],
             units: vec![

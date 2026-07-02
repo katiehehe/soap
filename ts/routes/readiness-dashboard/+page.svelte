@@ -165,7 +165,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         <span class="hint">{noScore.reviewsNeeded} more needed</span>
                     </div>
                     <div class="metric">
-                        <span class="label">Syllabus coverage</span>
+                        <span class="label">Syllabus practiced</span>
                         <span class="metric-value">{pct(coveragePct)}</span>
                         <div class="bar">
                             <span
@@ -173,7 +173,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                 style="width: {Math.min(100, coveragePct * 100)}%"
                             ></span>
                         </div>
-                        <span class="hint">need ≥ 50% (weighted by section)</span>
+                        <span class="hint">
+                            subtopics studied ≥ 1× · need ≥ 50% (weighted by section)
+                        </span>
                     </div>
                 </div>
                 <div class="next-action">
@@ -210,8 +212,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <p class="note">
                 The give-up rule lives in the Rust engine: with fewer than 200 graded
                 reviews <b>or</b>
-                under 50% weighted coverage, no score is shown. Fields stay "—" until the
-                memory and performance models are calibrated — we never fabricate a number.
+                under 50% weighted
+                <b>practiced</b>
+                coverage (the share of subtopics you've actually studied, not just have cards
+                for), no score is shown. Fields stay "—" until the memory and performance
+                models are calibrated — we never fabricate a number.
             </p>
             <dl class="bundle">
                 <div>
@@ -227,7 +232,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     </dd>
                 </div>
                 <div>
-                    <dt>Syllabus covered</dt>
+                    <dt>Syllabus practiced</dt>
                     <dd>{pct(coveragePct)}</dd>
                 </div>
                 <div>

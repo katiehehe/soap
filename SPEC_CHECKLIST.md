@@ -73,14 +73,14 @@ Desktop (AI):
 
 ## 6. Concrete challenges (section 7)
 
-- [~] 7a Rust change: the real three-tier mastery-gated scheduler now exists — mastery model (per-subtopic gate from revlog accuracy + FSRS retrievability), `GetMasteryState` + `GetMasteryOrderedNewCards` RPCs, tier/pool ordering. 11 Rust tests + 4 Python tests; undo/no-corruption covered; `docs/rust-change.md` (why Rust) + `docs/upstream-touched.md` (merge note). Remaining: wire ordering into the live queue builder (phone build now verified — engine runs on the emulator).
+- [~] 7a Rust change: the real three-tier mastery-gated scheduler now exists — mastery model (per-subtopic gate from revlog accuracy + FSRS retrievability), `GetMasteryState` + `GetMasteryOrderedNewCards` RPCs, tier/pool ordering. 14 Rust tests + 4 Python tests; undo/no-corruption covered; mastery query optimised to be revlog-driven (p95 ~0.06ms) and ordered-new-cards p95 cut from ~1.39s → ~155ms on 50k; `docs/rust-change.md` (why Rust) + `docs/upstream-touched.md` (merge note). Remaining: wire ordering into the live queue builder (phone build now verified — engine runs on the emulator).
 - [ ] 7b Sync test: 10 offline phone + 10 offline desktop → all 20 land once; same-card conflict rule picks a clear winner (documented).
 - [x] 7c Coverage map: official 2026-05 P outline in `pylib/anki/speedrun/exam_p_topics.json` (3 units, 19 subtopics from the real learning outcomes); coverage computed in Rust from note tags, weighted by section; % shown on the readiness dashboard; readiness abstains below 50% (give-up rule). An interactive **study map** (`ts/routes/study-map`) renders the syllabus as a concept map (Exam P centre, units on an equilateral triangle, subtopics radiating) with links that fill by mastery via `get_mastery_state`.
 - [ ] 7d Paraphrase test: 30 cards × 2 reworded Qs; recall vs reworded accuracy; gap reported.
 - [x] 7e Leakage check: `tools/speedrun/leakage_scan.py` flags verbatim + near-copy (Jaccard) test items in training and exits non-zero; ran clean on the seed deck; `test_speedrun_split.py` covers detection + a deterministic seeded split.
 - [ ] 7f AI card check: gold set of 50; 50 generated from one source; correct/wrong/bad-teaching counts; cutoff pre-set.
 - [~] 7g Crash + offline: desktop `make crash-test` kills the app mid-review 20× with zero corruption (SQLite integrity_check). Network/AI-off path is Friday (no AI yet); phone crash pending.
-- [x] 7h One-command benchmark: `make bench` on a 50k-card deck prints p50/p95/worst per action (next-card p95 ~0.06ms, mastery query p50 ~160ms, readiness p50 ~356ms).
+- [x] 7h One-command benchmark: `make bench` on a 50k-card deck prints p50/p95/worst per action. Latest run (all-new deck): next-card p95 ~0.05ms, mastery query p95 ~0.06ms, mastery-ordered new cards p95 ~155ms, readiness p95 ~4.7ms. The mastery query is now revlog-driven (scans only reviewed cards, so it scales with review count, not deck size); the ordered-new-cards path still scans all new cards and dropped from p95 ~1.39s → ~155ms after that optimisation + a precomputed-rank sort.
 
 ## 7. Score-model steps (section 9)
 
@@ -92,8 +92,8 @@ Desktop (AI):
 ## 8. Speed & reliability targets (section 10) — report p50 / p95 / worst
 
 - [ ] Button press acknowledged: p95 < 50 ms (desktop + phone).
-- [x] Next card after grading: p95 < 100 ms. (measured p95 ~0.06 ms on 50k via `make bench`.)
-- [~] Dashboard first load: p95 < 1 s. Refresh: p95 < 500 ms, no freeze. (readiness p95 ~553 ms on 50k — under the 1s load target; refresh borderline, to optimise.)
+- [x] Next card after grading: p95 < 100 ms. (measured p95 ~0.05 ms on 50k via `make bench`.)
+- [x] Dashboard first load: p95 < 1 s. Refresh: p95 < 500 ms, no freeze. (on 50k via `make bench`: mastery query p95 ~0.06 ms + readiness p95 ~4.7 ms power the dashboard, and mastery-ordered new cards p95 ~155 ms — all comfortably under both the 1 s load and 500 ms refresh targets after the revlog-driven query optimisation.)
 - [ ] Sync of a normal session: < 5 s on a normal connection.
 - [ ] Memory on 50k cards: under a stated limit, desktop + mid-range phone.
 - [ ] Cold start: < 5 s desktop, < 4 s phone. Nothing freezes the screen > 100 ms.

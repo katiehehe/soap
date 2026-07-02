@@ -5,119 +5,59 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <script lang="ts">
     import { onMount } from "svelte";
 
-    import { getMasteryState } from "@generated/backend";
-    import type { MasteryState, SubtopicMastery } from "@generated/anki/speedrun_pb";
+    import { computeReadiness, getMasteryState } from "@generated/backend";
+    import type {
+        MasteryState,
+        ReadinessResult,
+        SubtopicMastery,
+    } from "@generated/anki/speedrun_pb";
 
-    // Mirrors pylib/anki/speedrun/exam_p_topics.json (official 2026-05 outline).
-    // Display names are shortened to fit map nodes. A future RPC will serve the
-    // syllabus so there is a single source of truth.
-    const TAXONOMY = [
-        {
-            id: "general",
-            name: "General Probability",
-            subtopics: [
-                { id: "sets_axioms", name: "Sets & axioms" },
-                { id: "combinatorics", name: "Combinatorics" },
-                { id: "independence", name: "Independence" },
-                { id: "add_mult_rules", name: "Addition & multiplication" },
-                { id: "conditional", name: "Conditional probability" },
-                { id: "bayes", name: "Bayes' theorem" },
-            ],
-        },
-        {
-            id: "univariate",
-            name: "Univariate RVs",
-            subtopics: [
-                { id: "rv_basics", name: "PDFs & CDFs" },
-                { id: "expectation", name: "Expectation & moments" },
-                { id: "variance", name: "Variance & SD" },
-                { id: "discrete_dists", name: "Discrete distributions" },
-                { id: "continuous_dists", name: "Continuous distributions" },
-                { id: "insurance_apps", name: "Insurance applications" },
-            ],
-        },
-        {
-            id: "multivariate",
-            name: "Multivariate RVs",
-            subtopics: [
-                { id: "joint_distributions", name: "Joint distributions" },
-                { id: "marginal_conditional", name: "Marginal & conditional" },
-                { id: "joint_moments", name: "Joint moments" },
-                { id: "covariance_correlation", name: "Covariance & correlation" },
-                { id: "order_statistics", name: "Order statistics" },
-                { id: "linear_combinations", name: "Linear combinations" },
-                { id: "clt", name: "Central limit theorem" },
-            ],
-        },
-    ];
+    import type { LeafNode, SubtopicEvidence } from "./lib";
+    import {
+        COLORS,
+        computeLayout,
+        edgeBetween,
+        hasEnoughEvidence,
+        leafProgress,
+        MIN_PROBLEMS,
+        statusLabel,
+    } from "./lib";
 
-    // A calmer, cohesive palette (traffic-light meaning, softened).
-    const GREY = "#a7b2c2"; // not started
-    const AMBER = "#e0a552"; // in progress
-    const GREEN = "#57a37c"; // mastered
-    const ACCENT = "#6486bf"; // the central node
-
-    // --- radial concept-map layout: Exam P at the centre, the 3 units on an
-    // equilateral triangle around it, each unit's subtopics fanning outward. ---
-    const DEG = Math.PI / 180;
-    const CANVAS_W = 920;
-    const CANVAS_H = 900;
-    const CX = CANVAS_W / 2;
-    const CY = CANVAS_H / 2 + 4;
-    const R_UNIT = 160;
-    const R_SUB = 300;
-    const R_STAGGER = 64;
-    // Top, bottom-right, bottom-left -> an upward-pointing equilateral triangle.
-    const UNIT_ANGLES = [-90, 30, 150];
-
-    interface LeafNode {
-        id: string;
-        name: string;
-        tag: string;
-        unitId: string;
-        x: number;
-        y: number;
-    }
-    interface UnitNode {
-        id: string;
-        name: string;
-        x: number;
-        y: number;
-        subs: LeafNode[];
-    }
-
-    const units: UnitNode[] = TAXONOMY.map((u, i) => {
-        const baseDeg = UNIT_ANGLES[i];
-        const a = baseDeg * DEG;
-        const ux = CX + R_UNIT * Math.cos(a);
-        const uy = CY + R_UNIT * Math.sin(a);
-        const n = u.subtopics.length;
-        const spread = Math.min(96, (n - 1) * 18);
-        const step = n > 1 ? spread / (n - 1) : 0;
-        const subs: LeafNode[] = u.subtopics.map((s, j) => {
-            const sa = (baseDeg + (j - (n - 1) / 2) * step) * DEG;
-            const r = R_SUB + (j % 2) * R_STAGGER;
-            return {
-                id: s.id,
-                name: s.name,
-                tag: `subtopic::${u.id}::${s.id}`,
-                unitId: u.id,
-                x: CX + r * Math.cos(sa),
-                y: CY + r * Math.sin(sa),
-            };
-        });
-        return { id: u.id, name: u.name, x: ux, y: uy, subs };
-    });
-
+    const layout = computeLayout();
+    const { center, units } = layout;
     const allTags = units.flatMap((u) => u.subs.map((s) => s.tag));
 
+    // Official SOA P section weights (range midpoints), matching the readiness
+    // dashboard so the give-up rule evaluates identical coverage here.
+    const UNIT_WEIGHTS = [
+        { unitId: "general", weight: 26.5 },
+        { unitId: "univariate", weight: 47 },
+        { unitId: "multivariate", weight: 26.5 },
+    ];
+
+    const GREY = COLORS.grey;
+    const AMBER = COLORS.amber;
+    const GREEN = COLORS.green;
+    const ACCENT = COLORS.accent;
+
     let result: MasteryState | null = null;
+    let readiness: ReadinessResult | null = null;
     let loadError = "";
     let selected: LeafNode | null = null;
 
+    // Scale the fixed-size diagram to fit the available width (never upscaling),
+    // keeping labels readable. A uniform scale preserves the (verified)
+    // non-overlapping geometry; the page scrolls if the map is taller than the
+    // dialog.
+    let viewportWidth = 0;
+    $: scale = viewportWidth > 0 ? Math.min(1, viewportWidth / layout.width) : 1;
+
     onMount(async () => {
         try {
-            result = await getMasteryState({ expectedSubtopics: allTags });
+            [result, readiness] = await Promise.all([
+                getMasteryState({ expectedSubtopics: allTags }),
+                computeReadiness({ expectedSubtopics: allTags, units: UNIT_WEIGHTS }),
+            ]);
         } catch (err) {
             loadError = String(err);
         }
@@ -127,25 +67,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         (result?.subtopics ?? []).map((s) => [s.tag, s]),
     );
     $: unitMap = new Map((result?.units ?? []).map((u) => [u.unitId, u]));
+    $: overall = result?.overall ?? null;
 
-    function leafProgress(tag: string): number {
-        const m = subMap.get(tag);
-        if (!m) {
-            return 0;
-        }
-        if (m.gateCleared) {
-            return 1;
-        }
-        if (m.reviews === 0) {
-            return 0;
-        }
-        const parts = [
-            Math.min(m.reviews / 10, 1),
-            Math.min(m.accuracy / 0.8, 1),
-            Math.min(m.meanRetrievability / 0.9, 1),
-        ];
-        const avg = parts.reduce((a, b) => a + b, 0) / parts.length;
-        return Math.min(0.95, avg);
+    // Honest readiness give-up state — never a fabricated number. The score
+    // itself lives on the Readiness page; here we only surface why it's withheld.
+    $: noScore = readiness?.value.case === "noScore" ? readiness.value.value : null;
+
+    /** The subtopic's measured evidence, or null if we have none for it. */
+    function ev(tag: string): SubtopicEvidence | null {
+        return subMap.get(tag) ?? null;
     }
 
     function leafCleared(tag: string): boolean {
@@ -170,8 +100,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         return GREY;
     }
 
-    // Shorten a segment so it starts/ends at the node boundaries, not centres,
-    // and carries a progress fraction for the coloured (length-proportional) part.
     interface Edge {
         x1: number;
         y1: number;
@@ -180,58 +108,22 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         progress: number;
         color: string;
     }
-    function segment(
-        x1: number,
-        y1: number,
-        x2: number,
-        y2: number,
-        r1: number,
-        r2: number,
-        progress: number,
-        color: string,
-    ): Edge {
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const len = Math.hypot(dx, dy) || 1;
-        const ux = dx / len;
-        const uy = dy / len;
-        return {
-            x1: x1 + ux * r1,
-            y1: y1 + uy * r1,
-            x2: x2 - ux * r2,
-            y2: y2 - uy * r2,
-            progress,
-            color,
-        };
-    }
 
     $: edges = [
         ...units.map((u): Edge => {
+            const g = edgeBetween(center, u);
             const p = unitProgress(u.id);
-            return segment(
-                CX,
-                CY,
-                u.x,
-                u.y,
-                42,
-                46,
-                p,
-                colorFor(p, unitMap.get(u.id)?.mastered ?? false),
-            );
+            return {
+                ...g,
+                progress: p,
+                color: colorFor(p, unitMap.get(u.id)?.mastered ?? false),
+            };
         }),
         ...units.flatMap((u) =>
             u.subs.map((s): Edge => {
-                const p = leafProgress(s.tag);
-                return segment(
-                    u.x,
-                    u.y,
-                    s.x,
-                    s.y,
-                    46,
-                    40,
-                    p,
-                    colorFor(p, leafCleared(s.tag)),
-                );
+                const g = edgeBetween(u, s);
+                const p = leafProgress(ev(s.tag));
+                return { ...g, progress: p, color: colorFor(p, leafCleared(s.tag)) };
             }),
         ),
     ];
@@ -240,15 +132,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         return `${Math.round(x * 100)}%`;
     }
 
-    function leafStatus(tag: string): string {
-        const m = subMap.get(tag);
-        if (!m || m.reviews === 0) {
-            return "not started";
-        }
-        if (m.gateCleared) {
-            return "mastered";
-        }
-        return `${pct(leafProgress(tag))} to gate`;
+    function segWidth(n: number): string {
+        const total = overall?.subtopicsTotal ?? 0;
+        return total > 0 ? `${(n / total) * 100}%` : "0%";
     }
 
     function select(node: LeafNode): void {
@@ -261,14 +147,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <h1>Study map</h1>
         <p class="exam">SOA Exam P · Probability</p>
         <p class="subtitle">
-            Tap a subtopic to see its mastery. Each link fills along its length as you
-            clear the gate:
+            Tap a subtopic to see its mastery. Each link fills as you clear its gate:
             <span class="key" style="color:{GREY}">■</span>
             not started,
             <span class="key" style="color:{AMBER}">■</span>
-            in progress,
+            gathering data / in progress,
             <span class="key" style="color:{GREEN}">■</span>
-            mastered.
+            mastered. Mastery is measured from real reviews, never guessed.
         </p>
     </header>
 
@@ -276,13 +161,100 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <div class="notice error">Couldn't load mastery: {loadError}</div>
     {/if}
 
-    <div class="canvas-wrap">
-        <div class="canvas" style="width:{CANVAS_W}px; height:{CANVAS_H}px;">
+    {#if overall}
+        <section class="overall" aria-label="Overall mastery">
+            <div class="overall-head">
+                <h2>Overall mastery</h2>
+                <span class="overall-count">
+                    {overall.subtopicsMastered} / {overall.subtopicsTotal} subtopics
+                </span>
+            </div>
+            <div
+                class="stack"
+                role="img"
+                aria-label="{overall.subtopicsMastered} mastered, {overall.subtopicsInProgress} in progress, {overall.subtopicsNotStarted} not started"
+            >
+                {#if overall.subtopicsMastered > 0}
+                    <span
+                        class="seg"
+                        style="width:{segWidth(
+                            overall.subtopicsMastered,
+                        )}; background:{GREEN};"
+                    ></span>
+                {/if}
+                {#if overall.subtopicsInProgress > 0}
+                    <span
+                        class="seg"
+                        style="width:{segWidth(
+                            overall.subtopicsInProgress,
+                        )}; background:{AMBER};"
+                    ></span>
+                {/if}
+                {#if overall.subtopicsNotStarted > 0}
+                    <span
+                        class="seg"
+                        style="width:{segWidth(
+                            overall.subtopicsNotStarted,
+                        )}; background:{GREY};"
+                    ></span>
+                {/if}
+            </div>
+            <div class="overall-legend">
+                <span>
+                    <b style="color:{GREEN}">{overall.subtopicsMastered}</b>
+                    mastered
+                </span>
+                <span>
+                    <b style="color:{AMBER}">{overall.subtopicsInProgress}</b>
+                    in progress
+                </span>
+                <span>
+                    <b style="color:{GREY}">{overall.subtopicsNotStarted}</b>
+                    not started
+                </span>
+                <span class="sep">·</span>
+                <span>
+                    {overall.unitsMastered} / {overall.unitsTotal} units mastered
+                </span>
+                <span class="sep">·</span>
+                <span>{overall.totalReviews} reviews logged</span>
+            </div>
+            <p class="overall-note">
+                This is <b>demonstrated mastery</b>
+                — only subtopics you've proven with real reviews (≥ {MIN_PROBLEMS} problems,
+                ≥ 80% accurate, ≥ 90% retained) count. It is
+                <b>not</b>
+                a predicted exam score.
+                {#if noScore}
+                    Your projected score stays hidden until the give-up threshold is met
+                    ({noScore.gradedReviews} / 200 graded reviews, {pct(
+                        noScore.coveragePct,
+                    )} of the syllabus practiced). Open
+                    <b>Readiness</b>
+                    from the toolbar for the full breakdown.
+                {:else}
+                    Open <b>Readiness</b>
+                    from the toolbar for your projected score.
+                {/if}
+            </p>
+        </section>
+    {/if}
+
+    <div
+        class="viewport"
+        bind:clientWidth={viewportWidth}
+        style="height:{layout.height * scale}px;"
+    >
+        <div
+            class="canvas"
+            style="width:{layout.width}px; height:{layout.height}px;
+                   transform:scale({scale}); transform-origin:top left;"
+        >
             <svg
                 class="edges"
-                viewBox="0 0 {CANVAS_W} {CANVAS_H}"
-                width={CANVAS_W}
-                height={CANVAS_H}
+                viewBox="0 0 {layout.width} {layout.height}"
+                width={layout.width}
+                height={layout.height}
             >
                 {#each edges as e}
                     <line
@@ -293,7 +265,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         stroke={GREY}
                         stroke-width="2.5"
                         stroke-linecap="round"
-                        opacity="0.5"
+                        opacity="0.45"
                     />
                     {#if e.progress > 0}
                         <line
@@ -302,7 +274,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                             x2={e.x1 + e.progress * (e.x2 - e.x1)}
                             y2={e.y1 + e.progress * (e.y2 - e.y1)}
                             stroke={e.color}
-                            stroke-width="3"
+                            stroke-width="3.5"
                             stroke-linecap="round"
                         />
                     {/if}
@@ -312,10 +284,17 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <!-- centre -->
             <div
                 class="node center"
-                style="left:{CX - 58}px; top:{CY - 24}px; border-color:{ACCENT};
-                       --tint:{ACCENT}1f;"
+                style="left:{center.x - center.w / 2}px; top:{center.y -
+                    center.h / 2}px;
+                       width:{center.w}px; height:{center.h}px;
+                       border-color:{ACCENT}; --tint:{ACCENT}1f;"
             >
                 <span class="node-title">Exam P</span>
+                {#if overall}
+                    <span class="node-sub">
+                        {overall.subtopicsMastered}/{overall.subtopicsTotal} mastered
+                    </span>
+                {/if}
             </div>
 
             <!-- units -->
@@ -324,7 +303,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 {@const uc = colorFor(up, unitMap.get(u.id)?.mastered ?? false)}
                 <div
                     class="node unit"
-                    style="left:{u.x - 78}px; top:{u.y - 26}px;
+                    style="left:{u.x - u.w / 2}px; top:{u.y - u.h / 2}px;
+                           width:{u.w}px; height:{u.h}px;
                            border-color:{uc}; --tint:{uc}1f;"
                 >
                     <span class="node-title">{u.name}</span>
@@ -337,17 +317,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <!-- subtopics -->
             {#each units as u}
                 {#each u.subs as s}
-                    {@const p = leafProgress(s.tag)}
+                    {@const p = leafProgress(ev(s.tag))}
                     {@const c = colorFor(p, leafCleared(s.tag))}
                     <button
                         class="node leaf"
                         class:selected={selected?.tag === s.tag}
-                        style="left:{s.x - 72}px; top:{s.y - 24}px;
+                        style="left:{s.x - s.w / 2}px; top:{s.y - s.h / 2}px;
+                               width:{s.w}px; height:{s.h}px;
                                border-color:{c}; --tint:{c}1a;"
                         on:click={() => select(s)}
                     >
                         <span class="node-title">{s.name}</span>
-                        <span class="node-sub">{leafStatus(s.tag)}</span>
+                        <span class="node-sub">{statusLabel(ev(s.tag))}</span>
                     </button>
                 {/each}
             {/each}
@@ -355,8 +336,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     </div>
 
     {#if selected}
-        {@const m = subMap.get(selected.tag)}
-        {@const c = colorFor(leafProgress(selected.tag), leafCleared(selected.tag))}
+        {@const m = ev(selected.tag)}
+        {@const c = colorFor(leafProgress(m), leafCleared(selected.tag))}
+        {@const enough = hasEnoughEvidence(m)}
         <section class="detail">
             <div class="detail-head">
                 <div>
@@ -366,7 +348,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     </p>
                 </div>
                 <span class="pill" style="background:{c}22; color:{c};">
-                    {leafStatus(selected.tag)}
+                    {statusLabel(m)}
                 </span>
             </div>
             <dl class="stats">
@@ -374,20 +356,28 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     <dt>Graded reviews</dt>
                     <dd>
                         {m?.reviews ?? 0}
-                        <span class="need">(need ≥ 10)</span>
+                        <span class="need">(need ≥ {MIN_PROBLEMS})</span>
                     </dd>
                 </div>
                 <div>
                     <dt>Accuracy</dt>
                     <dd>
-                        {m ? pct(m.accuracy) : "—"}
+                        {#if enough}
+                            {pct(m?.accuracy ?? 0)}
+                        {:else}
+                            <span class="pending">— need ≥ {MIN_PROBLEMS} reviews</span>
+                        {/if}
                         <span class="need">(need ≥ 80%)</span>
                     </dd>
                 </div>
                 <div>
                     <dt>Mean retrievability</dt>
                     <dd>
-                        {m ? pct(m.meanRetrievability) : "—"}
+                        {#if enough}
+                            {pct(m?.meanRetrievability ?? 0)}
+                        {:else}
+                            <span class="pending">— need ≥ {MIN_PROBLEMS} reviews</span>
+                        {/if}
                         <span class="need">(need ≥ 90%)</span>
                     </dd>
                 </div>
@@ -397,8 +387,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </div>
             </dl>
             <p class="hint">
-                Opening this subtopic's deck straight from the map is coming next — for
-                now, study it from the deck list ("SOA Exam P").
+                {#if !m || m.reviews === 0}
+                    No reviews yet — study this subtopic from the "SOA Exam P" deck to
+                    start building evidence.
+                {:else if !enough}
+                    Only {m.reviews} of {MIN_PROBLEMS} reviews so far — accuracy and retention
+                    stay hidden until there's enough evidence to judge them honestly.
+                {:else}
+                    Keep reviewing until accuracy ≥ 80% and retention ≥ 90% to clear the
+                    gate.
+                {/if}
             </p>
         </section>
     {:else}
@@ -410,7 +408,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style>
     .study-map {
-        max-width: 940px;
+        max-width: 1040px;
         margin: 0 auto;
         padding: 1.5rem 1.25rem 3rem;
         color: var(--fg, #1c1c1e);
@@ -444,14 +442,68 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         padding: 0.75rem 1rem;
         margin-bottom: 1rem;
     }
-    .canvas-wrap {
-        overflow: auto;
+
+    /* Overall mastery */
+    .overall {
+        border: 1px solid var(--border, #e2e2e5);
+        border-radius: 10px;
+        padding: 0.9rem 1.1rem 1rem;
+        margin: 0.25rem 0 1.25rem;
+        background: var(--canvas-elevated, #fbfbfc);
+    }
+    .overall-head {
         display: flex;
-        justify-content: center;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+    .overall-head h2 {
+        margin: 0;
+        font-size: 1.05rem;
+    }
+    .overall-count {
+        font-weight: 700;
+        font-size: 0.95rem;
+    }
+    .stack {
+        display: flex;
+        height: 12px;
+        margin: 0.6rem 0 0.5rem;
+        border-radius: 999px;
+        overflow: hidden;
+        background: var(--canvas-inset, #ececef);
+    }
+    .stack .seg {
+        height: 100%;
+    }
+    .overall-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.75rem;
+        font-size: 0.82rem;
+        color: var(--fg-subtle, #4b5563);
+    }
+    .overall-legend b {
+        font-weight: 700;
+    }
+    .overall-legend .sep {
+        color: var(--border, #cfcfd3);
+    }
+    .overall-note {
+        margin: 0.7rem 0 0;
+        font-size: 0.82rem;
+        line-height: 1.4;
+        color: var(--fg-subtle, #6b7280);
+    }
+    .viewport {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
     }
     .canvas {
-        position: relative;
-        flex: 0 0 auto;
+        position: absolute;
+        top: 0;
+        left: 0;
     }
     .edges {
         position: absolute;
@@ -464,54 +516,38 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
+        align-items: center;
         justify-content: center;
         gap: 2px;
         border: 2px solid var(--border, #e2e2e5);
         border-radius: 12px;
-        background: var(--canvas-elevated, #fbfbfc);
-        padding: 6px 10px;
+        padding: 4px 8px;
         text-align: center;
         font: inherit;
         color: inherit;
+        overflow: hidden;
+        background:
+            linear-gradient(var(--tint), var(--tint)), var(--canvas-elevated, #fbfbfc);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
     }
     .node-title {
         font-weight: 600;
-        font-size: 0.82rem;
-        line-height: 1.15;
+        font-size: 0.8rem;
+        line-height: 1.12;
     }
     .node-sub {
-        font-size: 0.68rem;
+        font-size: 0.67rem;
         color: var(--fg-subtle, #6b7280);
-    }
-    .node.center {
-        width: 116px;
-        height: 48px;
-        align-items: center;
-        background:
-            linear-gradient(var(--tint), var(--tint)), var(--canvas-elevated, #fbfbfc);
     }
     .node.center .node-title {
         font-size: 1rem;
         font-weight: 700;
     }
-    .node.unit {
-        width: 156px;
-        height: 52px;
-        align-items: center;
-        background:
-            linear-gradient(var(--tint), var(--tint)), var(--canvas-elevated, #fbfbfc);
-    }
     .node.unit .node-title {
-        font-size: 0.9rem;
+        font-size: 0.88rem;
     }
     button.node.leaf {
-        width: 144px;
-        min-height: 48px;
         cursor: pointer;
-        align-items: center;
-        background:
-            linear-gradient(var(--tint), var(--tint)), var(--canvas-elevated, #fbfbfc);
         transition: box-shadow 0.1s ease;
     }
     button.node.leaf:hover {
@@ -576,6 +612,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .stats .need {
         font-weight: 400;
         font-size: 0.78rem;
+        color: var(--fg-subtle, #9ca3af);
+    }
+    .stats .pending {
+        font-weight: 400;
+        font-style: italic;
         color: var(--fg-subtle, #9ca3af);
     }
     .hint {

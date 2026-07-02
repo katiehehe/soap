@@ -126,9 +126,31 @@ message UnitMastery {
   bool mastered = 4;
 }
 
+// Honest, evidence-grounded rollup of gate state across the whole syllabus.
+// These are MEASURED counts (what the learner has actually demonstrated via
+// real reviews), never a predicted exam score: the readiness prediction stays
+// in ComputeReadiness behind the give-up rule. subtopics_mastered/in_progress/
+// not_started partition subtopics_total, so nothing is double-counted or
+// invented.
+message MasteryOverall {
+  uint32 subtopics_total = 1;
+  // Gate cleared: >= 10 graded problems AND >= 80% accuracy AND >= 90%
+  // retrievability.
+  uint32 subtopics_mastered = 2;
+  // Some reviews logged but the gate is not cleared yet.
+  uint32 subtopics_in_progress = 3;
+  // No graded reviews yet, so there is no evidence to judge.
+  uint32 subtopics_not_started = 4;
+  uint32 units_total = 5;
+  uint32 units_mastered = 6;
+  // Total graded reviews logged on syllabus subtopic cards (evidence volume).
+  uint32 total_reviews = 7;
+}
+
 message MasteryState {
   repeated SubtopicMastery subtopics = 1;
   repeated UnitMastery units = 2;
+  MasteryOverall overall = 3;
 }
 
 message MasteryOrderedCards {

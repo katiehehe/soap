@@ -17,10 +17,21 @@ Format: `path - what changed - merge risk (low/med/high)`.
   packages must be registered for the Python backend; rarely edited upstream.
 - `qt/aqt/mediasrv.py` - add `"readiness-dashboard"` and `"study-map"` to
   `is_sveltekit_page()`, and `"compute_readiness"` + `"get_mastery_state"` to
-  `exposed_backend_list` (4 entries) - med. All append-only additions.
+  `exposed_backend_list` (4 entries) - med. Also add `"/_anki/computeReadiness"`
+  and `"/_anki/getMasteryState"` to the request allow-list in
+  `_check_dynamic_request_permissions()` so the two read-only speedrun endpoints
+  have a deterministic authorization path independent of the webview's
+  `Authorization` header injection (2 entries) - med. All append-only additions.
 - `qt/aqt/main.py` - add two Tools-menu `QAction`s in `setupMenus()`
   (`Exam readiness`, `Study map`) plus `on_speedrun_readiness()` and
   `on_speedrun_study_map()` methods - med.
+- `qt/aqt/webview.py` - add `SPEEDRUN` to the `AnkiWebViewKind` enum and include it
+  in the API-access list in `AnkiWebPage._profileForPage()` (2 entries) - med. Both
+  append-only; without this the speedrun pages get "Unexpected API access"/403.
+- `qt/aqt/toolbar.py` - add two center links (`Readiness`, `Study map`) in
+  `_centerLinks()` plus `_speedrun_readiness_handler()` /
+  `_speedrun_study_map_handler()` methods, so the pages are first-class toolbar
+  buttons, not only Tools-menu items - med. Append-only additions.
 
 ## New files added by the fork (no merge risk)
 

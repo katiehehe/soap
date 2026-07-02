@@ -57,14 +57,14 @@ Only **Again** is a failure; Hard/Good/Easy all count as success, so on a succes
 review stability never decreases.
 
 Key mechanism (what SM-2 missed): how much S grows on a successful review depends on
-*when* you review. Reviewing while R is still high barely strengthens the memory;
+_when_ you review. Reviewing while R is still high barely strengthens the memory;
 reviewing when R has dropped low strengthens it much more. That is the spacing effect,
 and it is why interval length matters, not just pass/fail.
 
 ## Versions (verified against this fork)
 
 - **This fork: v25.09.99.** The bundled `fsrs` Rust crate is **5.2.0** (the crate's
-  semver in `Cargo.lock` — this is *not* the algorithm generation).
+  semver in `Cargo.lock` — this is _not_ the algorithm generation).
 - **Algorithm: FSRS-6** (in Anki since **v25.07**; our version is newer). FSRS-6 adds a
   per-card trainable **decay** parameter (`w20`); this fork carries it as `card.decay`
   with `fsrs::FSRS5_DEFAULT_n` as the fallback (see `rslib/src/stats/card.rs`,
@@ -80,11 +80,11 @@ and it is why interval length matters, not just pass/fail.
 
 ## What this means for THIS project (important)
 
-- **FSRS *is* the memory model.** Step 1 of the score bridge ("show the memory model is
-  calibrated") is mostly inherited — the job is to *prove* it, not rebuild it. Bin
+- **FSRS _is_ the memory model.** Step 1 of the score bridge ("show the memory model is
+  calibrated") is mostly inherited — the job is to _prove_ it, not rebuild it. Bin
   held-out reviews by predicted R, plot predicted vs. actual, report a Brier score.
-- **R is not performance.** FSRS's R is the recall probability for *this card with its
-  familiar cue*. It says nothing about whether the student can recognize the topic in a
+- **R is not performance.** FSRS's R is the recall probability for _this card with its
+  familiar cue_. It says nothing about whether the student can recognize the topic in a
   disguised SOA problem or set up the procedure. That gap is exactly what the paraphrase
   test measures and what the performance model must capture. Do not let R stand in for
   performance.

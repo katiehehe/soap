@@ -1,7 +1,8 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-from anki.speedrun import expected_subtopic_tags
+from anki import speedrun_pb2
+from anki.speedrun import expected_subtopic_tags, unit_weights
 from tests.shared import getEmptyCol
 
 
@@ -20,8 +21,12 @@ def test_compute_readiness_gives_up_below_threshold():
     # collection is below the >=200 reviews / >=50% coverage threshold, so the
     # oneof must be NoScore, never a fabricated number.
     col = getEmptyCol()
+    units = [
+        speedrun_pb2.UnitWeight(unit_id=uid, weight=w) for uid, w in unit_weights()
+    ]
     result = col._backend.compute_readiness(
-        expected_subtopics=expected_subtopic_tags()
+        expected_subtopics=expected_subtopic_tags(),
+        units=units,
     )
     assert result.WhichOneof("value") == "no_score"
     assert result.no_score.graded_reviews == 0

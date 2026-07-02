@@ -36,6 +36,19 @@ def difficulty_tag(level: str) -> str:
     return f"difficulty::{level}"
 
 
+def unit_weights(topics: dict[str, Any] | None = None) -> list[tuple[str, float]]:
+    """Relative per-unit weights: the midpoint of each published SOA section range.
+
+    Passed to the readiness RPC so coverage is weighted by the real exam weights.
+    """
+    topics = topics or load_topics()
+    weights: list[tuple[str, float]] = []
+    for unit in topics["units"]:
+        low, high = unit["weight_pct"]
+        weights.append((unit["id"], (low + high) / 2.0))
+    return weights
+
+
 def expected_subtopic_tags(topics: dict[str, Any] | None = None) -> list[str]:
     """Every subtopic tag in the syllabus (the denominator for coverage)."""
     topics = topics or load_topics()

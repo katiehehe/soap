@@ -49,8 +49,17 @@ message SpeedrunPingResponse {
 message ComputeReadinessRequest {
   // Full list of syllabus subtopic tags (e.g. "subtopic::univariate::binomial")
   // supplied by the Python topic map, so the curriculum is not hardcoded in the
-  // engine. Used as the denominator for coverage.
+  // engine. Defines the coverage denominator and each subtopic's unit.
   repeated string expected_subtopics = 1;
+  // Per-unit relative weights (the official SOA P section weights). When
+  // present, coverage is weighted by these, so skipping a high-weight section
+  // cannot read as "covered". When empty, units are weighted equally.
+  repeated UnitWeight units = 2;
+}
+
+message UnitWeight {
+  string unit_id = 1;
+  double weight = 2;
 }
 
 // A real readiness score, only ever returned once models are calibrated. Every

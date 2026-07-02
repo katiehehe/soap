@@ -91,8 +91,8 @@ pub(crate) fn parse_subtopic_tag(tag: &str) -> Option<(String, String)> {
     }
 }
 
-/// Multi-level gating: a subtopic's pool depends on its own gate AND whether its
-/// whole unit has been mastered (every subtopic in the unit cleared).
+/// Multi-level gating: a subtopic's pool depends on its own gate AND whether
+/// its whole unit has been mastered (every subtopic in the unit cleared).
 pub(crate) fn compute_pools(stats: &[SubtopicStats]) -> HashMap<String, Pool> {
     // A unit is mastered only if it has >= 1 subtopic and all are cleared.
     let mut unit_total: HashMap<&str, u32> = HashMap::new();
@@ -123,9 +123,10 @@ pub(crate) fn compute_pools(stats: &[SubtopicStats]) -> HashMap<String, Pool> {
         .collect()
 }
 
-/// Order new cards by tier: blocked subtopics first (grouped so each is practised
-/// in isolation), then within-unit interleaving, then cross-unit interleaving.
-/// Cards whose subtopic is unknown sort last, preserving their input order.
+/// Order new cards by tier: blocked subtopics first (grouped so each is
+/// practised in isolation), then within-unit interleaving, then cross-unit
+/// interleaving. Cards whose subtopic is unknown sort last, preserving their
+/// input order.
 pub(crate) fn order_new_cards(
     cards: &[(CardId, String)],
     pools: &HashMap<String, Pool>,
@@ -159,7 +160,8 @@ pub(crate) fn order_new_cards(
 
 impl Collection {
     /// Accumulate per-subtopic review stats for the expected subtopic tags,
-    /// reading real revlog accuracy and FSRS retrievability from the collection.
+    /// reading real revlog accuracy and FSRS retrievability from the
+    /// collection.
     pub(crate) fn speedrun_subtopic_stats(
         &mut self,
         expected_subtopics: &[String],
@@ -218,7 +220,8 @@ impl Collection {
     }
 
     /// New (unstudied) cards in the collection paired with their subtopic tag,
-    /// for mastery-ordered presentation. Cards with no subtopic tag are omitted.
+    /// for mastery-ordered presentation. Cards with no subtopic tag are
+    /// omitted.
     pub(crate) fn speedrun_new_cards_with_subtopic(
         &mut self,
         expected_subtopics: &[String],
@@ -236,10 +239,7 @@ impl Collection {
         while let Some(row) = rows.next()? {
             let cid: i64 = row.get(0)?;
             let tags: String = row.get(1)?;
-            if let Some(tag) = tags
-                .split_whitespace()
-                .find(|t| expected.contains(*t))
-            {
+            if let Some(tag) = tags.split_whitespace().find(|t| expected.contains(*t)) {
                 out.push((CardId(cid), tag.to_string()));
             }
         }
@@ -313,9 +313,9 @@ mod tests {
         ];
         let pools = compute_pools(&stats);
         let cards = vec![
-            (CardId(1), "subtopic::uv::x".to_string()),   // CrossUnit
-            (CardId(2), "subtopic::gp::a".to_string()),   // WithinUnit
-            (CardId(3), "subtopic::gp::b".to_string()),   // Blocked
+            (CardId(1), "subtopic::uv::x".to_string()), // CrossUnit
+            (CardId(2), "subtopic::gp::a".to_string()), // WithinUnit
+            (CardId(3), "subtopic::gp::b".to_string()), // Blocked
             (CardId(4), "subtopic::unknown::z".to_string()), // unknown -> last
         ];
         let ordered = order_new_cards(&cards, &pools);

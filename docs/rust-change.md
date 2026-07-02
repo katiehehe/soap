@@ -18,7 +18,7 @@ algorithm the memory model is built on, see [fsrs-reference.md](fsrs-reference.m
   merged. Reordering cards after the fact in Python/JS would be a reimplementation,
   not a change to the scheduler.
 - **One engine ships to both apps.** Desktop (`pylib`/`aqt`) and AnkiDroid consume
-  the *same* compiled engine (AnkiDroid via the `Anki-Android-Backend` `.aar`). A
+  the _same_ compiled engine (AnkiDroid via the `Anki-Android-Backend` `.aar`). A
   Rust change ships to the phone for free; a JS/Swift/Python scheduler would not,
   and per the rubric caps the project at 50%.
 - **The gate needs engine-only data.** The mastery gate is
@@ -47,7 +47,8 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   it returns `NoScore { reason, ... }`. This is the honesty/give-up rule as code.
 
 These two RPCs establish exactly the plumbing (new proto message + Rust trait impl
-+ Python/TS codegen) that the scheduler change needs.
+
+- Python/TS codegen) that the scheduler change needs.
 
 ## How the scaffold grows into the scheduler
 
@@ -77,7 +78,7 @@ These two RPCs establish exactly the plumbing (new proto message + Rust trait im
 
 ## Tests / guarantees for the full change
 
-- >= 3 Rust unit tests: tier transition, gate condition, pool ordering.
+- = 3 Rust unit tests: tier transition, gate condition, pool ordering.
 - 1 Python-calling test through `col._backend`.
 - FSRS intervals stay valid; undo works; no collection corruption.
 - Fast enough to power the dashboard on a 50k-card deck.

@@ -28,12 +28,23 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         "subtopic::multivariate::clt",
     ];
 
+    // Official SOA P section weights (range midpoints) so coverage is weighted:
+    // skipping a high-weight section can't read as "covered".
+    const UNIT_WEIGHTS = [
+        { unitId: "general", weight: 26.5 },
+        { unitId: "univariate", weight: 47 },
+        { unitId: "multivariate", weight: 26.5 },
+    ];
+
     let result: ReadinessResult | null = null;
     let loadError = "";
 
     onMount(async () => {
         try {
-            result = await computeReadiness({ expectedSubtopics: EXPECTED_SUBTOPICS });
+            result = await computeReadiness({
+                expectedSubtopics: EXPECTED_SUBTOPICS,
+                units: UNIT_WEIGHTS,
+            });
         } catch (err) {
             loadError = String(err);
         }
@@ -53,9 +64,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     <header>
         <h1>Exam readiness — SOA Exam P</h1>
         <p class="subtitle">
-            Three separate signals, never blended: <b>memory</b> (can you recall the
-            fact), <b>performance</b> (can you solve a new exam-style question), and
-            <b>readiness</b> (would you pass, and how sure are we).
+            Three separate signals, never blended: <b>memory</b>
+            (can you recall the fact),
+            <b>performance</b>
+            (can you solve a new exam-style question), and
+            <b>readiness</b>
+            (would you pass, and how sure are we).
         </p>
     </header>
 
@@ -91,9 +105,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <div class="card score">
             <div class="point">
                 {score.point.toFixed(1)}
-                <span class="range">({score.low.toFixed(1)}–{score.high.toFixed(1)})</span>
+                <span class="range">
+                    ({score.low.toFixed(1)}–{score.high.toFixed(1)})
+                </span>
             </div>
-            <p>Coverage {pct(score.coveragePct)} · confidence {pct(score.confidence)}</p>
+            <p>
+                Coverage {pct(score.coveragePct)} · confidence {pct(score.confidence)}
+            </p>
             <p class="next">{score.nextBestAction}</p>
         </div>
     {/if}
@@ -101,22 +119,48 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     <section class="honesty">
         <h2>Every readiness report must show all of this</h2>
         <p class="note">
-            The give-up rule is enforced in the Rust engine: below ≥ 200 graded
-            reviews <b>and</b> ≥ 50% coverage, no number is shown. Fields below stay
-            blank ("—") until the memory and performance models are calibrated — we
-            never fabricate a number.
+            The give-up rule is enforced in the Rust engine: below ≥ 200 graded reviews <b
+            >
+                and
+            </b>
+            ≥ 50% coverage, no number is shown. Fields below stay blank ("—") until the memory
+            and performance models are calibrated — we never fabricate a number.
         </p>
         <ul class="bundle">
-            <li><span>Point estimate</span><b>{score ? score.point.toFixed(1) : "—"}</b></li>
+            <li>
+                <span>Point estimate</span>
+                <b>{score ? score.point.toFixed(1) : "—"}</b>
+            </li>
             <li>
                 <span>Likely range</span>
-                <b>{score ? `${score.low.toFixed(1)}–${score.high.toFixed(1)}` : "—"}</b>
+                <b>
+                    {score ? `${score.low.toFixed(1)}–${score.high.toFixed(1)}` : "—"}
+                </b>
             </li>
-            <li><span>Syllabus covered</span><b>{pct(coveragePct)}</b></li>
-            <li><span>How sure (confidence)</span><b>{score ? pct(score.confidence) : "—"}</b></li>
-            <li><span>Last updated</span><b>{score ? new Date(Number(score.updatedAt) * 1000).toLocaleString() : "—"}</b></li>
-            <li><span>Main reasons</span><b>{score && score.reasons.length ? score.reasons.join("; ") : "—"}</b></li>
-            <li><span>Single best next action</span><b>{nextAction}</b></li>
+            <li>
+                <span>Syllabus covered</span>
+                <b>{pct(coveragePct)}</b>
+            </li>
+            <li>
+                <span>How sure (confidence)</span>
+                <b>{score ? pct(score.confidence) : "—"}</b>
+            </li>
+            <li>
+                <span>Last updated</span>
+                <b>
+                    {score
+                        ? new Date(Number(score.updatedAt) * 1000).toLocaleString()
+                        : "—"}
+                </b>
+            </li>
+            <li>
+                <span>Main reasons</span>
+                <b>{score && score.reasons.length ? score.reasons.join("; ") : "—"}</b>
+            </li>
+            <li>
+                <span>Single best next action</span>
+                <b>{nextAction}</b>
+            </li>
         </ul>
     </section>
 </div>

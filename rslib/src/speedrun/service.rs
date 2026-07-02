@@ -1,6 +1,8 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+use std::collections::HashMap;
+
 use anki_proto::speedrun::readiness_result;
 use anki_proto::speedrun::ComputeReadinessRequest;
 use anki_proto::speedrun::MasteryOrderedCards;
@@ -17,6 +19,7 @@ use crate::collection::Collection;
 use crate::error;
 use crate::speedrun::mastery::compute_pools;
 use crate::speedrun::mastery::order_new_cards;
+use crate::speedrun::mastery::parse_subtopic_tag;
 use crate::speedrun::mastery::Pool;
 
 /// Pre-registered give-up thresholds. Below EITHER of these, readiness returns
@@ -36,15 +39,20 @@ impl crate::services::SpeedrunService for Collection {
     }
 
     /// Compute exam readiness. The return type is a oneof, so a bare number can
-    /// never be emitted. The give-up rule is enforced here as an assertion: below
-    /// the data threshold we return NoScore with the evidence and the single best
-    /// next action.
+    /// never be emitted. The give-up rule is enforced here as an assertion:
+    /// below the data threshold we return NoScore with the evidence and the
+    /// single best next action.
     fn compute_readiness(
         &mut self,
         input: ComputeReadinessRequest,
     ) -> error::Result<ReadinessResult> {
         let graded_reviews = self.graded_review_count()?;
-        let coverage_pct = self.subtopic_coverage(&input.expected_subtopics)?;
+        let unit_weights: HashMap<String, f64> = input
+            .units
+            .iter()
+            .map(|u| (u.unit_id.clone(), u.weight))
+            .collect();
+        let coverage_pct = self.weighted_coverage(&input.expected_subtopics, &unit_weights)?;
 
         let reviews_ok = graded_reviews >= MIN_GRADED_REVIEWS;
         let coverage_ok = coverage_pct >= MIN_COVERAGE;
@@ -153,26 +161,50 @@ fn pool_to_proto(pool: Pool) -> anki_proto::speedrun::MasteryPool {
 impl Collection {
     /// Number of graded reviews (a rating was given) in the revlog.
     fn graded_review_count(&self) -> error::Result<u32> {
-        let count: i64 = self.storage.db.query_row(
-            "select count() from revlog where ease > 0",
-            [],
-            |row| row.get(0),
-        )?;
+        let count: i64 =
+            self.storage
+                .db
+                .query_row("select count() from revlog where ease > 0", [], |row| {
+                    row.get(0)
+                })?;
         Ok(count.max(0) as u32)
     }
 
-    /// Fraction of the expected syllabus subtopics that appear as a tag on at
-    /// least one note. Returns 0.0 when no subtopics are expected.
-    fn subtopic_coverage(&self, expected: &[String]) -> error::Result<f64> {
+    /// Coverage of the expected syllabus, weighted by unit. Each unit's covered
+    /// fraction (subtopics present as a note tag / total subtopics in the unit)
+    /// is combined by the given unit weights (the SOA section weights), so
+    /// skipping a high-weight section can't read as "covered". With no weights,
+    /// units are weighted equally. Returns 0.0 when nothing is expected.
+    fn weighted_coverage(
+        &self,
+        expected: &[String],
+        unit_weights: &HashMap<String, f64>,
+    ) -> error::Result<f64> {
         if expected.is_empty() {
             return Ok(0.0);
         }
         let tags = self.storage.all_tags_in_notes()?;
-        let covered = expected
-            .iter()
-            .filter(|tag| tags.contains(&UniCase::new((*tag).clone())))
-            .count();
-        Ok(covered as f64 / expected.len() as f64)
+        let mut total: HashMap<String, u32> = HashMap::new();
+        let mut covered: HashMap<String, u32> = HashMap::new();
+        for tag in expected {
+            if let Some((unit, _sub)) = parse_subtopic_tag(tag) {
+                *total.entry(unit.clone()).or_default() += 1;
+                if tags.contains(&UniCase::new(tag.clone())) {
+                    *covered.entry(unit).or_default() += 1;
+                }
+            }
+        }
+        if total.is_empty() {
+            return Ok(0.0);
+        }
+        let (mut num, mut den) = (0.0, 0.0);
+        for (unit, tot) in &total {
+            let frac = covered.get(unit).copied().unwrap_or(0) as f64 / *tot as f64;
+            let weight = unit_weights.get(unit).copied().unwrap_or(1.0);
+            num += weight * frac;
+            den += weight;
+        }
+        Ok(if den > 0.0 { num / den } else { 0.0 })
     }
 }
 
@@ -198,8 +230,7 @@ fn below_threshold_no_score(graded_reviews: u32, coverage_pct: f64) -> Readiness
 
     // Coverage gates readiness, so prioritise it as the single best next action.
     let next_best_action = if !coverage_ok {
-        "Study more subtopics: reach 50% syllabus coverage before a score is shown."
-            .to_string()
+        "Study more subtopics: reach 50% syllabus coverage before a score is shown.".to_string()
     } else {
         format!("Complete {reviews_needed} more graded reviews to reach 200.")
     };
@@ -254,7 +285,10 @@ mod tests {
         let resp = col.speedrun_ping().unwrap();
         assert!(resp.marker.starts_with("speedrun-ok:"));
         let after = col.changes_since_open().unwrap();
-        assert_eq!(before, after, "speedrun_ping must not modify the collection");
+        assert_eq!(
+            before, after,
+            "speedrun_ping must not modify the collection"
+        );
     }
 
     fn expected() -> Vec<String> {
@@ -269,6 +303,7 @@ mod tests {
     fn request(tags: Vec<String>) -> ComputeReadinessRequest {
         ComputeReadinessRequest {
             expected_subtopics: tags,
+            units: Vec::new(),
         }
     }
 
@@ -341,6 +376,37 @@ mod tests {
             Value::Score(_) => {
                 panic!("Wednesday has no calibrated model; must not emit a number")
             }
+        }
+    }
+
+    #[test]
+    fn coverage_is_weighted_by_unit_weights() {
+        let mut col = Collection::new();
+        // Two units, one subtopic each; cover only the heavy unit "b".
+        add_tagged_note(&mut col, &["subtopic::b::y"]);
+        let req = ComputeReadinessRequest {
+            expected_subtopics: vec!["subtopic::a::x".to_string(), "subtopic::b::y".to_string()],
+            units: vec![
+                anki_proto::speedrun::UnitWeight {
+                    unit_id: "a".into(),
+                    weight: 1.0,
+                },
+                anki_proto::speedrun::UnitWeight {
+                    unit_id: "b".into(),
+                    weight: 9.0,
+                },
+            ],
+        };
+        match col.compute_readiness(req).unwrap().value.unwrap() {
+            Value::NoScore(no_score) => {
+                // Heavy unit b (weight 9 of 10) is covered -> ~0.9, not 0.5.
+                assert!(
+                    (no_score.coverage_pct - 0.9).abs() < 1e-9,
+                    "coverage={}",
+                    no_score.coverage_pct
+                );
+            }
+            Value::Score(_) => panic!("must not score below threshold"),
         }
     }
 }

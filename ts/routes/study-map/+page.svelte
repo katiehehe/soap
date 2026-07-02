@@ -260,6 +260,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     </b>
                     — {priorities[0].reason}
                 </p>
+                <button
+                    class="study-btn"
+                    on:click={() => studySubtopic(priorities[0].tag)}
+                >
+                    Study recommended subtopic (blocked practice)
+                </button>
             {/if}
             <p class="overall-note">
                 This is <b>demonstrated mastery</b>

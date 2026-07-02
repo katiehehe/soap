@@ -395,6 +395,15 @@ class Toolbar:
                 id="speedrunStudyMap",
             )
         )
+        links.append(
+            self.create_link(
+                "speedrunStudyNext",
+                "Study next",
+                self._speedrun_study_recommended_handler,
+                tip="Blocked practice on your highest-priority weak subtopic",
+                id="speedrunStudyNext",
+            )
+        )
 
         links.append(self._create_sync_link())
 
@@ -481,6 +490,11 @@ class Toolbar:
         import aqt.speedrun
 
         aqt.speedrun.show_study_map(self.mw)
+
+    def _speedrun_study_recommended_handler(self) -> None:
+        import aqt.speedrun
+
+        aqt.speedrun.study_recommended(self.mw)
 
     def _syncLinkHandler(self) -> None:
         self.mw.on_sync_button_clicked()

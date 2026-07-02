@@ -17,7 +17,7 @@ import aqt
 import aqt.main
 from aqt import gui_hooks
 from aqt.qt import QDialog, Qt, QTimer, QVBoxLayout
-from aqt.utils import disable_help_button, restoreGeom, saveGeom
+from aqt.utils import disable_help_button, restoreGeom, saveGeom, showInfo
 from aqt.webview import AnkiWebView, AnkiWebViewKind
 
 if TYPE_CHECKING:
@@ -85,21 +85,10 @@ class StudyMapDialog(QDialog):
             self._study_subtopic(cmd[len(prefix) :])
 
     def _study_subtopic(self, tag: str) -> None:
-        from anki.speedrun import deck_name_for_subtopic_tag
-
-        name = deck_name_for_subtopic_tag(tag)
-        if not name:
-            return
-        deck_id = self.mw.col.decks.id_for_name(name)
-        if deck_id is None:
-            return
-
         def start() -> None:
-            # Studying just this subtopic's deck IS blocked practice.
-            self.mw.col.decks.select(deck_id)
+            # Close first, then open the subtopic's deck for blocked practice.
             self.close()
-            self.mw.col.startTimebox()
-            self.mw.moveToState("review")
+            open_subtopic_deck(self.mw, tag)
 
         # Defer so we don't tear down this webview from inside its own bridge
         # callback.
@@ -115,6 +104,53 @@ class StudyMapDialog(QDialog):
 
 def show_study_map(mw: aqt.main.AnkiQt) -> None:
     StudyMapDialog(mw)
+
+
+def open_subtopic_deck(mw: aqt.main.AnkiQt, tag: str) -> bool:
+    """Select a subtopic's deck and drop into review — i.e. blocked practice on
+    just that subtopic. Returns False if the tag doesn't resolve to a deck."""
+    from anki.speedrun import deck_name_for_subtopic_tag
+
+    name = deck_name_for_subtopic_tag(tag)
+    if not name:
+        return False
+    deck_id = mw.col.decks.id_for_name(name)
+    if deck_id is None:
+        return False
+    mw.col.decks.select(deck_id)
+    mw.col.startTimebox()
+    mw.moveToState("review")
+    return True
+
+
+def recommended_subtopic_tag(col: Collection) -> str | None:
+    """The highest-priority not-yet-cleared subtopic (importance weight x
+    opportunity), or None when everything is mastered. Uses the engine's
+    study-priority ranking, so it never fabricates a recommendation."""
+    from anki import speedrun_pb2
+    from anki.speedrun import expected_subtopic_tags, subtopic_weights, unit_weights
+
+    state = col._backend.get_mastery_state(
+        expected_subtopics=expected_subtopic_tags(),
+        units=[speedrun_pb2.UnitWeight(unit_id=u, weight=w) for u, w in unit_weights()],
+        subtopic_weights=[
+            speedrun_pb2.SubtopicWeight(tag=t, weight=w) for t, w in subtopic_weights()
+        ],
+    )
+    if not state.priorities:
+        return None
+    return state.priorities[0].tag
+
+
+def study_recommended(mw: aqt.main.AnkiQt) -> None:
+    """Open the recommended (highest-priority weak) subtopic for blocked
+    practice — the good path in one click, whatever the user picked before."""
+    tag = recommended_subtopic_tag(mw.col)
+    if tag is None:
+        showInfo("All subtopics are mastered — no recommendation right now.")
+        return
+    if not open_subtopic_deck(mw, tag):
+        showInfo("Couldn't open the recommended subtopic's deck.")
 
 
 # --- Reviewer mastery-tier banner ----------------------------------------

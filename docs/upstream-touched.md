@@ -30,10 +30,11 @@ Format: `path - what changed - merge risk (low/med/high)`.
 - `qt/aqt/webview.py` - add `SPEEDRUN` to the `AnkiWebViewKind` enum and include it
   in the API-access list in `AnkiWebPage._profileForPage()` (2 entries) - med. Both
   append-only; without this the speedrun pages get "Unexpected API access"/403.
-- `qt/aqt/toolbar.py` - add two center links (`Readiness`, `Study map`) in
-  `_centerLinks()` plus `_speedrun_readiness_handler()` /
-  `_speedrun_study_map_handler()` methods, so the pages are first-class toolbar
-  buttons, not only Tools-menu items - med. Append-only additions.
+- `qt/aqt/toolbar.py` - add three center links (`Readiness`, `Study map`,
+  `Study next`) in `_centerLinks()` plus `_speedrun_readiness_handler()` /
+  `_speedrun_study_map_handler()` / `_speedrun_study_recommended_handler()`
+  methods, so the pages + the recommended-subtopic blocked-practice shortcut are
+  first-class toolbar buttons, not only Tools-menu items - med. Append-only.
 - `rslib/src/scheduler/queue/builder/mod.rs` - in `Collection::build_queues`,
   after `gather_cards`, two small opt-in hooks: reorder the gathered new cards by
   mastery tier when `speedrunMasteryScheduler` is on, and reorder the due review

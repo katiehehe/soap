@@ -1,0 +1,337 @@
+{
+    "note": "ORIGINAL paraphrase-test dataset (challenge 7d) for the SOA Exam P Speedrun fork. Each card has a memory prompt (recall the fact) and TWO reworded exam-style questions that test the same idea in new words. These use standard probability results and are NOT copied from any real SOA exam. Held out of all AI training/index/few-shot; distinctness of the rewordings vs the card prompt is enforced by paraphrase.reworded_distinctness.",
+    "source": "original-speedrun-paraphrase",
+    "license_note": "Original content, AGPL-3.0-or-later with the rest of the fork.",
+    "cards": [
+        {
+            "id": "pp-sets-1",
+            "subtopic": "subtopic::general::sets_axioms",
+            "difficulty": "easy",
+            "fact": "P(A or B) = P(A) + P(B) - P(A and B).",
+            "card_prompt": "State the addition rule for the probability that A or B occurs.",
+            "reworded": [
+                "In a class, 60% study French and 45% study Spanish, while 30% study both. What fraction study at least one of the two languages?",
+                "One card is drawn from a standard 52-card deck. What is the chance it is a heart or a face card?"
+            ]
+        },
+        {
+            "id": "pp-sets-2",
+            "subtopic": "subtopic::general::sets_axioms",
+            "difficulty": "easy",
+            "fact": "The complement rule: P(not A) = 1 - P(A).",
+            "card_prompt": "Give the rule relating an event's probability to that of its complement.",
+            "reworded": [
+                "A machine breaks down on a given day with probability 0.02. What is the likelihood it runs the whole day without breaking?",
+                "If the chance of at least one flaw in a shipment is 0.13, how likely is a flaw-free shipment?"
+            ]
+        },
+        {
+            "id": "pp-comb-1",
+            "subtopic": "subtopic::general::combinatorics",
+            "difficulty": "medium",
+            "fact": "The count of unordered selections of k from n is C(n,k) = n! / (k! (n-k)!).",
+            "card_prompt": "Write the formula for the number of ways to choose k objects from n when order does not matter.",
+            "reworded": [
+                "A manager will invite 3 of 10 applicants to interview. How many different interview groups are possible?",
+                "A shop offers 8 toppings. How many distinct two-topping pizzas can a customer order?"
+            ]
+        },
+        {
+            "id": "pp-comb-2",
+            "subtopic": "subtopic::general::combinatorics",
+            "difficulty": "easy",
+            "fact": "Distinguishable arrangements of n items = n! divided by the factorial of each repeated group's size.",
+            "card_prompt": "How do you count the distinct orderings of a word whose letters repeat?",
+            "reworded": [
+                "How many different strings can be formed by rearranging the letters of the word BANANA?",
+                "In how many orders can 3 identical red balls and 2 identical blue balls be placed in a row?"
+            ]
+        },
+        {
+            "id": "pp-indep-1",
+            "subtopic": "subtopic::general::independence",
+            "difficulty": "easy",
+            "fact": "For independent events, P(A and B) = P(A) * P(B); multiply probabilities for a joint AND.",
+            "card_prompt": "State the multiplication rule for the joint occurrence of independent events.",
+            "reworded": [
+                "Three relays each function independently with probability 0.95, and all three must function for the alarm to sound. What is the probability the alarm sounds?",
+                "Two fair dice are thrown. How likely is it that both come up six?"
+            ]
+        },
+        {
+            "id": "pp-addmult-1",
+            "subtopic": "subtopic::general::add_mult_rules",
+            "difficulty": "medium",
+            "fact": "For mutually exclusive events, P(A or B) = P(A) + P(B), since they cannot both happen.",
+            "card_prompt": "How does the addition rule simplify when two events cannot occur together?",
+            "reworded": [
+                "A single die is rolled once. What is the probability the outcome is either a 2 or a 5?",
+                "A drum holds red, blue, and green tickets in proportions 0.5, 0.3, and 0.2. What is the chance a drawn ticket is red or green?"
+            ]
+        },
+        {
+            "id": "pp-cond-1",
+            "subtopic": "subtopic::general::conditional",
+            "difficulty": "medium",
+            "fact": "Conditional probability: P(A given B) = P(A and B) / P(B) for P(B) > 0.",
+            "card_prompt": "Define the probability of A conditional on B.",
+            "reworded": [
+                "Among insured drivers, 8% file a claim and 5% both file a claim and are under 25. Of those who file a claim, what fraction are under 25?",
+                "A screening turns positive for 12% of patients and is positive-and-diseased for 9%. Given a positive screen, how likely is disease?"
+            ]
+        },
+        {
+            "id": "pp-cond-2",
+            "subtopic": "subtopic::general::conditional",
+            "difficulty": "hard",
+            "fact": "Multiplication form of conditioning: P(A and B) = P(A given B) * P(B).",
+            "card_prompt": "Write the chain rule expressing a joint probability through a conditional one.",
+            "reworded": [
+                "30% of policies are high-risk, and 40% of high-risk policies lapse. What fraction of all policies are both high-risk and lapse?",
+                "A line runs 70% of the time, and while running it makes a defect 3% of the time. What fraction of all time is spent making a defect while running?"
+            ]
+        },
+        {
+            "id": "pp-bayes-1",
+            "subtopic": "subtopic::general::bayes",
+            "difficulty": "hard",
+            "fact": "Bayes' rule: P(A given B) = P(B given A) P(A) / P(B), with P(B) from total probability.",
+            "card_prompt": "State Bayes' theorem for revising P(A) after observing B.",
+            "reworded": [
+                "A condition affects 1% of people; a test is 99% sensitive and 95% specific. After a positive result, what is the probability the person has the condition?",
+                "Plants A and B make 60% and 40% of units with defect rates 2% and 5%. A unit is defective; how likely did plant B make it?"
+            ]
+        },
+        {
+            "id": "pp-bayes-2",
+            "subtopic": "subtopic::general::bayes",
+            "difficulty": "medium",
+            "fact": "Law of total probability: P(B) = sum over a partition of P(B given A_i) P(A_i).",
+            "card_prompt": "How do you find P(B) by conditioning on a partition of the sample space?",
+            "reworded": [
+                "One of two urns is picked with equal chance; they hold 30% and 70% red balls. What is the overall probability of drawing red?",
+                "Arrivals are 50% new and 50% returning customers, buying with probabilities 0.1 and 0.3. What share of all arrivals make a purchase?"
+            ]
+        },
+        {
+            "id": "pp-rvb-1",
+            "subtopic": "subtopic::univariate::rv_basics",
+            "difficulty": "easy",
+            "fact": "A valid probability density is nonnegative everywhere and its total integral equals 1.",
+            "card_prompt": "State the two requirements a probability density function must meet.",
+            "reworded": [
+                "A continuous variable has density proportional to x on the interval from 0 to 2. What constant makes it a legitimate density?",
+                "For a density of the form k(1 - x) on the interval 0 to 1, determine k so the probabilities total one."
+            ]
+        },
+        {
+            "id": "pp-rvb-2",
+            "subtopic": "subtopic::univariate::rv_basics",
+            "difficulty": "medium",
+            "fact": "The cdf F(x) = P(X <= x) is nondecreasing from 0 to 1, and its derivative is the density.",
+            "card_prompt": "Relate the cumulative distribution function to the density and list its main properties.",
+            "reworded": [
+                "A lifetime has cdf 1 - e^(-x/4) for x >= 0. What is the density at x = 4?",
+                "A distribution's cdf jumps from 0.30 to 0.55 at one point. How much probability sits exactly at that point?"
+            ]
+        },
+        {
+            "id": "pp-exp-1",
+            "subtopic": "subtopic::univariate::expectation",
+            "difficulty": "easy",
+            "fact": "Expected value: sum of x times p(x) (discrete) or the integral of x times f(x) (continuous).",
+            "card_prompt": "Give the definition of the expected value of a random variable.",
+            "reworded": [
+                "A game pays $10 with probability 0.2 and nothing otherwise. What is the long-run average payout per play?",
+                "A loss amount has density x/8 on the interval from 0 to 4. What is the mean loss?"
+            ]
+        },
+        {
+            "id": "pp-exp-2",
+            "subtopic": "subtopic::univariate::expectation",
+            "difficulty": "medium",
+            "fact": "Expectation is linear: E[aX + b] = a E[X] + b, and E[X + Y] = E[X] + E[Y] always.",
+            "card_prompt": "State the linearity property of expectation.",
+            "reworded": [
+                "Claims average $500 each. If every claim is increased by 10% and then a flat $50 is added, what is the new average claim?",
+                "Two ordinary dice are rolled. What is the expected value of the total showing?"
+            ]
+        },
+        {
+            "id": "pp-var-1",
+            "subtopic": "subtopic::univariate::variance",
+            "difficulty": "medium",
+            "fact": "Variance equals the second moment minus the squared mean: Var(X) = E[X^2] - (E[X])^2.",
+            "card_prompt": "Give the shortcut formula for variance in terms of moments.",
+            "reworded": [
+                "A variable satisfies E[X] = 3 and E[X^2] = 13. What is its variance?",
+                "A bet pays $2 with probability 0.5 and $0 otherwise. Find its variance from the first two moments."
+            ]
+        },
+        {
+            "id": "pp-var-2",
+            "subtopic": "subtopic::univariate::variance",
+            "difficulty": "medium",
+            "fact": "Var(aX + b) = a^2 Var(X); adding a constant does not change spread, scaling multiplies variance by the square.",
+            "card_prompt": "How does the linear change aX + b affect the variance of X?",
+            "reworded": [
+                "Losses have a standard deviation of $200. If each loss is doubled, what is the variance of the doubled loss?",
+                "Readings with variance 9 are transformed by the rule new = 2 * old + 5. What is the variance afterward?"
+            ]
+        },
+        {
+            "id": "pp-disc-1",
+            "subtopic": "subtopic::univariate::discrete_dists",
+            "difficulty": "medium",
+            "fact": "A binomial(n, p) count has mean np and variance np(1 - p).",
+            "card_prompt": "State the mean and variance of a binomial random variable.",
+            "reworded": [
+                "An agent independently closes each of 20 calls with probability 0.3. What is the expected number of sales and its variance?",
+                "A fair coin is tossed 50 times. What is the standard deviation of the number of heads?"
+            ]
+        },
+        {
+            "id": "pp-disc-2",
+            "subtopic": "subtopic::univariate::discrete_dists",
+            "difficulty": "medium",
+            "fact": "A Poisson(lambda) count has mean and variance both equal to lambda.",
+            "card_prompt": "Give the mean and variance of a Poisson random variable.",
+            "reworded": [
+                "A help desk gets on average 4 calls a minute, following a Poisson law. What is the chance of exactly 2 calls in a given minute?",
+                "Flaws appear at an average of 3 per sheet. What is the variance of the number of flaws on one sheet?"
+            ]
+        },
+        {
+            "id": "pp-cont-1",
+            "subtopic": "subtopic::univariate::continuous_dists",
+            "difficulty": "medium",
+            "fact": "An exponential(lambda) has mean 1/lambda and is memoryless: P(X > s + t given X > s) = P(X > t).",
+            "card_prompt": "State the mean of an exponential distribution and its memoryless property.",
+            "reworded": [
+                "A part's lifetime is exponential with a mean of 5 years. Given it has already lasted 3 years, how likely is it to last 2 more?",
+                "Gaps between arrivals average 10 minutes and are exponential. What is the probability of waiting longer than 15 minutes?"
+            ]
+        },
+        {
+            "id": "pp-cont-2",
+            "subtopic": "subtopic::univariate::continuous_dists",
+            "difficulty": "easy",
+            "fact": "A uniform variable on [a, b] has mean (a + b)/2 and variance (b - a)^2 / 12.",
+            "card_prompt": "Give the mean and variance of a continuous uniform distribution on [a, b].",
+            "reworded": [
+                "A shuttle is equally likely to arrive at any moment within 30 minutes of your arrival. What is your expected wait?",
+                "A value is picked uniformly between 2 and 8. What is its variance?"
+            ]
+        },
+        {
+            "id": "pp-ins-1",
+            "subtopic": "subtopic::univariate::insurance_apps",
+            "difficulty": "hard",
+            "fact": "Under an ordinary deductible d, the insurer pays max(X - d, 0), with expected payment the integral from d to infinity of (x - d) f(x) dx.",
+            "card_prompt": "Express the insurer's payment and its expectation when a deductible d applies.",
+            "reworded": [
+                "Losses are uniform on [0, 1000] and a $200 deductible applies. What is the expected amount the insurer pays per loss?",
+                "A policy covers the excess above a $500 deductible; losses are exponential with mean $1000. What is the expected insurer payment?"
+            ]
+        },
+        {
+            "id": "pp-ins-2",
+            "subtopic": "subtopic::univariate::insurance_apps",
+            "difficulty": "medium",
+            "fact": "With a policy limit u, the insurer pays min(X, u): payment is capped at u.",
+            "card_prompt": "Write the insurer's payment when the policy caps coverage at a maximum u.",
+            "reworded": [
+                "Losses are uniform on [0, 2000] and the policy pays at most $1500. What is the expected payment?",
+                "With a coverage cap of $10,000 and losses exponential with mean $8,000, what is the largest amount the insurer could ever pay on one loss?"
+            ]
+        },
+        {
+            "id": "pp-joint-1",
+            "subtopic": "subtopic::multivariate::joint_distributions",
+            "difficulty": "medium",
+            "fact": "A joint density is nonnegative and integrates to 1 over the plane; a region's probability is the double integral of the density over that region.",
+            "card_prompt": "State the conditions for a valid joint density and how to get the probability of a region.",
+            "reworded": [
+                "A joint density is constant on the square where both coordinates lie between 0 and 1. What is that constant?",
+                "For a uniform density on the unit square, what is the probability that the two coordinates sum to less than 1?"
+            ]
+        },
+        {
+            "id": "pp-marg-1",
+            "subtopic": "subtopic::multivariate::marginal_conditional",
+            "difficulty": "medium",
+            "fact": "The marginal density of X integrates the joint density over the other variable: f_X(x) = integral of f(x, y) dy.",
+            "card_prompt": "How do you recover the marginal distribution of X from a joint density?",
+            "reworded": [
+                "A joint density equals x + y on the unit square. What is the marginal density of the first coordinate?",
+                "Starting from a joint density on the unit square, which integration yields the distribution of the second variable by itself?"
+            ]
+        },
+        {
+            "id": "pp-jm-1",
+            "subtopic": "subtopic::multivariate::joint_moments",
+            "difficulty": "medium",
+            "fact": "Expectation of a function of two variables: E[g(X, Y)] = double integral of g(x, y) f(x, y).",
+            "card_prompt": "Write the expected value of a function of two jointly distributed variables.",
+            "reworded": [
+                "For a uniform density on the unit square, compute the expected value of the product of the two coordinates.",
+                "Given a joint density x + y on the unit square, find the expected value of the sum of the two coordinates."
+            ]
+        },
+        {
+            "id": "pp-cov-1",
+            "subtopic": "subtopic::multivariate::covariance_correlation",
+            "difficulty": "medium",
+            "fact": "Cov(X, Y) = E[XY] - E[X] E[Y]; it is zero when the variables are independent.",
+            "card_prompt": "Give the formula for covariance and its value under independence.",
+            "reworded": [
+                "Two variables satisfy E[XY] = 6, E[X] = 2, and E[Y] = 2.5. What is their covariance?",
+                "If two random variables are independent, what does their covariance equal?"
+            ]
+        },
+        {
+            "id": "pp-cov-2",
+            "subtopic": "subtopic::multivariate::covariance_correlation",
+            "difficulty": "hard",
+            "fact": "Correlation = Cov(X, Y) / (sd(X) sd(Y)) and always lies between -1 and 1.",
+            "card_prompt": "Define the correlation coefficient and state the range of values it can take.",
+            "reworded": [
+                "Two variables have covariance 8 and standard deviations 4 and 5. What is their correlation?",
+                "An analyst reports a correlation of 1.4 between two variables. Why must this be a mistake?"
+            ]
+        },
+        {
+            "id": "pp-order-1",
+            "subtopic": "subtopic::multivariate::order_statistics",
+            "difficulty": "hard",
+            "fact": "For n iid variables with cdf F, the maximum has cdf F(x)^n and the minimum has cdf 1 - (1 - F(x))^n.",
+            "card_prompt": "Give the distribution functions of the maximum and minimum of n iid variables.",
+            "reworded": [
+                "Three independent parts each have a lifetime uniform on [0, 1]. What is the probability the longest-lasting part exceeds 0.9?",
+                "Five independent exponential variables each have mean 1. What is the distribution function of the smallest of the five?"
+            ]
+        },
+        {
+            "id": "pp-lin-1",
+            "subtopic": "subtopic::multivariate::linear_combinations",
+            "difficulty": "medium",
+            "fact": "Var(aX + bY) = a^2 Var(X) + b^2 Var(Y) + 2ab Cov(X, Y).",
+            "card_prompt": "State the variance of a linear combination aX + bY of two variables.",
+            "reworded": [
+                "X and Y have variances 4 and 9 and covariance 2. What is the variance of their sum?",
+                "Two assets have variances 0.04 and 0.09 with covariance -0.01. What is the variance of a portfolio holding half of each?"
+            ]
+        },
+        {
+            "id": "pp-clt-1",
+            "subtopic": "subtopic::multivariate::clt",
+            "difficulty": "medium",
+            "fact": "By the central limit theorem, the mean of n iid variables is approximately Normal with mean mu and variance sigma^2 / n for large n.",
+            "card_prompt": "State what the central limit theorem says about the distribution of a sample mean.",
+            "reworded": [
+                "Claim sizes have mean $400 and standard deviation $200. Approximate the probability that the average of 100 claims exceeds $440.",
+                "A die is rolled 200 times. Approximately how is the average of the rolls distributed?"
+            ]
+        }
+    ]
+}

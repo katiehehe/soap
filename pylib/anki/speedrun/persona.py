@@ -136,6 +136,17 @@ def response_time_for(persona: Persona, subtopic: str, difficulty: str) -> float
     return min(1.0, max(0.0, val))
 
 
+def recall_prob(persona: Persona, subtopic: str) -> float:
+    """Probability the persona RECALLS a studied card for this subtopic — the
+    MEMORY signal (same pass model as ``review_grades``). It is deliberately
+    higher than ``p_correct`` (transfer performance) for the same skill, so a
+    correct pipeline sees memory and performance diverge (the paraphrase test,
+    challenge 7d). A copycat that reused the performance model here would show
+    no gap."""
+    skill = persona.skill_for(subtopic)
+    return min(0.98, max(0.30, 0.45 + 0.5 * skill))
+
+
 def review_grades(persona: Persona, subtopic: str, n: int) -> list[int]:
     """``n`` graded-review eases (Anki: 1 = Again/fail, 3 = Good/pass) for a
     subtopic. Pass probability rises with skill, so a strong subtopic's revlog

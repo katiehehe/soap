@@ -26,6 +26,8 @@ docs/autoapi/
 .complexipy_cache
 # Personal, machine-local Cursor rules (keep out of version control)
 .cursor/rules/personal.mdc
+# Local secrets (e.g. OPENAI_API_KEY for the AI evals). NEVER commit.
+.env
 # Held-out real SOA sample questions are copyrighted: keep them local, never
 # commit them. The committed original fallback (pylib/anki/speedrun/sample_items.json)
 # is what ships. See data/soa_sample_p/README.md.

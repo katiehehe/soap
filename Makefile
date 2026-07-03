@@ -5,7 +5,13 @@ PYENV := out/pyenv/bin/python
 PYPATH := pylib:out/pylib
 ARGS ?=
 
-.PHONY: bench crash-test calibration performance seed-persona practice-test classify ai-eval sync-test
+# Load local secrets (e.g. OPENAI_API_KEY) from a gitignored .env if present, so
+# the AI evals pick up the key without you ever typing it in the terminal.
+# Format: one KEY=value per line, e.g.  OPENAI_API_KEY=sk-...
+-include .env
+export
+
+.PHONY: bench crash-test calibration performance seed-persona practice-test classify ai-eval sync-test paraphrase ablation
 
 # 7h: load a large deck and report p50/p95/worst per action.
 bench:
@@ -53,3 +59,15 @@ ai-eval:
 # local sync server; assert all 20 land once, none doubled/lost.
 sync-test:
 	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/sync_test.py $(ARGS)
+
+# Paraphrase test (rubric 7d): 30 cards x 2 reworded exam-style questions each;
+# compare card recall (memory) vs reworded accuracy (performance) and report the
+# gap. Includes a copycat control that must read COPYING. Synthetic cohort.
+paraphrase:
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/evals/paraphrase_eval.py $(ARGS)
+
+# Study-feature ablation (section 8): run the three builds (Full / Ablated /
+# Plain) at equal study time and report held-out accuracy across an assumed
+# effect-size sweep, including the null (disc_gain=0). Synthetic cohort.
+ablation:
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/evals/ablation_eval.py $(ARGS)

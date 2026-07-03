@@ -63,6 +63,55 @@ Direction: Full > Ablated ≥ Plain on the primary metric. We report the result
   (`full_scheduler_groups_within_unit_cleared_cards_by_unit`,
   `ablated_collapses_within_and_cross_into_one_mixed_pool`).
 - The held-out splitter + leakage scan already exist and are re-runnable.
-- Remaining for Sunday: RUN the three builds at equal study time and report the
-  pre-registered metric (accuracy on held-out confusable sub-types), including
-  nulls.
+
+## The run (`make ablation`)
+
+Harness: `pylib/anki/speedrun/ablation.py`; runner
+`tools/speedrun/evals/ablation_eval.py`; tests
+`pylib/tests/test_speedrun_ablation.py`.
+
+Because there is no real cohort in a week, this is a **seeded simulation on the
+labelled synthetic persona cohort**, engineered so it cannot smuggle in the
+conclusion:
+
+- **Equal study time**: every build studies the identical multiset of reps
+  (asserted), so each subtopic's proficiency is the same in all three — only the
+  interleaving ORDER differs.
+- The **only** build-dependent term is a discrimination boost on confusable
+  within-unit questions, with one explicit knob `disc_gain` (in logits), swept
+  **from zero**. At `disc_gain = 0` the builds must coincide (the null).
+- Held-out, leakage-clean metric: accuracy on the held-out exam-style corpus
+  (`soa_sample`); a leakage scan confirms the eval questions are not near-copies
+  of the study cards.
+
+### Results (synthetic cohort, 60 students, seed 0; official SOA corpus locally)
+
+Within-unit interleaving exposure (the mechanism's input): Full 0.715 ·
+Ablated 0.636 · **Plain 0.106**.
+
+| disc_gain | Full | Ablated | Plain |
+|---|---|---|---|
+| **0.0 (null)** | 0.486 | 0.486 | 0.486 |
+| 0.5 | 0.568 | 0.559 | 0.499 |
+| 1.0 | 0.647 | 0.630 | 0.511 |
+| 1.5 | 0.719 | 0.696 | 0.523 |
+| 2.0 | 0.782 | 0.755 | 0.535 |
+
+- **Null check passes**: at `disc_gain = 0` the three builds are identical
+  (spread 0.0000) — the harness has no built-in bias.
+- For any assumed positive effect the **pre-registered direction holds**:
+  Full ≥ Ablated ≥ Plain. The **within-unit tier** (Full − Ablated) contributes
+  +0.017 at `disc_gain = 1.0`, growing with the assumed effect; the bulk of the
+  gap over Plain comes from mastery-gated interleaving generally.
+
+### Honest reading
+
+This run does **not** prove the feature works, and it cannot: with no assumed
+mechanism the builds are identical. What it delivers is a **fair, reproducible
+experiment** — equal study time, held-out leakage-clean questions, the ablation
+isolating the within-unit tier (Full vs Ablated), a null that passes, and the
+effect size a real study-log run would need to detect. The real per-student
+effect requires real study logs; the machine to measure it is done and seeded.
+Numbers above use the owner's local official SOA corpus (gitignored); the
+committed fallback corpus reproduces the same structure (null at 0, ordering
+preserved) with slightly different absolute values.

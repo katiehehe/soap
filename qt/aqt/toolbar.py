@@ -343,60 +343,28 @@ class Toolbar:
         )
 
     def _centerLinks(self) -> str:
-        links = [
-            self.create_link(
-                "decks",
-                tr.actions_decks(),
-                self._deckLinkHandler,
-                tip=tr.actions_shortcut_key(val="D"),
-                id="decks",
-            ),
-            self.create_link(
-                "add",
-                tr.actions_add(),
-                self._addLinkHandler,
-                tip=tr.actions_shortcut_key(val="A"),
-                id="add",
-            ),
-            self.create_link(
-                "browse",
-                tr.qt_misc_browse(),
-                self._browseLinkHandler,
-                tip=tr.actions_shortcut_key(val="B"),
-                id="browse",
-            ),
-            self.create_link(
-                "stats",
-                tr.qt_misc_stats(),
-                self._statsLinkHandler,
-                tip=tr.actions_shortcut_key(val="T"),
-                id="stats",
-            ),
-        ]
-
         # Speedrun (SOA Exam P fork): the app's home is the custom concept-map /
-        # readiness shell (the speedrunHome state). This toolbar is hidden on the
-        # home screen and only shows on Anki's own screens (review/browse/etc), so
-        # give a "Home" button back to the shell plus one-click "Study next".
-        links.insert(
-            0,
+        # progress / readiness shell (the speedrunHome state). We deliberately do
+        # NOT surface Anki's own nav (Decks/Add/Browse/Stats) here, so the app
+        # never reads as stock Anki — those flows live in the custom home top bar.
+        # On Anki's own screens (review/overview/etc) this toolbar only offers a
+        # way back to the shell ("Home") plus one-click "Study next".
+        links = [
             self.create_link(
                 "speedrunHome",
                 "Home",
                 self._speedrun_home_handler,
-                tip="Back to the Exam P home (concept map + readiness)",
+                tip="Back to the Exam P home (concept map · progress · readiness)",
                 id="speedrunHome",
             ),
-        )
-        links.append(
             self.create_link(
                 "speedrunStudyNext",
                 "Study next",
                 self._speedrun_study_recommended_handler,
                 tip="Blocked practice on your highest-priority weak subtopic",
                 id="speedrunStudyNext",
-            )
-        )
+            ),
+        ]
 
         links.append(self._create_sync_link())
 

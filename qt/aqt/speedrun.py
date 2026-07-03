@@ -530,6 +530,31 @@ QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QTextEdit {{
 QTabBar::tab:selected {{
     color: {SPEEDRUN_ACCENT};
 }}
+
+/* Thread the accent through item views so the Browse window (sidebar tree +
+   card table) and every list/tree dialog read as the custom product, not stock
+   Anki. Selection uses the app accent; headers get a little breathing room. */
+QTreeView::item:selected,
+QTableView::item:selected,
+QListView::item:selected,
+QTreeWidget::item:selected,
+QListWidget::item:selected {{
+    background-color: {SPEEDRUN_ACCENT};
+    color: white;
+}}
+QTreeView::item:selected:!active,
+QTableView::item:selected:!active,
+QListView::item:selected:!active {{
+    background-color: rgba(99, 102, 241, 0.45);
+    color: white;
+}}
+QHeaderView::section {{
+    padding: 4px 10px;
+}}
+QTableView, QTreeView, QListView {{
+    selection-background-color: {SPEEDRUN_ACCENT};
+    selection-color: white;
+}}
 """
 
 
@@ -555,16 +580,53 @@ _REVIEWER_CSS = f"""
 </style>
 """
 
+# Anki's own deck list and overview are legacy stdHtml pages the student passes
+# through on the way to/from a review. We restyle them (accent, rounded controls,
+# card-like rows, Inter font) so they read as part of the custom app rather than
+# stock Anki — the app should look like one product end to end.
+_SHELL_CHROME_CSS = f"""
+<style>
+body {{
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}}
+a {{ color: {SPEEDRUN_ACCENT}; }}
+a:hover {{ color: #7377f5; }}
+button {{
+    border-radius: 8px;
+    padding: 6px 14px;
+}}
+/* Overview "Study now" primary action */
+#study {{
+    background: {SPEEDRUN_ACCENT};
+    color: #fff;
+    border: 1px solid {SPEEDRUN_ACCENT};
+    font-weight: 600;
+}}
+#study:hover {{ background: #7377f5; }}
+/* Deck list rows read as cards */
+tr.deck td {{
+    padding-top: 7px;
+    padding-bottom: 7px;
+}}
+tr.deck:hover td {{ background: rgba(99, 102, 241, 0.07); }}
+</style>
+"""
+
 
 def _on_webview_content(web_content: WebContent, context: object) -> None:
+    import aqt.deckbrowser
+    import aqt.overview
     import aqt.reviewer
 
     if isinstance(context, aqt.reviewer.Reviewer):
         web_content.head += _REVIEWER_CSS
+    elif isinstance(context, (aqt.deckbrowser.DeckBrowser, aqt.overview.Overview)):
+        web_content.head += _SHELL_CHROME_CSS
 
 
 def register_theme() -> None:
-    """Thread the Speedrun accent through all Qt screens, and style the reviewer's
-    typed short-answer box. Call once at init."""
+    """Thread the Speedrun accent through all Qt screens, style the reviewer's
+    typed short-answer box, and restyle Anki's own deck list / overview so the
+    app reads as one custom product. Call once at init."""
     gui_hooks.style_did_init.append(_append_theme)
     gui_hooks.webview_will_set_content.append(_on_webview_content)

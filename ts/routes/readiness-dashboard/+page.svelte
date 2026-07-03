@@ -294,12 +294,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style>
     .readiness {
-        max-width: 780px;
+        max-width: 900px;
         margin: 0 auto;
-        padding: 1.5rem 1.25rem 3rem;
+        padding: 1.75rem 1.5rem 3rem;
         color: var(--fg, #1c1c1e);
         font-size: 15px;
-        line-height: 1.45;
+        line-height: 1.5;
     }
 
     /* Header */
@@ -308,29 +308,31 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     header h1 {
         margin: 0;
-        font-size: 1.5rem;
-        font-weight: 700;
+        font-size: 1.7rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
     }
     header .exam {
-        margin: 0.15rem 0 0;
-        font-size: 0.85rem;
-        font-weight: 600;
-        letter-spacing: 0.02em;
+        margin: 0.25rem 0 0;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: var(--fg-subtle, #6b7280);
+        color: var(--sr-accent, #6366f1);
     }
     header .subtitle {
-        margin: 0.5rem 0 0;
+        margin: 0.6rem 0 0;
         color: var(--fg-subtle, #4b5563);
     }
 
     /* Generic panel */
     .panel {
-        border: 1px solid var(--border, #e2e2e5);
-        border-radius: 10px;
-        padding: 1.1rem 1.25rem;
-        margin-bottom: 1rem;
-        background: var(--canvas-elevated, #fbfbfc);
+        border: 1px solid var(--border, #e6e7eb);
+        border-radius: 16px;
+        padding: 1.4rem 1.5rem;
+        margin-bottom: 1.25rem;
+        background: var(--canvas-elevated, #fff);
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
     }
     .panel.muted {
         color: var(--fg-subtle, #6b7280);
@@ -358,11 +360,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin-bottom: 1.25rem;
     }
     .signal {
-        border: 1px solid var(--border, #e2e2e5);
+        border: 1px solid var(--border, #e6e7eb);
         border-top: 3px solid var(--signal-color, #9ca3af);
-        border-radius: 10px;
-        padding: 0.9rem 1rem 1rem;
-        background: var(--canvas-elevated, #fbfbfc);
+        border-radius: 14px;
+        padding: 1.1rem 1.15rem 1.2rem;
+        background: var(--canvas-elevated, #fff);
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
     }
     .signal.pending {
         --signal-color: #9ca3af;

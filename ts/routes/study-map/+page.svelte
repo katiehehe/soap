@@ -92,9 +92,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     const GREEN = COLORS.green;
     const ACCENT = COLORS.accent;
 
-    // Which sections to render. The home shell shows the map on one tab
-    // (variant "map") and the plan/pace/mastery panels on the Readiness & stats
-    // tab (variant "panels"); the standalone /study-map route shows everything.
+    // Which sections to render. The home shell shows the map on the Concept map
+    // tab (variant "map") and the plan/pace/mastery panels on the Progress tab
+    // (variant "panels"); the standalone /study-map route shows everything.
     export let variant: "map" | "panels" | "full" = "full";
     $: showMap = variant !== "panels";
     $: showPanels = variant !== "map";
@@ -108,9 +108,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let selectedUnit: UnitNode | null = null;
 
     // Scale the fixed-size diagram to fit the available width (never upscaling).
-    // A uniform scale preserves the (verified) non-overlapping geometry.
+    // A uniform scale preserves the (verified) non-overlapping geometry. The
+    // compact geometry (see lib.ts) means scale stays at/near 1 on a normal
+    // window, so the bubble labels render at their intended (readable) size.
     let viewportWidth = 0;
     $: scale = viewportWidth > 0 ? Math.min(1, viewportWidth / layout.width) : 1;
+    // Centre the diagram when the viewport is wider than the scaled canvas.
+    $: canvasLeft = Math.max(0, (viewportWidth - layout.width * scale) / 2);
 
     async function loadState(): Promise<void> {
         try {
@@ -710,16 +714,17 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     {/if}
 
     {#if showMap}
-        <div
-            class="viewport"
-            bind:clientWidth={viewportWidth}
-            style="height:{layout.height * scale}px;"
-        >
+        <div class="map-card">
             <div
-                class="canvas"
-                style="width:{layout.width}px; height:{layout.height}px;
-                   transform:scale({scale}); transform-origin:top left;"
+                class="viewport"
+                bind:clientWidth={viewportWidth}
+                style="height:{layout.height * scale}px;"
             >
+                <div
+                    class="canvas"
+                    style="width:{layout.width}px; height:{layout.height}px;
+                   left:{canvasLeft}px; transform:scale({scale}); transform-origin:top left;"
+                >
                 <svg
                     class="edges"
                     viewBox="0 0 {layout.width} {layout.height}"
@@ -837,6 +842,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         </button>
                     {/each}
                 {/each}
+                </div>
             </div>
         </div>
     {/if}
@@ -1011,33 +1017,39 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style>
     .study-map {
-        max-width: 1040px;
+        max-width: 1180px;
         margin: 0 auto;
-        padding: 1.5rem 1.25rem 3rem;
+        padding: 1.75rem 1.5rem 3rem;
         color: var(--fg, #1c1c1e);
         font-size: 15px;
-        line-height: 1.45;
+        line-height: 1.5;
+    }
+    header {
+        margin-bottom: 1.25rem;
     }
     header h1 {
         margin: 0;
-        font-size: 1.5rem;
-        font-weight: 700;
+        font-size: 1.7rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
     }
     header .exam {
-        margin: 0.15rem 0 0;
-        font-size: 0.85rem;
-        font-weight: 600;
-        letter-spacing: 0.02em;
+        margin: 0.25rem 0 0;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: var(--fg-subtle, #6b7280);
+        color: var(--sr-accent, #6366f1);
     }
     header .subtitle {
-        margin: 0.5rem 0 0.5rem;
+        margin: 0.6rem 0 0;
+        max-width: 68ch;
         color: var(--fg-subtle, #4b5563);
-        font-size: 0.9rem;
+        font-size: 0.92rem;
+        line-height: 1.55;
     }
     .key {
-        font-size: 0.95rem;
+        font-size: 1rem;
         vertical-align: middle;
     }
     .notice.error {
@@ -1052,13 +1064,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 0.6rem 1rem;
-        margin: 0 0 1rem;
-        padding: 0.5rem 0.85rem;
-        border: 1px solid var(--border, #e2e2e5);
-        border-radius: 10px;
-        background: var(--canvas-elevated, #fbfbfc);
-        font-size: 0.85rem;
+        gap: 0.6rem 1.25rem;
+        margin: 0 0 1.25rem;
+        padding: 0.7rem 1.1rem;
+        border: 1px solid var(--border, #e6e7eb);
+        border-radius: 14px;
+        background: var(--canvas-elevated, #fff);
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+        font-size: 0.88rem;
     }
     .map-controls .ctrl {
         display: inline-flex;
@@ -1080,11 +1093,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     /* Today's focus strip */
     .focus-strip {
-        border: 1px solid var(--border, #e2e2e5);
-        border-radius: 10px;
-        padding: 0.75rem 1rem;
-        margin: 0 0 1rem;
-        background: var(--canvas-elevated, #fbfbfc);
+        border: 1px solid var(--border, #e6e7eb);
+        border-radius: 14px;
+        padding: 1rem 1.25rem;
+        margin: 0 0 1.25rem;
+        background: var(--canvas-elevated, #fff);
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
     }
     .focus-strip-head {
         display: flex;
@@ -1130,11 +1144,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     /* Overall mastery */
     .overall {
-        border: 1px solid var(--border, #e2e2e5);
-        border-radius: 10px;
-        padding: 0.9rem 1.1rem 1rem;
-        margin: 0.25rem 0 1.25rem;
-        background: var(--canvas-elevated, #fbfbfc);
+        border: 1px solid var(--border, #e6e7eb);
+        border-radius: 16px;
+        padding: 1.25rem 1.4rem 1.35rem;
+        margin: 0 0 1.25rem;
+        background: var(--canvas-elevated, #fff);
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
     }
     .overall-head {
         display: flex;
@@ -1144,7 +1159,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .overall-head h2 {
         margin: 0;
-        font-size: 1.05rem;
+        font-size: 1.15rem;
+        font-weight: 700;
     }
     .overall-count {
         font-weight: 700;
@@ -1152,8 +1168,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .stack {
         display: flex;
-        height: 12px;
-        margin: 0.6rem 0 0.5rem;
+        height: 16px;
+        margin: 0.8rem 0 0.6rem;
         border-radius: 999px;
         overflow: hidden;
         background: var(--canvas-inset, #ececef);
@@ -1201,11 +1217,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     /* Today's plan */
     .plan {
-        border: 1px solid var(--border, #e2e2e5);
-        border-radius: 10px;
-        padding: 0.9rem 1.1rem 1rem;
-        margin: 0.25rem 0 1.25rem;
-        background: var(--canvas-elevated, #fbfbfc);
+        border: 1px solid var(--border, #e6e7eb);
+        border-radius: 16px;
+        padding: 1.25rem 1.4rem 1.35rem;
+        margin: 0 0 1.25rem;
+        background: var(--canvas-elevated, #fff);
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
     }
     .plan-head {
         display: flex;
@@ -1215,7 +1232,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .plan-head h2 {
         margin: 0;
-        font-size: 1.05rem;
+        font-size: 1.15rem;
+        font-weight: 700;
     }
     .plan-sub {
         font-size: 0.8rem;
@@ -1306,11 +1324,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     /* Exam pace */
     .pace {
-        border: 1px solid var(--border, #e2e2e5);
-        border-radius: 10px;
-        padding: 0.9rem 1.1rem 1rem;
-        margin: 0.25rem 0 1.25rem;
-        background: var(--canvas-elevated, #fbfbfc);
+        border: 1px solid var(--border, #e6e7eb);
+        border-radius: 16px;
+        padding: 1.25rem 1.4rem 1.35rem;
+        margin: 0 0 1.25rem;
+        background: var(--canvas-elevated, #fff);
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
     }
     .pace-head {
         display: flex;
@@ -1320,7 +1339,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .pace-head h2 {
         margin: 0;
-        font-size: 1.05rem;
+        font-size: 1.15rem;
+        font-weight: 700;
     }
     .pace-badge {
         border-radius: 999px;
@@ -1402,6 +1422,19 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     /* Concept map */
+    .map-card {
+        border: 1px solid var(--border, #e6e7eb);
+        border-radius: 18px;
+        padding: 0.5rem 0.75rem;
+        background:
+            radial-gradient(
+                120% 120% at 50% 0%,
+                var(--sr-accent-weak, rgba(99, 102, 241, 0.06)),
+                transparent 60%
+            ),
+            var(--canvas-elevated, #fff);
+        box-shadow: 0 2px 14px rgba(15, 23, 42, 0.06);
+    }
     .viewport {
         position: relative;
         width: 100%;
@@ -1427,36 +1460,42 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 1px;
-        border: 2.5px solid var(--border, #e2e2e5);
+        gap: 2px;
+        border: 3px solid var(--border, #e2e2e5);
         border-radius: 50%;
-        padding: 4px;
+        padding: 6px;
         text-align: center;
         font: inherit;
         color: inherit;
         overflow: hidden;
         background:
             linear-gradient(var(--tint), var(--tint)), var(--canvas-elevated, #fbfbfc);
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
     }
     .node-title {
-        font-weight: 600;
-        font-size: 0.78rem;
-        line-height: 1.1;
+        font-weight: 700;
+        font-size: 0.92rem;
+        line-height: 1.15;
     }
     .node-sub {
-        font-size: 0.64rem;
+        font-size: 0.74rem;
         color: var(--fg-subtle, #6b7280);
     }
     .node-pct {
-        font-size: 0.62rem;
+        font-size: 0.72rem;
         font-weight: 700;
-        line-height: 1.1;
+        line-height: 1.15;
         color: var(--sr-accent, #6366f1);
     }
+    .bubble.center {
+        border-width: 3.5px;
+        box-shadow:
+            0 0 0 6px var(--sr-accent-weak, rgba(99, 102, 241, 0.1)),
+            0 4px 14px rgba(15, 23, 42, 0.12);
+    }
     .bubble.center .node-title {
-        font-size: 1rem;
-        font-weight: 700;
+        font-size: 1.2rem;
+        font-weight: 800;
     }
     .bubble.unit {
         cursor: pointer;
@@ -1465,15 +1504,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             transform 0.12s ease;
     }
     .bubble.unit .node-title {
-        font-size: 0.82rem;
+        font-size: 1rem;
     }
     .bubble.unit:hover {
         box-shadow:
-            0 0 0 3px var(--tint),
-            0 2px 6px rgba(0, 0, 0, 0.1);
+            0 0 0 4px var(--tint),
+            0 4px 12px rgba(15, 23, 42, 0.14);
+        transform: translateY(-1px);
     }
     .bubble.unit.selected {
-        box-shadow: 0 0 0 3px var(--fg-subtle, #6b7280);
+        box-shadow: 0 0 0 4px var(--fg-subtle, #6b7280);
     }
 
     /* Subtopic: a circular bubble with its label INSIDE it. */
@@ -1484,12 +1524,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         align-items: center;
         justify-content: center;
         text-align: center;
-        padding: 6px;
-        border: 2.5px solid var(--border, #e2e2e5);
+        padding: 5px;
+        border: 3px solid var(--border, #e2e2e5);
         border-radius: 50%;
         background:
             linear-gradient(var(--tint), var(--tint)), var(--canvas-elevated, #fbfbfc);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.07);
         font: inherit;
         color: inherit;
         cursor: pointer;
@@ -1499,17 +1539,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             transform 0.12s ease;
     }
     .leaf-label {
-        font-size: 0.62rem;
-        line-height: 1.1;
-        font-weight: 500;
-        overflow-wrap: anywhere;
+        font-size: 0.8rem;
+        line-height: 1.2;
+        font-weight: 600;
+        overflow-wrap: break-word;
+        hyphens: auto;
         color: var(--fg, #33373d);
     }
     .leaf:hover {
         box-shadow:
-            0 0 0 3px var(--tint),
-            0 2px 6px rgba(0, 0, 0, 0.1);
-        transform: scale(1.05);
+            0 0 0 4px var(--tint),
+            0 4px 12px rgba(15, 23, 42, 0.14);
+        transform: scale(1.06);
         z-index: 3;
     }
     .leaf.selected {
@@ -1543,8 +1584,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     /* Locked subtopic: prerequisites not met yet (guided mode). */
     .leaf.locked {
         border-style: dashed;
-        filter: grayscale(0.35);
-        opacity: 0.72;
+        filter: grayscale(0.25);
+        opacity: 0.82;
     }
     /* Dim bubbles outside the selected subtopic's prerequisite chain. */
     .leaf.dim {
@@ -1561,11 +1602,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     /* detail */
     .detail {
-        border: 1px solid var(--border, #e2e2e5);
-        border-radius: 12px;
-        padding: 1rem 1.25rem;
+        border: 1px solid var(--border, #e6e7eb);
+        border-radius: 16px;
+        padding: 1.25rem 1.4rem;
         margin-top: 1.25rem;
-        background: var(--canvas-elevated, #fbfbfc);
+        background: var(--canvas-elevated, #fff);
     }
     /* Floating popup: appears immediately over the map on click, so it's obvious
        something opened (rather than a panel far down the page). */
@@ -1573,13 +1614,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         position: fixed;
         top: 84px;
         right: 24px;
-        width: 340px;
+        width: 360px;
         max-width: calc(100vw - 48px);
-        max-height: 76vh;
+        max-height: 78vh;
         overflow-y: auto;
         margin-top: 0;
         z-index: 60;
-        box-shadow: 0 10px 34px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.24);
         animation: popIn 0.12s ease;
     }
     @keyframes popIn {
@@ -1614,7 +1655,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .detail-head h2 {
         margin: 0;
-        font-size: 1.1rem;
+        font-size: 1.2rem;
+        font-weight: 700;
     }
     .detail-unit {
         margin: 0.1rem 0 0;
@@ -1725,25 +1767,32 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: #e0a55222;
     }
     .study-btn {
-        margin-top: 0.9rem;
+        margin-top: 1rem;
         width: 100%;
-        padding: 0.55rem 0.75rem;
+        padding: 0.7rem 0.9rem;
         border: none;
-        border-radius: 8px;
-        background: #6486bf;
+        border-radius: 11px;
+        background: var(--sr-accent, #6366f1);
         color: #fff;
         font: inherit;
-        font-weight: 600;
+        font-weight: 700;
+        font-size: 0.95rem;
         cursor: pointer;
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.28);
+        transition:
+            filter 0.12s ease,
+            transform 0.12s ease;
     }
     .study-btn:hover {
-        filter: brightness(1.05);
+        filter: brightness(1.06);
+        transform: translateY(-1px);
     }
     .study-btn.secondary {
-        margin-top: 0.5rem;
+        margin-top: 0.6rem;
         background: transparent;
-        color: #6486bf;
-        border: 1px solid #6486bf;
+        color: var(--sr-accent, #6366f1);
+        border: 1px solid var(--sr-accent, #6366f1);
+        box-shadow: none;
     }
     /* Calm by default: honour reduced-motion preferences. */
     @media (prefers-reduced-motion: reduce) {

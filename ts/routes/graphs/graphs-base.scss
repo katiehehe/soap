@@ -8,3 +8,24 @@ button {
 html {
     height: initial;
 }
+
+// --- Speedrun (SOA Exam P) skin -----------------------------------------
+// Anki's original Stats page kept as-is (data untouched), but reskinned so it
+// reads as part of the custom app rather than stock Anki: Inter type + each
+// graph card gets the app accent on its title bar.
+body {
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+}
+
+:global(.graphs-container .container) {
+    border-top: 3px solid var(--sr-accent, #6366f1);
+}
+
+:global(.graphs-container .container h1) {
+    color: var(--sr-accent, #6366f1);
+}

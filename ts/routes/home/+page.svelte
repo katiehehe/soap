@@ -5,13 +5,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <script lang="ts">
     import { bridgeCommand } from "@tslib/bridgecommand";
 
-    // The concept map and readiness/stats screens are the existing SvelteKit
-    // pages, reused here as the two tabs of the custom home shell (they still
-    // work as standalone routes too).
+    // The concept map, progress panels, and readiness screens are the existing
+    // SvelteKit pages, reused as the tabs of the custom home shell (they still
+    // work as standalone routes too). Readiness (our custom honesty bundle) is
+    // kept separate from Anki's original Stats, which has its own meaning and is
+    // reached via the "Anki stats" button below.
     import ConceptMap from "../study-map/+page.svelte";
-    import ReadinessStats from "../readiness-dashboard/+page.svelte";
+    import Readiness from "../readiness-dashboard/+page.svelte";
 
-    type Tab = "map" | "readiness";
+    type Tab = "map" | "progress" | "readiness";
     let tab: Tab = "map";
 
     // Desktop actions are routed to the native Anki flows through the mw.web
@@ -41,10 +43,17 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </button>
             <button
                 class="tab"
+                class:active={tab === "progress"}
+                on:click={() => (tab = "progress")}
+            >
+                Progress
+            </button>
+            <button
+                class="tab"
                 class:active={tab === "readiness"}
                 on:click={() => (tab = "readiness")}
             >
-                Readiness &amp; stats
+                Readiness
             </button>
         </nav>
 
@@ -58,6 +67,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <button class="action" on:click={() => nav("browse")} title="Browse cards">
                 Browse
             </button>
+            <button
+                class="action"
+                on:click={() => nav("stats")}
+                title="Anki's original review-history graphs"
+            >
+                Anki stats
+            </button>
             <button class="action" on:click={() => nav("sync")} title="Sync">
                 Sync
             </button>
@@ -67,9 +83,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     <main class="content">
         {#if tab === "map"}
             <ConceptMap variant="map" />
-        {:else}
-            <ReadinessStats />
+        {:else if tab === "progress"}
             <ConceptMap variant="panels" />
+        {:else}
+            <Readiness />
         {/if}
     </main>
 </div>
@@ -103,10 +120,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         align-items: center;
         gap: 1rem;
-        padding: 0.6rem 1rem;
+        padding: 0.7rem 1.4rem;
         background: var(--canvas-elevated, #fff);
         border-bottom: 1px solid var(--border, #e6e7eb);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
+        position: sticky;
+        top: 0;
+        z-index: 40;
     }
     .brand {
         display: flex;
@@ -146,18 +166,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         gap: 0.25rem;
         margin: 0 auto;
         background: var(--canvas-inset, #eef0f4);
-        padding: 0.2rem;
-        border-radius: 10px;
+        padding: 0.3rem;
+        border-radius: 12px;
     }
     .tab {
         border: none;
         background: transparent;
         font: inherit;
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 0.92rem;
         color: var(--fg-subtle, #5b6069);
-        padding: 0.4rem 0.9rem;
-        border-radius: 8px;
+        padding: 0.5rem 1.1rem;
+        border-radius: 9px;
         cursor: pointer;
         transition:
             background 0.12s ease,

@@ -181,11 +181,11 @@ export function unitWeight(u: UnitDef): number {
 // the biggest exam topics read as the biggest bubbles. Radii are capped well
 // below the spacing between bubble centres (see the radial constants) so no two
 // bubbles can overlap — verified by lib.test.ts.
-export const CENTER_R = 58;
-const UNIT_R_MIN = 54;
-const UNIT_R_MAX = 72;
-const SUB_R_MIN = 50;
-const SUB_R_MAX = 74;
+export const CENTER_R = 52;
+const UNIT_R_MIN = 50;
+const UNIT_R_MAX = 62;
+const SUB_R_MIN = 48;
+const SUB_R_MAX = 64;
 
 const SUB_WEIGHTS = TAXONOMY.flatMap((u) => u.subtopics.map((s) => s.weight));
 const SUB_W_MIN = Math.min(...SUB_WEIGHTS);
@@ -215,13 +215,15 @@ export function unitRadius(weight: number): number {
 
 // Radial layout constants. Two rings (near/far) per unit halve the number of
 // bubbles competing for angular space; the generous radii leave room for the
-// largest bubbles without overlap (verified by lib.test.ts).
-const R_UNIT = 250;
-const R_IN = 450;
-const R_OUT = 640;
-const STEP_DEG = 17; // angular gap between consecutive subtopics of a unit
+// largest bubbles without overlap (verified by lib.test.ts). Kept compact so
+// the whole diagram fits a normal window at ~1:1 scale — the map is never shrunk
+// so far that its labels turn tiny (the reason for the tightened radii here).
+const R_UNIT = 198;
+const R_IN = 348;
+const R_OUT = 476;
+const STEP_DEG = 18; // angular gap between consecutive subtopics of a unit
 const UNIT_ANGLES_DEG = [-90, 30, 150]; // upward-pointing equilateral triangle
-const MARGIN = 26;
+const MARGIN = 22;
 const DEG = Math.PI / 180;
 
 export interface Circle {

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import aqt.forms
 from anki._legacy import print_deprecation_warning
 from anki.collection import Progress
+from anki.utils import is_mac
 from aqt.qt import *
 from aqt.qt import sip
 from aqt.utils import disable_help_button, tr
@@ -26,6 +27,7 @@ class ProgressManager:
         self.blockUpdates = False
         self._show_timer: QTimer | None = None
         self._busy_cursor_timer: QTimer | None = None
+        self._busy_cursor_active = False
         self._win: ProgressDialog | None = None
         self._levels = 0
         self._backend_timer: QTimer | None = None
@@ -305,10 +307,24 @@ class ProgressManager:
         self._shown = 0
 
     def _set_busy_cursor(self) -> None:
+        # On macOS, realizing the themed wait cursor converts a bitmap to a
+        # CGImage (QImage::toCGImage -> CGImageCreate), which crashes the whole
+        # app with a pointer-authentication SIGTRAP on recent macOS. Any
+        # operation slow enough to show the busy cursor (e.g. sync) would take
+        # the app down, so skip the override cursor there; the progress dialog
+        # still shows that work is happening.
+        if is_mac:
+            return
         self.mw.app.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
+        self._busy_cursor_active = True
 
     def _restore_cursor(self) -> None:
-        self.app.restoreOverrideCursor()
+        # Only pop a cursor we actually pushed, so we never underflow Qt's
+        # override-cursor stack (the busy-cursor timer may not have fired yet on
+        # a fast operation, and we push nothing at all on macOS).
+        if self._busy_cursor_active:
+            self.app.restoreOverrideCursor()
+            self._busy_cursor_active = False
 
     def busy(self) -> int:
         "True if processing."

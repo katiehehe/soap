@@ -558,6 +558,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     @media (max-width: 620px) {
         .formula {
             flex-direction: column;
+            /* Stretch (not baseline) so the stacked body spans the full card
+               width; otherwise a wide equation sizes the body to its own width
+               and pushes the whole page into horizontal scroll on a phone. */
+            align-items: stretch;
+        }
+        .formula-body {
+            /* Full card width so a too-wide formula scrolls inside
+               .formula-math (overflow-x: auto), not the page. */
+            flex: 1 1 auto;
+            width: 100%;
         }
         .formula-source {
             margin-top: 0;

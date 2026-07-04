@@ -6,7 +6,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import type { CongratsInfoResponse } from "@generated/anki/scheduler_pb";
     import { congratsInfo } from "@generated/backend";
     import * as tr from "@generated/ftl";
-    import { bridgeLink } from "@tslib/bridgecommand";
+    import { bridgeCommand, bridgeLink } from "@tslib/bridgecommand";
 
     import Col from "$lib/components/Col.svelte";
     import Container from "$lib/components/Container.svelte";
@@ -29,6 +29,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     const customStudyMsg = tr.schedulingHowToCustomStudy({
         customStudy,
     });
+
+    // Speedrun navigation off the end-of-deck screen: keep moving (open the next
+    // due deck, tier-ordered) or jump back to the daily Plan. Both are handled by
+    // the desktop bridge (aqt/speedrun.py), so only offer them when pycmd works.
+    function studyNext(): void {
+        bridgeCommand("speedrun-study-next");
+    }
+    function backToPlan(): void {
+        bridgeCommand("speedrun-plan");
+    }
 
     onMount(() => {
         if (refreshPeriodically) {
@@ -61,6 +71,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
             {#if info.newRemaining}
                 <p>{today_new}</p>
+            {/if}
+
+            {#if info.bridgeCommandsSupported}
+                <div class="sr-actions">
+                    <button
+                        class="sr-btn sr-btn-primary"
+                        on:click={studyNext}
+                    >
+                        Study next&nbsp;&rarr;
+                    </button>
+                    <button class="sr-btn" on:click={backToPlan}>
+                        Back to plan
+                    </button>
+                </div>
             {/if}
 
             {#if info.bridgeCommandsSupported}
@@ -158,5 +182,47 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         padding: 1em;
         margin-top: 1.25em;
         text-align: start;
+    }
+
+    /* End-of-deck navigation: keep going, or head back to the plan. */
+    .sr-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        justify-content: center;
+        margin: 1.5rem 0 0.25rem;
+    }
+    .sr-btn {
+        appearance: none;
+        cursor: pointer;
+        font-family: var(--sr-font-body, sans-serif);
+        font-size: 0.95rem;
+        font-weight: 700;
+        padding: 0.6rem 1.15rem;
+        border-radius: var(--sr-radius-sm, 8px);
+        border: 1px solid var(--border);
+        background: var(--canvas);
+        color: var(--fg);
+        transition:
+            background 0.12s ease,
+            border-color 0.12s ease,
+            transform 0.05s ease;
+    }
+    .sr-btn:hover {
+        border-color: var(--sr-accent);
+        color: var(--sr-accent);
+    }
+    .sr-btn:active {
+        transform: translateY(1px);
+    }
+    .sr-btn-primary {
+        background: linear-gradient(135deg, var(--sr-accent), var(--sr-accent-2));
+        border-color: transparent;
+        color: #fbfaf6;
+        box-shadow: var(--sr-shadow-sm);
+    }
+    .sr-btn-primary:hover {
+        color: #fbfaf6;
+        filter: brightness(1.05);
     }
 </style>

@@ -66,8 +66,18 @@ Format: `path - what changed - merge risk (low/med/high)`.
   app-accent on each graph card's title bar); graph DATA colours untouched, so
   the stats stay legible - low.
 - `ts/routes/congrats/CongratsPage.svelte` - restyle the end-of-review congrats
-  screen as a custom accent card (brand mark + Inter + accent links); content and
-  logic unchanged - low.
+  screen as a custom accent card (brand mark + Inter + accent links), and add two
+  navigation buttons shown when `bridgeCommandsSupported`: "Study next" (pycmd
+  `speedrun-study-next` -> `study_recommended`, opens the next due deck) and "Back
+  to plan" (pycmd `speedrun-plan` -> home shell on the Plan tab). Both handled in
+  `aqt/speedrun.py`'s `_on_js_message` hook (append-only) - low.
+- `qt/aqt/progress.py` - crash fix - low, append-only. `ProgressManager._set_busy_cursor`
+  skips the themed wait cursor on macOS (realizing it runs `QImage::toCGImage` ->
+  `CGImageCreate`, which SIGTRAPs the whole app with a pointer-authentication trap on
+  recent macOS, killing any slow op such as sync/sign-in), and `_restore_cursor` now only
+  pops a cursor we actually pushed (tracked by a new `_busy_cursor_active` flag), which
+  also fixes a latent override-cursor stack underflow when an op finishes under 300ms.
+  Isolated to two small methods + one init field; low rebase risk.
 - `pylib/tests/{test_collection,test_importing,test_models,test_schedv3,test_stats}.py`
   - unused-import cleanups only (e.g. dropping unused `pytest`/`re`/`os` imports);
     no behaviour change - low.

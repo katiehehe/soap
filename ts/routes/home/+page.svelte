@@ -91,6 +91,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     onMount(() => {
+        // A caller (e.g. the end-of-deck congrats screen's "Back to plan") can
+        // request an initial tab via ?tab=… ; honour it if it's a real tab.
+        const requested = new URLSearchParams(window.location.search).get("tab");
+        const known: Tab[] = [
+            "map",
+            "plan",
+            "memory",
+            "formula",
+            "readiness",
+            "stats",
+            "metrics",
+        ];
+        if (requested && (known as string[]).includes(requested)) {
+            tab = requested as Tab;
+        }
         send("speedrun-settings", (s) => {
             settings = (s as Settings) ?? settings;
         });
@@ -652,6 +667,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         .actions {
             width: 100%;
+            justify-content: center;
+        }
+    }
+
+    /* Touch devices (the phone WebView) — meet the ≥44px touch-target minimum
+       from the design system. Scoped to coarse pointers so the desktop mouse
+       layout (tighter top bar) is unchanged. */
+    @media (pointer: coarse) {
+        .tab,
+        .chip,
+        .settings-btn {
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
             justify-content: center;
         }
     }

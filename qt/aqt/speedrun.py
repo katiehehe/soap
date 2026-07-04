@@ -740,10 +740,24 @@ def _ensure_speedrun_defaults(mw: aqt.main.AnkiQt) -> None:
 
 
 def show_home(mw: aqt.main.AnkiQt) -> None:
-    """Render the custom home shell into the main webview."""
+    """Render the custom home shell into the main webview.
+
+    A caller can request an initial tab (e.g. the daily Plan) by setting
+    ``mw._speedrun_home_tab`` before entering the ``speedrunHome`` state; it is
+    consumed once and passed to the page as ``?tab=…`` so, say, the end-of-deck
+    congrats screen can land the user straight on the Plan."""
     _ensure_speedrun_defaults(mw)
     mw.web.set_bridge_command(lambda cmd: _home_bridge_cmd(mw, cmd), mw)
-    mw.web.load_sveltekit_page("home")
+    tab = getattr(mw, "_speedrun_home_tab", None)
+    mw._speedrun_home_tab = None
+    page = f"home?tab={tab}" if tab else "home"
+    mw.web.load_sveltekit_page(page)
+
+
+def go_home_tab(mw: aqt.main.AnkiQt, tab: str) -> None:
+    """Open the custom home shell on a specific tab (e.g. "plan")."""
+    mw._speedrun_home_tab = tab
+    mw.moveToState("speedrunHome")
 
 
 # --- Categorized add-card ---------------------------------------------------
@@ -1333,6 +1347,22 @@ def _on_js_message(
 
         if mw is not None:
             QTimer.singleShot(0, lambda: mw.moveToState("speedrunHome"))
+        return (True, None)
+    if message == "speedrun-plan":
+        # End-of-deck congrats "Back to plan": open the home shell on the Plan tab.
+        from aqt import mw
+
+        if mw is not None:
+            QTimer.singleShot(0, lambda: go_home_tab(mw, "plan"))
+        return (True, None)
+    if message == "speedrun-study-next":
+        # End-of-deck congrats "Study next": open the next due deck (tier-ordered),
+        # or say we're caught up. Deferred so we don't move states from inside the
+        # webview's own callback.
+        from aqt import mw
+
+        if mw is not None:
+            QTimer.singleShot(0, lambda: study_recommended(mw))
         return (True, None)
     return handled
 

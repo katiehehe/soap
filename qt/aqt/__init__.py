@@ -427,20 +427,28 @@ class AnkiApp(QApplication):
             QToolButton,
             QTabBar,
         )
-        if evt.type() in [QEvent.Type.Enter, QEvent.Type.HoverEnter]:
-            if (isinstance(src, pointer_classes) and src.isEnabled()) or (
-                isinstance(src, QComboBox) and not src.isEditable()
-            ):
-                self.setOverrideCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-            else:
-                self.restoreOverrideCursor()
-            return False
+        # The hover pointer-cursor calls setOverrideCursor(QCursor(...)), which on
+        # recent macOS crashes realizing the cursor to a CGImage
+        # (QImage::toCGImage -> CGImageCreate, arm64 pointer-auth SIGTRAP) — the
+        # same crash guarded in aqt/progress.py. Skip this cosmetic cursor on
+        # macOS so e.g. clicking Sync (which hovers a button) can't take the app
+        # down.
+        if not is_mac:
+            if evt.type() in [QEvent.Type.Enter, QEvent.Type.HoverEnter]:
+                if (isinstance(src, pointer_classes) and src.isEnabled()) or (
+                    isinstance(src, QComboBox) and not src.isEditable()
+                ):
+                    self.setOverrideCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+                else:
+                    self.restoreOverrideCursor()
+                return False
 
-        elif evt.type() in [QEvent.Type.HoverLeave, QEvent.Type.Leave] or isinstance(
-            evt, QCloseEvent
-        ):
-            self.restoreOverrideCursor()
-            return False
+            elif evt.type() in [
+                QEvent.Type.HoverLeave,
+                QEvent.Type.Leave,
+            ] or isinstance(evt, QCloseEvent):
+                self.restoreOverrideCursor()
+                return False
 
         return False
 

@@ -34,6 +34,12 @@ phone-rebuild:
 phone-rebuild-dry:
 	tools/speedrun/phone-rebuild.sh --dry-run
 
+# Local sync server (Anki's own, same Rust protocol) for phone<->desktop sync
+# with no AnkiWeb account. Binds all interfaces so the emulator can reach it at
+# http://10.0.2.2:27701/. Runs in the foreground; leave it running while syncing.
+sync-server:
+	tools/speedrun/sync_server.sh
+
 # 7h: load a large deck and report p50/p95/worst per action.
 bench:
 	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/bench.py $(ARGS)

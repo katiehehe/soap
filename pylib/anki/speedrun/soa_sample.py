@@ -29,7 +29,7 @@ committed to this AGPL repo. Instead:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +41,14 @@ _FALLBACK_PATH = Path(__file__).parent / "sample_items.json"
 _REAL_DATA_PATH = (
     Path(__file__).resolve().parents[3] / "data" / "soa_sample_p" / "items.json"
 )
+
+# Optional hand-authored LaTeX cleanups, keyed by item id, merged over the
+# extracted corpus at load time. The PDF extraction mangles math (lost
+# exponents/fractions/piecewise), so these restore clean \( \)/\[ \] LaTeX that
+# MathJax renders. Kept SEPARATE from items.json so the extraction pipeline
+# (regen.py) stays reproducible, and gitignored (derived from the copyrighted
+# SOA questions). Never AI-generated — hand-authored, so no held-out leakage.
+_LATEX_OVERRIDES_PATH = _REAL_DATA_PATH.parent / "latex_overrides.json"
 
 
 @dataclass(frozen=True)
@@ -92,26 +100,61 @@ def _parse(data: dict[str, Any], default_source: str, path: Path) -> list[Sample
     return out
 
 
+def _apply_latex_overrides(items: list[SampleItem]) -> list[SampleItem]:
+    """Merge hand-authored LaTeX cleanups (``latex_overrides.json``) over the
+    extracted items, by id. Each override may set a clean ``question`` (and
+    optionally ``answer``). Missing file / unknown ids are left untouched, so
+    this is safe on any corpus (the ids only match the real SOA set)."""
+    if not _LATEX_OVERRIDES_PATH.exists():
+        return items
+    try:
+        with open(_LATEX_OVERRIDES_PATH, encoding="utf8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return items
+    by_id = raw.get("items", raw)
+    if not isinstance(by_id, dict):
+        return items
+    out: list[SampleItem] = []
+    for it in items:
+        ov = by_id.get(it.id)
+        if isinstance(ov, dict):
+            out.append(
+                replace(
+                    it,
+                    question=str(ov.get("question", it.question)),
+                    answer=str(ov.get("answer", it.answer)),
+                )
+            )
+        else:
+            out.append(it)
+    return out
+
+
 def load_corpus(path: str | None = None) -> SampleCorpus:
     """Load the held-out corpus.
 
     Preference order: an explicit ``path`` -> the real SOA data file (if the
     owner dropped it in) -> the committed original fallback. The returned
     ``is_real_soa`` flag lets callers label results honestly ("original
-    fallback" vs "official SOA sample").
+    fallback" vs "official SOA sample"). Hand-authored LaTeX cleanups are merged
+    in (see ``_apply_latex_overrides``) so mangled math renders as clean LaTeX.
     """
     if path is not None:
         p = Path(path)
         with open(p, encoding="utf8") as f:
-            return SampleCorpus(
-                _parse(json.load(f), "external", p), "external", False, str(p)
-            )
+            items = _apply_latex_overrides(_parse(json.load(f), "external", p))
+        return SampleCorpus(items, "external", False, str(p))
     if _REAL_DATA_PATH.exists():
         with open(_REAL_DATA_PATH, encoding="utf8") as f:
-            items = _parse(json.load(f), "soa-sample", _REAL_DATA_PATH)
+            items = _apply_latex_overrides(
+                _parse(json.load(f), "soa-sample", _REAL_DATA_PATH)
+            )
         return SampleCorpus(items, items[0].source, True, str(_REAL_DATA_PATH))
     with open(_FALLBACK_PATH, encoding="utf8") as f:
-        items = _parse(json.load(f), "original-speedrun", _FALLBACK_PATH)
+        items = _apply_latex_overrides(
+            _parse(json.load(f), "original-speedrun", _FALLBACK_PATH)
+        )
     return SampleCorpus(items, items[0].source, False, str(_FALLBACK_PATH))
 
 

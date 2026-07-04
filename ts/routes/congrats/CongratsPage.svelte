@@ -89,27 +89,23 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <style lang="scss">
     .congrats {
         margin: 2.5em auto 0;
-        max-width: 30em;
+        max-width: 32em;
         font-size: var(--font-size);
-        font-family:
-            "Inter",
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            sans-serif;
+        font-family: var(--sr-font-body, sans-serif);
+        color: var(--fg);
         text-align: center;
 
-        /* Card treatment so the post-review moment reads as the custom app. */
-        background: var(--canvas-elevated, #fff);
-        border: 1px solid var(--border-subtle, #e6e7eb);
-        border-top: 4px solid var(--sr-accent, #6366f1);
-        border-radius: var(--sr-radius, 12px);
-        padding: 1.75rem 2rem 2rem;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+        /* A warm, quiet "you finished" card — a green top accent marks the win. */
+        background-color: var(--canvas-elevated);
+        border: 1px solid var(--border);
+        border-top: 3px solid var(--sr-mastered);
+        border-radius: var(--sr-radius);
+        padding: 2.25rem 2rem 2.5rem;
+        box-shadow: var(--sr-shadow);
 
         :global(a) {
-            color: var(--sr-accent, #6366f1);
-            font-weight: 600;
+            color: var(--sr-accent);
+            font-weight: 700;
             text-decoration: none;
         }
         :global(a:hover) {
@@ -121,41 +117,46 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
+        gap: 0.55rem;
+        margin-bottom: 1.25rem;
     }
     .brand-mark {
         display: grid;
         place-items: center;
-        width: 30px;
-        height: 30px;
-        border-radius: 8px;
-        background: linear-gradient(
-            135deg,
-            var(--sr-accent, #6366f1),
-            var(--sr-accent-2, #8b5cf6)
-        );
-        color: #fff;
-        font-weight: 800;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--sr-accent), var(--sr-accent-2));
+        color: #fbfaf6;
+        font-family: var(--sr-font-heading, serif);
+        font-weight: 700;
+        font-size: 1rem;
+        box-shadow: var(--sr-shadow-sm);
     }
     .brand-sub {
-        font-size: 0.7rem;
-        letter-spacing: 0.14em;
+        font-family: var(--sr-font-body, sans-serif);
+        font-size: 0.64rem;
+        font-weight: 700;
+        letter-spacing: 0.2em;
         text-transform: uppercase;
-        color: var(--fg-subtle, #8a8f98);
+        color: var(--fg-subtle);
     }
 
     h1 {
-        font-size: 1.5rem;
-        font-weight: 800;
-        margin: 0 0 0.5rem;
+        font-family: var(--sr-font-heading, serif);
+        font-size: clamp(1.7rem, 4.5vw, 2.4rem);
+        font-weight: 600;
+        line-height: 1.1;
+        letter-spacing: -0.01em;
+        margin: 0 0 0.75rem;
+        color: var(--fg);
     }
 
     .description {
         border: 1px solid var(--border);
-        border-radius: var(--sr-radius, 10px);
+        border-radius: var(--sr-radius-sm);
         padding: 1em;
-        margin-top: 1em;
+        margin-top: 1.25em;
         text-align: start;
     }
 </style>

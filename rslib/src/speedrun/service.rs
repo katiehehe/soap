@@ -10,6 +10,7 @@ use anki_proto::speedrun::MasteryOrderedCards;
 use anki_proto::speedrun::MasteryOverall;
 use anki_proto::speedrun::MasteryRequest;
 use anki_proto::speedrun::MasteryState;
+use anki_proto::speedrun::MemoryRecall;
 use anki_proto::speedrun::NoScore;
 use anki_proto::speedrun::PointsAtStakeCard;
 use anki_proto::speedrun::PointsAtStakeOrder;
@@ -28,7 +29,7 @@ use crate::collection::Collection;
 use crate::error;
 use crate::speedrun::mastery::build_study_plan;
 use crate::speedrun::mastery::compute_locks;
-use crate::speedrun::mastery::compute_pace;
+use crate::speedrun::mastery::compute_mastery_pace;
 use crate::speedrun::mastery::compute_pools;
 use crate::speedrun::mastery::order_new_cards;
 use crate::speedrun::mastery::parse_subtopic_tag;
@@ -59,6 +60,14 @@ const PASS_PROPORTION: f64 = 0.60;
 const PRACTICE_STATS_KEY: &str = "speedrunPracticeStats";
 
 /// Accumulated practice-test evidence, read from collection config.
+///
+/// `questions`/`correct`/`tests` are the RAW integer counts (the give-up gate
+/// uses `questions`). `weighted_*` are the same evidence scaled by each test's
+/// representativeness (`practice_test.readiness_weight`: a full, whole-exam official
+/// test counts 1.0; narrower scope or generated sources count for less). The
+/// readiness BAND uses the weighted proportion; they default to 0 for tests
+/// recorded before weighting existed, in which case the band falls back to the
+/// raw counts.
 #[derive(serde::Deserialize, Default)]
 struct PracticeStats {
     #[serde(default)]
@@ -67,6 +76,10 @@ struct PracticeStats {
     correct: u32,
     #[serde(default)]
     tests: u32,
+    #[serde(default)]
+    weighted_questions: f64,
+    #[serde(default)]
+    weighted_correct: f64,
 }
 
 impl crate::services::SpeedrunService for Collection {
@@ -96,71 +109,102 @@ impl crate::services::SpeedrunService for Collection {
             .collect();
         let coverage_pct = self.weighted_coverage(&input.expected_subtopics, &unit_weights)?;
 
+        // The Memory signal (with a range) is computed INDEPENDENTLY of the
+        // readiness give-up rule — memory can be shown as soon as there are
+        // reviews, even while readiness abstains. It is attached to every return
+        // path below.
+        let stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
+        let memory_recall = Some(memory_recall_proto(
+            &crate::speedrun::mastery::memory_recall(&stats),
+        ));
+
         let reviews_ok = graded_reviews >= MIN_GRADED_REVIEWS;
         let coverage_ok = coverage_pct >= MIN_COVERAGE;
 
-        if !reviews_ok || !coverage_ok {
-            return Ok(below_threshold_no_score(graded_reviews, coverage_pct));
-        }
-
-        // Review + coverage gates are met. A readiness NUMBER additionally needs
-        // graded practice-test evidence (P(pass) is estimated from real graded
-        // exam-style results, never invented). Below the practice-question
-        // threshold we still return NoScore — the honesty rule, not a UI hint.
-        let practice: PracticeStats = self.get_config_default(PRACTICE_STATS_KEY);
-        if practice.questions < MIN_PRACTICE_QUESTIONS {
-            return Ok(no_practice_evidence_no_score(
-                graded_reviews,
-                coverage_pct,
-                practice.questions,
-            ));
-        }
-
-        // Enough graded practice-test evidence: emit the readiness band. Every
-        // field is populated (the honesty bundle), so a bare number can't ship.
-        let band = readiness_from_practice(practice.questions, practice.correct, coverage_pct);
-        let pct = 100.0 * practice.correct as f64 / practice.questions as f64;
-        let reasons = vec![
-            format!(
-                "{} graded practice-test questions across {} test(s), {pct:.0}% correct.",
-                practice.questions, practice.tests
-            ),
-            format!("{:.0}% weighted syllabus coverage.", coverage_pct * 100.0),
-            "Projected 0-10 assumes scaled score ~= 10 x proportion correct (see \
-             docs/score-models.md); range is a 95% Wilson interval."
-                .to_string(),
-        ];
-        Ok(ReadinessResult {
-            value: Some(readiness_result::Value::Score(ReadinessScore {
-                point: band.point,
-                low: band.low,
-                high: band.high,
-                coverage_pct,
-                confidence: band.confidence,
-                updated_at: TimestampSecs::now().0,
-                reasons,
-                next_best_action: self.readiness_next_action(&input.expected_subtopics)?,
-                // No history of past predictions vs outcomes yet, so past
-                // accuracy is not-yet-available (the UI shows it as such).
-                past_accuracy: 0.0,
-                pass_probability: band.pass_probability,
-            })),
-        })
+        let mut result = if !reviews_ok || !coverage_ok {
+            below_threshold_no_score(graded_reviews, coverage_pct)
+        } else {
+            // Review + coverage gates are met. A readiness NUMBER additionally
+            // needs graded practice-test evidence (P(pass) is estimated from real
+            // graded exam-style results, never invented). Below the
+            // practice-question threshold we still return NoScore — the honesty
+            // rule, not a UI hint.
+            let practice: PracticeStats = self.get_config_default(PRACTICE_STATS_KEY);
+            if practice.questions < MIN_PRACTICE_QUESTIONS {
+                no_practice_evidence_no_score(graded_reviews, coverage_pct, practice.questions)
+            } else {
+                // Enough graded practice-test evidence: emit the readiness band.
+                // Every field is populated (the honesty bundle), so a bare number
+                // can't ship. The band uses REPRESENTATIVENESS-WEIGHTED evidence
+                // (a full official exam counts most); it falls back to the raw
+                // counts for tests recorded before weighting existed. The give-up
+                // gate above always used the RAW question count.
+                let weighted = practice.weighted_questions > 0.0;
+                let (band_q, band_c) = if weighted {
+                    (practice.weighted_questions, practice.weighted_correct)
+                } else {
+                    (practice.questions as f64, practice.correct as f64)
+                };
+                let band = readiness_from_practice(band_q, band_c, coverage_pct);
+                let pct = 100.0 * practice.correct as f64 / practice.questions as f64;
+                let mut reasons = vec![
+                    format!(
+                        "{} graded practice-test questions across {} test(s), {pct:.0}% correct.",
+                        practice.questions, practice.tests
+                    ),
+                    format!("{:.0}% weighted syllabus coverage.", coverage_pct * 100.0),
+                    "Projected 0-10 assumes scaled score ~= 10 x proportion correct (see \
+                     docs/score-models.md); range is a 95% Wilson interval."
+                        .to_string(),
+                ];
+                if weighted {
+                    reasons.insert(
+                        1,
+                        "Each test is weighted by how representative it is: a full, whole-exam \
+                         official test counts most."
+                            .to_string(),
+                    );
+                }
+                ReadinessResult {
+                    value: Some(readiness_result::Value::Score(ReadinessScore {
+                        point: band.point,
+                        low: band.low,
+                        high: band.high,
+                        coverage_pct,
+                        confidence: band.confidence,
+                        updated_at: TimestampSecs::now().0,
+                        reasons,
+                        next_best_action: self.readiness_next_action(&input.expected_subtopics)?,
+                        // No history of past predictions vs outcomes yet, so past
+                        // accuracy is not-yet-available (the UI shows it as such).
+                        past_accuracy: 0.0,
+                        pass_probability: band.pass_probability,
+                    })),
+                    memory_recall: None,
+                }
+            }
+        };
+        result.memory_recall = memory_recall;
+        Ok(result)
     }
 
     fn get_mastery_state(&mut self, input: MasteryRequest) -> error::Result<MasteryState> {
         let mut stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
 
-        // Attach each subtopic's importance weight from the request (the
-        // editable topic-map emphasis). Absent weights stay 0, which makes the
-        // weighted rollup fall back to a plain count fraction.
+        // Attach each subtopic's importance weight (editable topic-map emphasis;
+        // absent weights stay 0, so the weighted rollup falls back to a plain
+        // count) AND its practice-test PERFORMANCE from config. Performance is a
+        // SEPARATE signal (shown with its own range) that is AND-ed with the
+        // memory gate to decide FULL mastery — never averaged into it.
         let sub_weights: HashMap<String, f64> = input
             .subtopic_weights
             .iter()
             .map(|w| (w.tag.clone(), w.weight))
             .collect();
+        let perf = self.speedrun_performance_config();
         for s in &mut stats {
             s.weight = sub_weights.get(&s.tag()).copied().unwrap_or(0.0);
+            s.performance = perf.get(&s.tag()).copied().unwrap_or_default();
         }
         let unit_req_weights: HashMap<String, f64> = input
             .units
@@ -172,10 +216,10 @@ impl crate::services::SpeedrunService for Collection {
         let pools = compute_pools(&stats);
 
         // Guided-learning gate. The DAG comes from the request (the Python topic
-        // map); the guided flag, per-topic unlocks, and practice-test
-        // PERFORMANCE come from config. Performance stays a SEPARATE signal from
-        // the memory gate — it is only OR-ed in to decide prerequisites, never
-        // blended into mastery.
+        // map); the guided flag and per-topic unlocks come from config.
+        // Performance (attached to the stats above) stays a SEPARATE signal: it
+        // is OR-ed in to satisfy prerequisites and AND-ed with the memory gate
+        // for FULL mastery, but never averaged into a blended score.
         let subtopic_prereqs: HashMap<String, Vec<String>> = input
             .subtopic_prereqs
             .iter()
@@ -186,7 +230,6 @@ impl crate::services::SpeedrunService for Collection {
             .iter()
             .map(|p| (p.unit_id.clone(), p.prereqs.clone()))
             .collect();
-        let perf = self.speedrun_performance_config();
         let unlocked = self.speedrun_unlocked_subtopics_config();
         let guided = self.speedrun_guided_mode_enabled();
         let locks = compute_locks(
@@ -214,7 +257,7 @@ impl crate::services::SpeedrunService for Collection {
                 unit_order.push(s.unit_id.clone());
             }
             *unit_total.entry(s.unit_id.clone()).or_default() += 1;
-            if s.gate_cleared() {
+            if s.fully_mastered() {
                 *unit_cleared.entry(s.unit_id.clone()).or_default() += 1;
             }
         }
@@ -227,6 +270,7 @@ impl crate::services::SpeedrunService for Collection {
                 // Practice-test performance (separate signal) + guided lock.
                 let p = perf.get(&tag).copied().unwrap_or_default();
                 let lock = locks.get(&tag).cloned().unwrap_or_default();
+                let (recall_low, recall_high) = s.recall_band();
                 SubtopicMastery {
                     tag,
                     unit_id: s.unit_id.clone(),
@@ -244,6 +288,8 @@ impl crate::services::SpeedrunService for Collection {
                     performance_mastered: p.mastered(),
                     locked: lock.locked,
                     unmet_prereqs: lock.unmet_prereqs,
+                    recall_low,
+                    recall_high,
                 }
             })
             .collect();
@@ -329,6 +375,7 @@ impl crate::services::SpeedrunService for Collection {
             priorities,
             recommendation,
             guided_mode: guided,
+            mastery_scheduler_on: self.speedrun_mastery_scheduler_enabled(),
         })
     }
 
@@ -467,35 +514,59 @@ impl crate::services::SpeedrunService for Collection {
         Ok(StudyPlan { items })
     }
 
-    /// Coverage pace vs the user's exam date. Counts the new (unstudied)
-    /// syllabus cards, reads the exam deck's new-cards/day limit, and works out
-    /// the pace needed to introduce them all before the exam. Pure arithmetic
-    /// over measured counts (see `compute_pace`); it is a coverage pace, never
-    /// the readiness score. Read-only.
+    /// Mastery pace vs the user's exam date. Counts the syllabus subtopics whose
+    /// mastery gate is cleared (the SAME gate the map and Overall-mastery use),
+    /// measures the study history from the first graded review, and works out
+    /// whether the observed clear-rate masters the rest before the exam. Pure
+    /// arithmetic over measured counts (see `compute_mastery_pace`); it is a
+    /// mastery pace, never the readiness score. Read-only.
     fn get_study_pace(&mut self, input: MasteryRequest) -> error::Result<StudyPace> {
         let exam_ts = self.get_config_optional::<i64, _>(EXAM_DATE_KEY);
         let has_exam_date = exam_ts.is_some();
         let exam_timestamp = exam_ts.unwrap_or(0);
-        let remaining_new = self
-            .speedrun_new_cards_with_subtopic(&input.expected_subtopics)?
-            .len() as u32;
-        let current_new_per_day = self
-            .speedrun_root_new_per_day(&input.expected_subtopics)?
-            .unwrap_or(0);
+
+        // Mastered / total from the same FULL-mastery gate the rest of the engine
+        // reports (memory gate AND practice-test performance), so the pace burns
+        // down to exactly the Overall-mastery the user sees. Performance is a
+        // separate signal attached to the stats before the rollup.
+        let mut stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
+        let perf = self.speedrun_performance_config();
+        for s in &mut stats {
+            s.performance = perf.get(&s.tag()).copied().unwrap_or_default();
+        }
+        let counts = crate::speedrun::mastery::mastery_overall(&stats);
+        let total_subtopics = counts.subtopics_total;
+        let mastered_subtopics = counts.subtopics_mastered;
+        let remaining_subtopics = total_subtopics.saturating_sub(mastered_subtopics);
+
         let now = TimestampSecs::now().0;
         let days_left = if has_exam_date {
             ((exam_timestamp - now) as f64 / 86_400.0).round() as i64
         } else {
             0
         };
-        let pace = compute_pace(remaining_new, current_new_per_day, days_left, has_exam_date);
+        let days_studied = match self.first_graded_review_secs()? {
+            Some(first) => ((now - first).max(0) as f64 / 86_400.0).floor() as i64,
+            None => 0,
+        };
+
+        let pace = compute_mastery_pace(
+            remaining_subtopics,
+            mastered_subtopics,
+            days_studied,
+            days_left,
+            has_exam_date,
+        );
         Ok(StudyPace {
             has_exam_date,
             exam_timestamp,
             days_left,
-            remaining_new,
-            current_new_per_day,
-            recommended_new_per_day: pace.recommended_new_per_day,
+            remaining_subtopics,
+            mastered_subtopics,
+            total_subtopics,
+            days_studied: days_studied.max(0) as u32,
+            current_per_week: pace.current_per_week,
+            recommended_per_week: pace.recommended_per_week,
             projected_days_to_finish: pace.projected_days_to_finish,
             on_track: pace.on_track,
         })
@@ -585,6 +656,20 @@ impl Collection {
                     row.get(0)
                 })?;
         Ok(count.max(0) as u32)
+    }
+
+    /// Unix seconds of the FIRST graded review (revlog.id is epoch millis), i.e.
+    /// when studying began — used to measure the study history for the mastery
+    /// pace. `None` when there are no graded reviews yet (min() over an empty set
+    /// is NULL). Read-only.
+    fn first_graded_review_secs(&self) -> error::Result<Option<i64>> {
+        let first_ms: Option<i64> =
+            self.storage
+                .db
+                .query_row("select min(id) from revlog where ease > 0", [], |row| {
+                    row.get(0)
+                })?;
+        Ok(first_ms.map(|ms| ms / 1000))
     }
 
     /// Practiced coverage of the expected syllabus, weighted by unit. Per PRD
@@ -686,6 +771,18 @@ fn below_threshold_no_score(graded_reviews: u32, coverage_pct: f64) -> Readiness
             coverage_pct,
             next_best_action,
         })),
+        memory_recall: None,
+    }
+}
+
+/// Convert the engine's memory-recall aggregate into the proto message.
+fn memory_recall_proto(mr: &crate::speedrun::mastery::MemoryRecallData) -> MemoryRecall {
+    MemoryRecall {
+        has_data: mr.has_data,
+        point: mr.point,
+        low: mr.low,
+        high: mr.high,
+        reviewed_cards: mr.reviewed_cards,
     }
 }
 
@@ -711,6 +808,7 @@ fn no_practice_evidence_no_score(
                  readiness range."
             ),
         })),
+        memory_recall: None,
     }
 }
 
@@ -729,10 +827,16 @@ struct ReadinessBand {
 /// normal-approx probability the true proportion clears the pass mark, and
 /// confidence rises with a tighter band and more coverage. Never fabricated —
 /// it only summarises real graded results.
-fn readiness_from_practice(questions: u32, correct: u32, coverage_pct: f64) -> ReadinessBand {
-    let n = questions.max(1) as f64;
-    let p = (correct as f64 / n).clamp(0.0, 1.0);
-    let (lo, hi) = wilson_interval(correct, questions);
+///
+/// `questions`/`correct` are f64 so the caller can pass REPRESENTATIVENESS-
+/// WEIGHTED evidence: a less representative test contributes a smaller effective
+/// sample size, which correctly widens the band (less certain) as well as moving
+/// the proportion. Passing the raw integer counts (as f64) is the unweighted
+/// special case.
+fn readiness_from_practice(questions: f64, correct: f64, coverage_pct: f64) -> ReadinessBand {
+    let n = questions.max(1.0);
+    let p = (correct / n).clamp(0.0, 1.0);
+    let (lo, hi) = wilson_interval_f(correct, questions);
     let scale = |x: f64| (10.0 * x).clamp(0.0, 10.0);
     let se = (p * (1.0 - p) / n).sqrt();
     let pass_probability = if se > 0.0 {
@@ -754,15 +858,23 @@ fn readiness_from_practice(questions: u32, correct: u32, coverage_pct: f64) -> R
     }
 }
 
-/// 95% Wilson score interval for a binomial proportion (z = 1.96). Robust near
-/// 0/1 and for small n, unlike the plain normal approximation.
+/// 95% Wilson score interval for a binomial proportion (z = 1.96), integer
+/// counts. Robust near 0/1 and for small n, unlike the plain normal
+/// approximation. Thin wrapper over the float form.
 fn wilson_interval(correct: u32, total: u32) -> (f64, f64) {
-    if total == 0 {
+    wilson_interval_f(correct as f64, total as f64)
+}
+
+/// 95% Wilson score interval on a proportion `correct / total`, with real-valued
+/// counts so the effective (representativeness-weighted) sample size can widen
+/// the band. `correct` is clamped into `[0, total]` for safety.
+fn wilson_interval_f(correct: f64, total: f64) -> (f64, f64) {
+    if total <= 0.0 {
         return (0.0, 0.0);
     }
     let z = 1.96_f64;
-    let n = total as f64;
-    let phat = correct as f64 / n;
+    let n = total;
+    let phat = (correct / n).clamp(0.0, 1.0);
     let z2 = z * z;
     let denom = 1.0 + z2 / n;
     let center = (phat + z2 / (2.0 * n)) / denom;
@@ -1016,13 +1128,92 @@ mod tests {
 
     #[test]
     fn readiness_band_scales_and_bounds() {
-        let strong = readiness_from_practice(100, 85, 1.0);
+        let strong = readiness_from_practice(100.0, 85.0, 1.0);
         assert!(strong.point > 8.0 && strong.point <= 10.0);
         assert!(strong.low <= strong.point && strong.point <= strong.high);
         assert!(strong.pass_probability > 0.9);
-        let weak = readiness_from_practice(100, 30, 1.0);
+        let weak = readiness_from_practice(100.0, 30.0, 1.0);
         assert!(weak.point < 4.0, "point={}", weak.point);
         assert!(weak.pass_probability < 0.1);
+    }
+
+    #[test]
+    fn weighted_evidence_widens_the_band_versus_raw() {
+        // Same proportion (80%), but only a fraction of the questions are
+        // "representative" evidence. The weighted band is centred at the same
+        // point yet WIDER (a smaller effective sample size is less certain), so
+        // less representative practice moves readiness less confidently.
+        let raw = readiness_from_practice(100.0, 80.0, 1.0);
+        let weighted = readiness_from_practice(40.0, 32.0, 1.0);
+        assert!((raw.point - weighted.point).abs() < 1e-9, "same proportion");
+        let raw_width = raw.high - raw.low;
+        let weighted_width = weighted.high - weighted.low;
+        assert!(
+            weighted_width > raw_width,
+            "weighted width {weighted_width} should exceed raw width {raw_width}"
+        );
+    }
+
+    #[test]
+    fn band_uses_weighted_proportion_when_present() {
+        // Raw counts read 50% correct, but the weighted evidence (the
+        // representative tests) reads 80% correct. The BAND must follow the
+        // WEIGHTED proportion (~8/10), not the raw one (~5/10), while the give-up
+        // gate still passes on the RAW question count (120 >= 30).
+        let mut col = Collection::new();
+        for tag in expected() {
+            add_reviewed_note(&mut col, &[tag.as_str()], 50); // 200 reviews, full coverage
+        }
+        col.set_config_json(
+            PRACTICE_STATS_KEY,
+            &serde_json::json!({
+                "questions": 120, "correct": 60, "tests": 4,
+                "weighted_questions": 60.0, "weighted_correct": 48.0,
+            }),
+            false,
+        )
+        .unwrap();
+        match col
+            .compute_readiness(request(expected()))
+            .unwrap()
+            .value
+            .unwrap()
+        {
+            Value::Score(s) => {
+                assert!(s.point > 7.0, "weighted 80% -> ~8/10, got {}", s.point);
+                assert!(s.pass_probability > 0.5);
+            }
+            Value::NoScore(ns) => panic!("expected a weighted score, got NoScore: {}", ns.reason),
+        }
+    }
+
+    #[test]
+    fn give_up_gate_uses_raw_question_count_not_weighted() {
+        // 30 RAW graded questions clears the practice gate even though the
+        // weighted evidence is tiny (a pile of low-representativeness drills):
+        // the give-up rule counts real questions answered, not their weight.
+        let mut col = Collection::new();
+        for tag in expected() {
+            add_reviewed_note(&mut col, &[tag.as_str()], 50);
+        }
+        col.set_config_json(
+            PRACTICE_STATS_KEY,
+            &serde_json::json!({
+                "questions": 30, "correct": 24, "tests": 3,
+                "weighted_questions": 8.4, "weighted_correct": 6.72,
+            }),
+            false,
+        )
+        .unwrap();
+        match col
+            .compute_readiness(request(expected()))
+            .unwrap()
+            .value
+            .unwrap()
+        {
+            Value::Score(s) => assert!(s.low <= s.point && s.point <= s.high),
+            Value::NoScore(ns) => panic!("30 raw questions must clear the gate: {}", ns.reason),
+        }
     }
 
     #[test]
@@ -1044,7 +1235,7 @@ mod tests {
     #[test]
     fn coverage_is_weighted_by_unit_weights() {
         let mut col = Collection::new();
-        // Two units, one subtopic each; practise only the heavy unit "b".
+        // Two units, one subtopic each; practice only the heavy unit "b".
         add_reviewed_note(&mut col, &["subtopic::b::y"], 1);
         let req = ComputeReadinessRequest {
             expected_subtopics: vec!["subtopic::a::x".to_string(), "subtopic::b::y".to_string()],
@@ -1158,75 +1349,38 @@ mod tests {
         }
     }
 
-    fn seed_two_new_cards(col: &mut Collection) {
-        col.get_or_create_normal_deck("SOA Exam P").unwrap();
-        col.get_or_create_normal_deck("SOA Exam P::General Probability")
-            .unwrap();
-        let a = col
-            .get_or_create_normal_deck("SOA Exam P::General Probability::A")
-            .unwrap();
-        let b = col
-            .get_or_create_normal_deck("SOA Exam P::General Probability::B")
-            .unwrap();
-        add_tagged_note_in_deck(col, &["subtopic::general::a"], a.id);
-        add_tagged_note_in_deck(col, &["subtopic::general::b"], b.id);
-    }
-
     #[test]
-    fn study_pace_without_exam_date_reports_counts_but_no_track() {
-        // Two new cards, default 20/day, no exam date: we report the measured
-        // counts but never claim on/off track without a deadline.
+    fn study_pace_reports_subtopic_counts_without_exam_date() {
+        // No exam date: report the measured subtopic counts (total from the
+        // expected syllabus, none mastered yet) but never claim on/off track.
         let mut col = Collection::new();
-        seed_two_new_cards(&mut col);
         let pace = col.get_study_pace(pace_req()).unwrap();
         assert!(!pace.has_exam_date);
-        assert_eq!(pace.remaining_new, 2);
-        assert_eq!(pace.current_new_per_day, 20); // default deck preset
+        assert_eq!(pace.total_subtopics, 2);
+        assert_eq!(pace.mastered_subtopics, 0);
+        assert_eq!(pace.remaining_subtopics, 2);
+        assert_eq!(pace.projected_days_to_finish, 0);
         assert!(!pace.on_track);
     }
 
     #[test]
-    fn study_pace_with_distant_exam_is_on_track() {
+    fn study_pace_gathers_before_projecting_when_nothing_mastered() {
+        // Reviews exist (a study history) but nothing has cleared its mastery
+        // gate yet, so we show the needed rate but abstain from a projection /
+        // verdict — the give-up rule applied to the pace.
         let mut col = Collection::new();
-        seed_two_new_cards(&mut col);
+        add_reviewed_note(&mut col, &["subtopic::general::a"], 5);
         let now = crate::timestamp::TimestampSecs::now().0;
         col.set_config_json("speedrunExamDate", &(now + 100 * 86_400), false)
             .unwrap();
         let pace = col.get_study_pace(pace_req()).unwrap();
         assert!(pace.has_exam_date);
-        assert!(pace.days_left >= 99 && pace.days_left <= 100);
-        // 2 new at 20/day finishes in 1 day, well before 100 -> on track.
-        assert_eq!(pace.projected_days_to_finish, 1);
-        assert!(pace.on_track);
-    }
-
-    #[test]
-    fn study_pace_with_imminent_exam_and_many_cards_is_behind() {
-        let mut col = Collection::new();
-        // Root deck with a tiny daily limit + more cards than can fit in 1 day.
-        col.get_or_create_normal_deck("SOA Exam P").unwrap();
-        col.get_or_create_normal_deck("SOA Exam P::General Probability")
-            .unwrap();
-        let a = col
-            .get_or_create_normal_deck("SOA Exam P::General Probability::A")
-            .unwrap();
-        // Shrink the exam deck's new/day to 1 so two new cards can't fit in a day.
-        let mut conf = col
-            .get_deck_config(DeckConfigId(1), false)
-            .unwrap()
-            .unwrap();
-        conf.inner.new_per_day = 1;
-        col.add_or_update_deck_config(&mut conf).unwrap();
-        add_tagged_note_in_deck(&mut col, &["subtopic::general::a"], a.id);
-        add_tagged_note_in_deck(&mut col, &["subtopic::general::b"], a.id);
-
-        let now = crate::timestamp::TimestampSecs::now().0;
-        col.set_config_json("speedrunExamDate", &(now + 86_400), false)
-            .unwrap(); // exam ~tomorrow
-        let pace = col.get_study_pace(pace_req()).unwrap();
-        assert_eq!(pace.current_new_per_day, 1);
-        assert_eq!(pace.remaining_new, 2);
-        assert!(!pace.on_track); // 2 cards at 1/day can't finish by tomorrow
-        assert!(pace.recommended_new_per_day >= 2);
+        assert_eq!(pace.mastered_subtopics, 0);
+        assert_eq!(pace.remaining_subtopics, 2);
+        // Nothing mastered -> the observed rate is undefined, so no projection.
+        assert_eq!(pace.projected_days_to_finish, 0);
+        assert!(!pace.on_track);
+        // The rate needed to finish in time is still shown (2 left over ~14 wk).
+        assert!(pace.recommended_per_week > 0.0);
     }
 }

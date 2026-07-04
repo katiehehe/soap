@@ -120,6 +120,116 @@ def _print_counts(label: str, counts: dict[str, int]) -> None:
     )
 
 
+_FULL_N = 50  # the rubric-7f reference sample size (generate 50 from the sources)
+
+
+def collect_results(n: int = _FULL_N, run_ai: bool = True, seed: int = 0) -> dict:
+    """Machine-readable record for the committed AI-eval artifact (ai_eval.json).
+
+    The extraction baseline is always computed offline at the FULL rubric size
+    (50 cards); the AI cell is populated only when a provider/key is configured
+    AND ``run_ai`` is True, else ``None`` with a ``pending`` verdict — no AI
+    number is ever fabricated here. Pass ``run_ai=False`` to force the
+    offline/baseline-only record.
+
+    ``n`` caps how many cards the AI generates/scores (cost control for a keyed
+    smoke run). When ``n`` is below the full size the AI cell is flagged
+    ``is_subsample`` and carries an apples-to-apples ``baseline_on_sample``
+    (the extraction baseline at the same ``n``).
+    """
+    sources = load_sources()
+    corpus = load_sample_items()
+    leaks = find_leaks(
+        [(s["id"], s["passage"]) for s in sources],
+        [(it.id, it.question) for it in corpus],
+    )
+    human_ok = sum(1 for c in SEED_CARDS if structural_ok(c.front, c.back))
+
+    baseline = tally(generate_set("stub", sources, _FULL_N))  # FULL baseline
+    base_total = sum(baseline.values()) or 1
+    base_correct, base_bad = _rates(baseline)
+
+    ai_cell: dict | None = None
+    ai_ran = False
+    verdict = "pending: run `make ai-report` with OPENAI_API_KEY to populate"
+    provider = available_provider() if run_ai else None
+    if provider is not None:
+        from anki.speedrun.ai import DEFAULT_OPENAI_MODEL
+
+        is_sub = n < _FULL_N
+        ai = tally(generate_set(provider, sources, n))
+        base_s = tally(generate_set("stub", sources, n))  # same-n baseline (no API)
+        ai_total = sum(ai.values()) or 1
+        base_s_total = sum(base_s.values()) or 1
+        ai_correct, ai_bad = _rates(ai)
+        bs_correct, bs_bad = _rates(base_s)
+        ai_ran = True
+        ai_cell = {
+            "provider": provider,
+            "model": DEFAULT_OPENAI_MODEL,
+            "is_subsample": is_sub,
+            "sample_size": sum(ai.values()),
+            "seed": seed,
+            "correct": ai["correct"],
+            "wrong": ai["wrong"],
+            "bad_teaching": ai["bad_teaching"],
+            "correct_rate": round(ai_correct, 4),
+            "wrong_rate": round(ai["wrong"] / ai_total, 4),
+            "bad_teaching_rate": round(ai_bad, 4),
+            "baseline_on_sample": {
+                "n": sum(base_s.values()),
+                "correct": base_s["correct"],
+                "wrong": base_s["wrong"],
+                "bad_teaching": base_s["bad_teaching"],
+                "correct_rate": round(bs_correct, 4),
+                "wrong_rate": round(base_s["wrong"] / base_s_total, 4),
+                "bad_teaching_rate": round(bs_bad, 4),
+            },
+        }
+        passed = (
+            ai_correct >= MIN_CORRECT_RATE
+            and ai_bad <= MAX_BAD_TEACHING
+            and ai_correct > bs_correct
+        )
+        scope = f"sample n={sum(ai.values())}" if is_sub else "full set"
+        verdict = (
+            f"{'PASS' if passed else 'BELOW bar'} on {scope}: AI correct "
+            f"{ai_correct:.0%} vs baseline {bs_correct:.0%}, bad-teaching "
+            f"{ai_bad:.0%}"
+        )
+
+    return {
+        "name": "Feature 2 — card generation from a named source",
+        "make_target": "make ai-eval",
+        "baseline_vs": "template/extraction (stub)",
+        "dataset": {
+            "named_sources": len(sources),
+            "human_gold_cards": len(SEED_CARDS),
+            "human_gold_structural_ok": human_ok,
+            "full_sample_size": sum(baseline.values()),
+            "held_out_items_for_leakage": len(corpus),
+        },
+        "cutoff": {
+            "min_correct_rate": MIN_CORRECT_RATE,
+            "max_bad_teaching": MAX_BAD_TEACHING,
+        },
+        "leakage_over_ai_inputs": {"leaks": len(leaks), "clean": not leaks},
+        "baseline": {
+            "method": "template/extraction (stub)",
+            "n": sum(baseline.values()),
+            "correct": baseline["correct"],
+            "wrong": baseline["wrong"],
+            "bad_teaching": baseline["bad_teaching"],
+            "correct_rate": round(base_correct, 4),
+            "wrong_rate": round(baseline["wrong"] / base_total, 4),
+            "bad_teaching_rate": round(base_bad, 4),
+        },
+        "ai": ai_cell,
+        "ai_ran": ai_ran,
+        "verdict": verdict,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--n", type=int, default=50)

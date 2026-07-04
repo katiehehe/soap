@@ -373,9 +373,12 @@ class DeckBrowser:
     # Top buttons
     ######################################################################
 
+    # Speedrun (single-exam fork): the "Create Deck" button is removed so users
+    # can't spin up ad-hoc decks alongside SOA Exam P. Importing stays available
+    # (Get Shared / Import File), and cards are added via the categorized
+    # add-card flow (which files them under a syllabus subtopic).
     drawLinks = [
         ["", "shared", tr.decks_get_shared()],
-        ["", "create", tr.decks_create_deck()],
         ["Ctrl+Shift+I", "import", tr.decks_import_file()],
     ]
 

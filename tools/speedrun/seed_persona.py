@@ -30,8 +30,11 @@ for _p in (os.path.join(_REPO, "pylib"), os.path.join(_REPO, "out", "pylib")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import anki.collection  # noqa: E402,F401  (preload to avoid a circular import)
 from anki import speedrun_pb2  # noqa: E402
+from anki.cards import FSRSMemoryState  # noqa: E402
 from anki.collection import Collection  # noqa: E402
+from anki.consts import CARD_TYPE_REV, QUEUE_TYPE_REV  # noqa: E402
 from anki.speedrun import (  # noqa: E402
     expected_subtopic_tags,
     set_exam_date,
@@ -53,27 +56,75 @@ from anki.speedrun.soa_sample import load_sample_items  # noqa: E402
 
 
 def insert_reviews(col: Collection, persona, per_subtopic: int) -> int:
-    """Insert graded revlog rows so review count + coverage are real collection
-    state. Reviews per subtopic are spread across that subtopic's cards; each
-    ease comes from the persona (1 = fail, 3 = pass), so per-subtopic revlog
-    accuracy reflects the persona's skill. Returns the total rows inserted."""
-    sql = (
-        "insert into revlog (id,cid,usn,ease,ivl,lastIvl,factor,time,type) "
-        "values (?,?,?,?,?,?,?,?,?)"
-    )
-    rid = int(time.time() * 1000) - 400_000_000
-    rows: list[tuple] = []
+    """Give each studied card a realistic FSRS review history so the collection
+    carries real MEMORY state, not just a review count.
+
+    For each subtopic's cards we synthesise a plausible study history: graded
+    revlog rows spaced over past days with growing intervals (reset on a fail),
+    with eases from the persona (1 = fail, 3 = pass) so per-subtopic accuracy
+    reflects the persona's skill. We then let the engine compute each card's FSRS
+    memory state (`compute_memory_state`) from that history and mark the card as a
+    review card last seen a few days ago. That makes the Memory signal (mean FSRS
+    retrievability, with a 10th-90th band) a MEASURED value with a real range,
+    instead of abstaining. Deterministic given the persona seed. Returns the total
+    revlog rows inserted.
+    """
+    day_ms = 86_400_000
+    today = col.sched.today
+    now_secs = int(time.time())
+    now_day_ms = (now_secs * 1000 // day_ms) * day_ms
+    total = 0
+    card_seq = 0
     for tag in expected_subtopic_tags():
         cids = col.find_cards(f'"tag:{tag}"')
         if not cids:
             continue
         grades = review_grades(persona, tag, per_subtopic)
+        by_card: dict = {}
         for i, ease in enumerate(grades):
-            cid = cids[i % len(cids)]
-            rows.append((rid, cid, -1, ease, 1, 1, 2500, 1000, 1))
-            rid += 1
-    col.db.executemany(sql, rows)
-    return len(rows)
+            by_card.setdefault(cids[i % len(cids)], []).append(ease)
+        for cid, gs in by_card.items():
+            # Interval scheduled AT each review (the wait until the next one),
+            # growing on a pass and resetting on a fail; capped so stability stays
+            # realistic rather than saturating retrievability at 1.0.
+            gaps: list[int] = []
+            iv = 1
+            for g in gs:
+                gaps.append(iv)
+                iv = 1 if g == 1 else min(40, max(1, round(iv * 1.6)))
+            pos = [sum(gaps[:k]) for k in range(len(gs))]
+            last_ivl = gaps[-1]
+            # Days since the last review = a fraction of the last interval, varied
+            # per card so retrievability decays to a real spread (not all 1.0).
+            frac = 0.4 + 1.3 * ((card_seq * 7) % 10) / 10.0
+            elapsed = max(1, round(last_ivl * frac))
+            offset = card_seq * 1000  # unique sub-day offset -> unique revlog ids
+            rows = []
+            for k, ease in enumerate(gs):
+                days_ago = elapsed + (pos[-1] - pos[k])
+                ts = now_day_ms - days_ago * day_ms + offset + k
+                last = gaps[k - 1] if k > 0 else 0
+                rows.append((int(ts), cid, -1, ease, gaps[k], last, 2500, 1500, 1))
+            col.db.executemany(
+                "insert into revlog (id,cid,usn,ease,ivl,lastIvl,factor,time,type) "
+                "values (?,?,?,?,?,?,?,?,?)",
+                rows,
+            )
+            total += len(rows)
+            card = col.get_card(cid)
+            card.type = CARD_TYPE_REV
+            card.queue = QUEUE_TYPE_REV
+            card.ivl = last_ivl
+            card.due = today - elapsed + last_ivl
+            state = col.compute_memory_state(cid)
+            if state.stability:
+                card.memory_state = FSRSMemoryState(
+                    stability=state.stability, difficulty=state.difficulty
+                )
+                card.last_review_time = now_secs - elapsed * 86_400
+            col.update_card(card)
+            card_seq += 1
+    return total
 
 
 def take_tests(col: Collection, persona, n_tests: int, size: int) -> None:

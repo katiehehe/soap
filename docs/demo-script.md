@@ -5,10 +5,10 @@ This is the script for the **3–5 minute hand-in demo video** (`docs/project-br
 how to prove the engine is ours, and how to install on a clean device.
 
 **Stay honest (it's graded).** A made-up readiness number or a faked sync/AI clip
-is an _automatic fail_. Two of the six required shots — **phone→desktop sync** and
-**AI features** — are Friday/Sunday items and are **not built yet**. This script
-delivers the strongest _honest_ cut you can record today and marks the two beats
-you must replace before the final submission. Do **not** stage either one.
+is an _automatic fail_. All six shots are now built and measured, with **one**
+capture still outstanding: the **on-device phone→desktop sync recording** (the
+sync code path itself is tested green via `make sync-test`; only the screen
+recording on the phone remains). Do **not** stage it — record the real thing.
 
 ## The six required shots (§12) → where they are
 
@@ -56,7 +56,7 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 Pre-flight checklist:
 
 - [ ] `git -C ~/dev/soap log -1 --format='%h %s'` handy (say the commit hash on camera).
-- [ ] Deck imported; **Tools → Exam readiness (Speedrun)** and **Tools → Study map (Speedrun)** both open.
+- [ ] Deck imported; the app opens on the **custom Home shell** with three tabs — **Concept map · Progress · Readiness** — plus an **"Anki stats"** button (Anki's own screens are restyled to match, and the stock Decks/Add/Browse/Stats toolbar links are removed so it never reads as plain Anki). The standalone **Tools → Exam readiness / Study map** dialogs still open too.
 - [ ] Emulator booted to the AnkiDroid deck list (`adb shell getprop sys.boot_completed` → `1`).
 - [ ] A terminal open for the `./ninja` / `make` / `unzip` commands.
 - [ ] Window layout: app on the left, terminal on the right, emulator ready to bring forward.
@@ -100,8 +100,9 @@ threshold."_ Show the honesty bundle: evidence, what's missing, past accuracy, a
 
 Then show the flip side: open the demo collection (`make seed-persona` →
 `out/demo-persona.anki2`). With 200+ reviews, 100% coverage, and graded practice
-tests, the **same engine emits a real band** — e.g. projected **5.7 (4.8–6.5),
-P(pass) 23%**, confidence 0.91, next action "focus multivariate." Say: _"This is a
+tests, **all three signals now carry a range**: Memory **90% (85–96%)** (mean FSRS
+retrievability with a 10th–90th band), and readiness projected **5.5 (4.6–6.4),
+P(pass) 14%**, confidence 0.91, next action "focus multivariate." Say: _"This is a
 **synthetic demo persona**, labelled as such and reproducible from a seed —
 computed by the same code a real student hits, never hardcoded."_
 
@@ -122,6 +123,15 @@ problems, ≥80% accuracy, ≥90% retrievability) and moves from Blocked to
 within-unit to cross-unit interleaving. Size is importance, colour is measured
 mastery — never blended."_ Tap a subtopic (or a unit) for its mastery detail, and
 point out the "Study next" suggestion.
+
+Then name the ablation (in the terminal, optional): `make ablation`. Say: _"The
+within-unit tier is the feature I ablate. Three builds — Full, Ablated, Plain —
+at **equal study time**; I sweep the assumed effect from **zero**, so at zero the
+builds are identical (no built-in bias), and for any positive effect the
+pre-registered direction Full ≥ Ablated ≥ Plain holds. Honest: it reports the
+null and can't prove the feature without real study logs."_ And the paraphrase
+test: `make paraphrase` → _"recall 73% vs reworded 32%, a +41-point gap — proof
+Performance isn't just Memory in disguise; a copycat control collapses to zero."_
 
 ### Beat 6 — Shot 6: test results (3:15–3:55)
 
@@ -168,12 +178,14 @@ Say: _"AI is **off by default** — you just saw all three signals compute witho
 it. The AI features are source-traced: every generated card carries its named
 source and is quarantined `ai::unreviewed` until a human approves it, and every
 call is logged. Each feature is checked on a held-out gold set against a simpler
-baseline with a **pre-registered cutoff** — if it doesn't beat the baseline, we
-ship the baseline and say so (`docs/ai-results.md`)."_
+baseline with a **pre-registered cutoff**."_ Show the measured PASS: on the
+official SOA corpus (leakage-clean), **classifier** AI top-1 **38%** vs keyword
+**13%** (+25 pts), **generation** AI **92%** correct / **0%** bad-teaching vs the
+**24%** extraction baseline — both clear the pre-set cutoff (`docs/ai-results.md`).
 
-(With `OPENAI_API_KEY` set, the eval prints the AI-vs-baseline comparison and
-PASS/FAIL; without one it shows the baselines and that the app still scores with
-AI off.)
+(The AI rows appear when `OPENAI_API_KEY` is set — put it in a gitignored `.env`;
+the Makefile auto-loads it. Without a key the baselines still print and the app
+still scores with AI off.)
 
 ## Run it on the phone emulator (exact commands)
 
@@ -295,10 +307,14 @@ on camera.
   conflict rule; syllabus taxonomy + weights + 42-card tagged deck; weighted
   coverage; **shared engine on the phone**; seeded split + leakage scan + benchmark
   - crash test; desktop DMG + phone APK.
+    Also built since: **paraphrase test** (`make paraphrase`, 7d — recall 73% vs
+    reworded 32%, +41-pt gap); **3-build ablation run** (`make ablation` — equal
+    study time, null included, direction holds); **live AI-vs-baseline numbers**
+    (`make ai-eval` with a key — classifier +25 pts, generation 92% vs 24%, both
+    PASS).
 - **Planned (Sunday — `docs/vision.md`):** the on-device phone↔desktop sync
   recording; a native AnkiDroid score screen (`docs/phone-scores.md`); fusing the
-  per-question performance model into readiness; the 3-build ablation run; the
-  live AI-vs-baseline numbers with a key; validation against real students.
+  per-question performance model into readiness; validation against real students.
 
 ## Feature reference (one line each, for Q&A)
 

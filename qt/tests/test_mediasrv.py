@@ -8,15 +8,19 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 import pytest
+from werkzeug.exceptions import HTTPException
 
 from aqt.mediasrv import (
     UNTRUSTED_MEDIA_CSP,
     LocalFileRequest,
     UnsafePathException,
+    _check_dynamic_request_permissions,
     _editor_content_security_policy,
     _handle_local_file_request,
+    app,
     ensure_safe_path,
     is_localhost_origin,
 )
@@ -213,3 +217,62 @@ class TestEditorPageCSP:
         assert "frame-src" not in directives
         assert "child-src" not in directives
         assert "img-src" not in directives
+
+
+# Endpoints the first-party Speedrun pages reach without the webview's
+# Authorization (Bearer) header. The custom Home shell renders in the MAIN
+# webview, which has no header path at all, so these MUST stay allow-listed in
+# _check_dynamic_request_permissions() or the matching tab 403s ("Unexpected API
+# access") on every load. The last three back the Stats tab, which inlines
+# Anki's own review-history graphs.
+SPEEDRUN_ALLOWLISTED_PATHS = [
+    "/_anki/computeReadiness",
+    "/_anki/getMasteryState",
+    "/_anki/getStudyPlan",
+    "/_anki/getStudyPace",
+    "/_anki/graphs",
+    "/_anki/getGraphPreferences",
+    "/_anki/setGraphPreferences",
+]
+
+
+class TestDynamicRequestPermissions:
+    """The first-party Speedrun pages authorize via the allow-list, because the
+    Home shell runs in the MAIN webview and never receives the Bearer header.
+
+    These run under `pytest` without launching Anki, so a regression is caught
+    here — the e2e suite cannot catch it, as it sets ANKI_API_HOST=0.0.0.0 which
+    bypasses this gate entirely.
+    """
+
+    @pytest.mark.parametrize("path", SPEEDRUN_ALLOWLISTED_PATHS)
+    def test_allowlisted_path_passes_without_auth_header(
+        self, path: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # No Authorization header and no 0.0.0.0 escape is exactly the MAIN
+        # webview's situation, so the allow-list is the only thing that can let
+        # the request through.
+        monkeypatch.delenv("ANKI_API_HOST", raising=False)
+        with app.test_request_context(
+            path=path, method="POST", content_type="application/binary"
+        ):
+            # Returns None (does not abort) for allow-listed paths.
+            assert _check_dynamic_request_permissions() is None
+
+    def test_unlisted_api_path_is_forbidden_without_auth_header(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Control: a non-allow-listed backend call from a page with no Bearer
+        # header is still rejected, so the assertions above aren't vacuous (i.e.
+        # the gate really is what lets the allow-listed paths through).
+        monkeypatch.delenv("ANKI_API_HOST", raising=False)
+        with app.test_request_context(
+            path="/_anki/someUnlistedMethod",
+            method="POST",
+            content_type="application/binary",
+        ):
+            # The reject path posts a warning via aqt.mw before aborting; stub it
+            # so the test needs no running app.
+            with mock.patch("aqt.mw"), pytest.raises(HTTPException) as exc_info:
+                _check_dynamic_request_permissions()
+            assert exc_info.value.code == 403

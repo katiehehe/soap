@@ -10,22 +10,33 @@ test("study map renders the three-layer topic tree", async ({ page }) => {
         timeout: 15000,
     });
 
-    // The three units (layer 2 of the tree).
-    await expect(page.getByText("General Probability")).toBeVisible();
-    await expect(page.getByText("Univariate RVs")).toBeVisible();
-    await expect(page.getByText("Multivariate RVs")).toBeVisible();
+    // The three units (layer 2 of the tree). Unit names also appear as the
+    // Memory panel's per-unit "cram" buttons on the full route, so match the
+    // first occurrence (the bubble).
+    await expect(page.getByText("General Probability").first()).toBeVisible();
+    await expect(page.getByText("Univariate RVs").first()).toBeVisible();
+    await expect(page.getByText("Multivariate RVs").first()).toBeVisible();
 
     // Some subtopics (layer 3), including the ones added to match the syllabus.
     await expect(page.getByText("Bayes' theorem")).toBeVisible();
     await expect(page.getByText("Order statistics")).toBeVisible();
     await expect(page.getByText("Insurance apps")).toBeVisible();
 
-    // Guided-learning DAG controls, on by default.
-    await expect(page.getByText("Show prerequisites")).toBeVisible();
-    await expect(page.getByText(/Guided sequence: (on|off)/)).toBeVisible();
-    // On a fresh collection only the curriculum roots are open, so downstream
-    // subtopics show a lock badge (the guided gate, default on).
-    await expect(page.locator(".lock-badge").first()).toBeVisible();
+    // Performance-first legend: the two recommendation kinds are shown. There is
+    // no guided-gate toggle any more — the guided sequence is advisory arrows only,
+    // never a lock (so no lock badges either).
+    await expect(page.getByText(/Practice next/).first()).toBeVisible();
+    await expect(page.getByText(/Review —/).first()).toBeVisible();
+    await expect(page.locator(".lock-badge")).toHaveCount(0);
+
+    // The two connector tracks are unambiguously labelled: a SOLID Memory line
+    // and a DOTTED Performance line. The legend renders two swatches (one per
+    // track) drawn with the same stroke/dash as the rails, and spells out the
+    // solid-vs-dotted mnemonic + the upward (child → parent) fill direction.
+    const trackLegend = page.locator(".track-legend");
+    await expect(trackLegend.locator(".track-swatch")).toHaveCount(2);
+    await expect(trackLegend.getByText("dotted")).toBeVisible();
+    await expect(trackLegend.getByText(/subtopic → unit → Exam P/)).toBeVisible();
 
     // Overall mastery is shown, and on an empty collection it honestly reads
     // 0 of 19 mastered (a measured count, not a guess).
@@ -40,11 +51,12 @@ test("study map renders the three-layer topic tree", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Today's plan" })).toBeVisible();
     await expect(page.getByText(/Nothing due today/)).toBeVisible();
 
-    // Exam pace is shown; with no exam date set it prompts for one and is
-    // explicit that it's a coverage pace, not a predicted score.
-    await expect(page.getByRole("heading", { name: "Exam pace" })).toBeVisible();
+    // Mastery pace is shown; with no exam date set it prompts for one and is
+    // explicit that it's a mastery pace (subtopics clearing their gate), not a
+    // predicted score.
+    await expect(page.getByRole("heading", { name: "Mastery pace" })).toBeVisible();
     await expect(page.getByText(/Set your exam date/)).toBeVisible();
-    await expect(page.getByText(/coverage pace/)).toBeVisible();
+    await expect(page.getByText(/mastery pace/)).toBeVisible();
 
     // Tapping a subtopic opens its mastery detail (empty collection -> not started).
     await page.getByText("Order statistics").click();
@@ -52,11 +64,15 @@ test("study map renders the three-layer topic tree", async ({ page }) => {
     await expect(detail.getByText("Graded reviews", { exact: true })).toBeVisible();
     // With no reviews, accuracy/retention are withheld rather than guessed.
     await expect(detail.getByText(/need ≥ 10 reviews/).first()).toBeVisible();
-    // Performance is shown as its OWN signal, separate from the memory gate.
-    await expect(detail.getByText("Performance (practice tests)")).toBeVisible();
-    // Order statistics is downstream, so it's locked with a reason + a bypass.
-    await expect(detail.getByText(/Locked by guided sequence/)).toBeVisible();
-    await expect(detail.getByRole("button", { name: "Unlock anyway" })).toBeVisible();
+    // Performance is shown as its OWN signal (the spine), separate from memory.
+    await expect(detail.getByText("Performance", { exact: true })).toBeVisible();
+    // No gating any more: the detail offers Practice (performance) + Review (memory).
+    await expect(
+        detail.getByRole("button", { name: "Practice this topic (test)" }),
+    ).toBeVisible();
+    await expect(
+        detail.getByRole("button", { name: "Review this topic (memory)" }),
+    ).toBeVisible();
 
     await page.screenshot({ path: "out/study-map.png", fullPage: true });
 });

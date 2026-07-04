@@ -1,7 +1,7 @@
 # The paraphrase test (challenge 7d)
 
-**Question it answers:** is our *Performance* signal actually measuring something
-beyond *Memory*, or is it just copying the memory model?
+**Question it answers:** is our _Performance_ signal actually measuring something
+beyond _Memory_, or is it just copying the memory model?
 
 Anki's FSRS already tells us whether a student can **recall a flashcard**. The
 whole point of this project's Performance signal is to predict whether they can
@@ -32,23 +32,23 @@ memory side uses `persona.recall_prob` (an FSRS-style recall) and the performanc
 side uses `persona.p_correct` (transfer to a new question) — two different
 models, exactly as in the app. Same `--seed`/`--students` → same numbers.
 
-Three guards make it a *fair* test rather than a flattering one:
+Three guards make it a _fair_ test rather than a flattering one:
 
 1. **Distinctness gate** — every rewording must differ enough (word-overlap
    below `MAX_REWORD_OVERLAP`) from its card prompt, or "performance" would just
    be re-reading the memory prompt.
 2. **Pre-registered threshold** — `COPYING_GAP = 0.05`; a gap below it is
    reported as COPYING, not spun.
-3. **Copycat control (null run)** — feed the *performance* model into *both*
+3. **Copycat control (null run)** — feed the _performance_ model into _both_
    sides. If the test is sound, the gap must collapse to ~0 and the verdict must
    flip to COPYING. It does.
 
 ## Result (synthetic cohort, `--students 60 --seed 0`)
 
-| | Card recall (memory) | Reworded accuracy (performance) | Gap |
-|---|---|---|---|
-| **Main** | 73.2% | 31.8% | **+41.4%** |
-| **Control (copycat)** | 31.1% | 31.8% | −0.7% |
+|                       | Card recall (memory) | Reworded accuracy (performance) | Gap        |
+| --------------------- | -------------------- | ------------------------------- | ---------- |
+| **Main**              | 73.2%                | 31.8%                           | **+41.4%** |
+| **Control (copycat)** | 31.1%                | 31.8%                           | −0.7%      |
 
 The +41.4% gap means performance is a **genuinely separate, harder signal** than
 memory — the bridge exists. The control collapsing to −0.7% (verdict: COPYING)

@@ -27,6 +27,34 @@ app shows **no** score — a Rust assertion (`ComputeReadiness` returns a
 derivative work of Anki; some upstream Anki components are BSD-3-Clause. See
 [LICENSE](./LICENSE) and the upstream README below.
 
+## What's proven (measured, reproducible)
+
+Every number below comes from a one-command, seeded, leakage-checked run — not a
+claim. Commands in [Makefile](./Makefile); details in [SPEC_CHECKLIST.md](./SPEC_CHECKLIST.md).
+
+- **Rust engine change** — `SpeedrunService` (7 RPCs) + two opt-in live-queue
+  reorders; ~53 Rust tests + Python-calling tests; undo/no-corruption covered.
+- **Study feature + ablation** (`make ablation`) — the three-tier scheduler's
+  **within-unit interleaving** tier, tested Full / Ablated / Plain at **equal
+  study time**. Reports the pre-registered metric across an effect-size sweep
+  **including the null** (disc_gain 0 → builds identical, no built-in bias);
+  direction Full ≥ Ablated ≥ Plain holds for any assumed effect.
+  [docs/study-feature-ablation.md](./docs/study-feature-ablation.md).
+- **Paraphrase test** (`make paraphrase`, rubric 7d) — 30 cards × 2 reworded
+  questions: **card recall 73% vs reworded accuracy 32% → +41-pt gap**, so
+  Performance is a genuinely separate signal from Memory (a copycat control
+  collapses to ~0, confirming the test discriminates).
+  [docs/paraphrase-test.md](./docs/paraphrase-test.md).
+- **AI, checked vs a baseline** (`make ai-eval`, off by default) — on the
+  held-out official SOA corpus, leakage-clean: **classifier** AI top-1 38% vs
+  keyword 13% (**+25 pts, PASS**); **generation** AI 92% correct / 0%
+  bad-teaching vs 24% baseline (**PASS**), each against a pre-registered cutoff.
+  [docs/ai-results.md](./docs/ai-results.md).
+- **Speed** (`make bench`, 50k cards) — next-card p95 ~0.05 ms, mastery query p95
+  ~0.06 ms, readiness p95 ~4.7 ms. **Crash** (`make crash-test`) — 20× mid-review
+  SIGKILL, SQLite integrity clean every time. **Sync** (`make sync-test`) — 20/20
+  reviews land once, none lost/doubled, deterministic conflict winner.
+
 ## The engine change (why it's real)
 
 The graded Rust change lives in Anki's shared engine (`rslib/`, the `anki`
@@ -53,8 +81,22 @@ their merge risk are in [docs/upstream-touched.md](./docs/upstream-touched.md).
 - **Mobile:** AnkiDroid consuming the **same** Rust engine via the
   `Anki-Android-Backend` JNI `.aar` (see [docs/android-build.md](./docs/android-build.md)).
 - Full spec + diagrams: [PRD.md](./PRD.md); north-star design:
-  [docs/vision.md](./docs/vision.md); score models:
-  [docs/score-models.md](./docs/score-models.md).
+  [docs/vision.md](./docs/vision.md).
+
+## Model descriptions & hand-in docs
+
+- **Model descriptions** (one section each — memory / performance / readiness,
+  with the give-up rule and calibration): [docs/score-models.md](./docs/score-models.md).
+- **Rust-change rationale:** [docs/rust-change.md](./docs/rust-change.md) ·
+  **upstream files touched + merge risk:** [docs/upstream-touched.md](./docs/upstream-touched.md).
+- **AI features + results:** [docs/ai-results.md](./docs/ai-results.md) ·
+  **paraphrase test:** [docs/paraphrase-test.md](./docs/paraphrase-test.md) ·
+  **study-feature ablation:** [docs/study-feature-ablation.md](./docs/study-feature-ablation.md).
+- **Demo video script:** [docs/demo-script.md](./docs/demo-script.md) ·
+  **Brainlift:** [docs/brainlift.md](./docs/brainlift.md).
+- **Latency evidence** (p50/p95/worst on 50k cards): [docs/latency.md](./docs/latency.md) ·
+  **manual-capture steps** (clean install + phone sync recording):
+  [docs/recording-steps.md](./docs/recording-steps.md).
 
 ## Build & run
 

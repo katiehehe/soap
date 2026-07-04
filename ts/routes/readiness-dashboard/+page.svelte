@@ -3,10 +3,31 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { createEventDispatcher, onMount } from "svelte";
 
     import { computeReadiness } from "@generated/backend";
     import type { ReadinessResult } from "@generated/anki/speedrun_pb";
+    import type { MetricId } from "../metrics/lib";
+
+    // Each signal card is clickable: it opens the "How it works" transparency
+    // page anchored to that metric. Inside the Home shell (embedded) we dispatch
+    // "metricinfo" so the shell switches to the metrics tab with the anchor; as a
+    // standalone route we navigate to /metrics#<id> instead.
+    export let embedded = false;
+    const dispatch = createEventDispatcher<{ metricinfo: MetricId }>();
+    function openMetric(id: MetricId): void {
+        if (embedded) {
+            dispatch("metricinfo", id);
+        } else if (typeof window !== "undefined") {
+            window.location.href = `/metrics#${id}`;
+        }
+    }
+    function onCardKey(e: KeyboardEvent, id: MetricId): void {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openMetric(id);
+        }
+    }
 
     // Mirrors pylib/anki/speedrun/exam_p_topics.json (official 2026-05 outline).
     // A future RPC will serve the syllabus so there is a single source.
@@ -56,9 +77,23 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     $: noScore = result?.value.case === "noScore" ? result.value.value : null;
     $: score = result?.value.case === "score" ? result.value.value : null;
+    // Memory signal (with a range), independent of the readiness give-up rule.
+    $: memoryRecall = result?.memoryRecall ?? null;
     $: coveragePct = noScore?.coveragePct ?? score?.coveragePct ?? 0;
     $: gradedReviews = noScore?.gradedReviews ?? 0;
     $: nextAction = noScore?.nextBestAction ?? score?.nextBestAction ?? "—";
+    // Memory detail line, kept out of the signals array to avoid a nested
+    // ternary: reviewed-card count once we have a measured band, else the
+    // graded-review count, else nothing studied yet.
+    $: memoryDetail = ((): string => {
+        if (memoryRecall?.hasData) {
+            return `${memoryRecall.reviewedCards} cards reviewed · 10th–90th pct range`;
+        }
+        if (gradedReviews > 0) {
+            return `${gradedReviews} graded reviews on file`;
+        }
+        return "no reviews yet";
+    })();
     // Distinguish the abstain reasons honestly: below the review/coverage gate
     // vs. gate met but awaiting graded practice-test evidence.
     $: readinessNeedsPractice =
@@ -79,6 +114,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // "not yet calibrated" rather than showing a fabricated value.
     type SignalState = "pending" | "giveup" | "score";
     interface Signal {
+        id: MetricId;
         name: string;
         question: string;
         state: SignalState;
@@ -89,17 +125,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     $: signals = [
         {
+            id: "memory",
             name: "Memory",
             question: "Can you recall the fact right now?",
-            state: "pending",
-            value: "Not yet scored",
-            detail:
-                gradedReviews > 0
-                    ? `${gradedReviews} graded reviews on file`
-                    : "no reviews yet",
-            source: "FSRS review history",
+            state: memoryRecall?.hasData ? "score" : "pending",
+            value: memoryRecall?.hasData
+                ? `${pct(memoryRecall.point)} (${pct(memoryRecall.low)}–${pct(memoryRecall.high)})`
+                : "Not yet scored",
+            detail: memoryDetail,
+            source: "FSRS retrievability",
         },
         {
+            id: "performance",
             name: "Performance",
             question: "Can you solve a new, exam-style question?",
             state: "pending",
@@ -108,6 +145,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             source: "Performance model",
         },
         {
+            id: "readiness",
             name: "Readiness",
             question: "Would you pass today, and how sure are we?",
             state: score ? "score" : "giveup",
@@ -139,7 +177,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     {:else}
         <section class="signals" aria-label="The three signals">
             {#each signals as s}
-                <article class="signal {s.state}">
+                <div
+                    class="signal {s.state}"
+                    role="button"
+                    tabindex="0"
+                    aria-label={`${s.name}: ${s.value}. Open how it's calculated.`}
+                    on:click={() => openMetric(s.id)}
+                    on:keydown={(e) => onCardKey(e, s.id)}
+                >
                     <div class="signal-head">
                         <span class="dot" aria-hidden="true"></span>
                         <h2>{s.name}</h2>
@@ -148,7 +193,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     <p class="value">{s.value}</p>
                     <p class="detail">{s.detail}</p>
                     <p class="source">{s.source}</p>
-                </article>
+                    <p class="explain-link" aria-hidden="true">
+                        What is this? · How it's calculated →
+                    </p>
+                </div>
             {/each}
         </section>
 
@@ -294,147 +342,212 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style>
     .readiness {
-        max-width: 900px;
+        position: relative;
+        z-index: 0;
+        max-width: 940px;
         margin: 0 auto;
-        padding: 1.75rem 1.5rem 3rem;
-        color: var(--fg, #1c1c1e);
+        padding: 2rem 1.5rem 4rem;
+        color: var(--fg);
+        font-family: var(--sr-font-body);
         font-size: 15px;
         line-height: 1.5;
     }
-
-    /* Header */
+    /* Header — loud chrome (the numbers below stay calm). */
     header {
-        margin-bottom: 1.5rem;
+        position: relative;
+        z-index: 1;
+        margin-bottom: 1.75rem;
     }
     header h1 {
         margin: 0;
-        font-size: 1.7rem;
-        font-weight: 800;
+        font-family: var(--sr-font-heading);
+        font-size: clamp(2rem, 4.5vw, 2.9rem);
+        font-weight: 600;
+        line-height: 1.05;
         letter-spacing: -0.01em;
+        color: var(--fg);
     }
     header .exam {
-        margin: 0.25rem 0 0;
-        font-size: 0.8rem;
+        margin: 0.6rem 0 0;
+        font-family: var(--sr-font-body);
+        font-size: 0.72rem;
         font-weight: 700;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: var(--sr-accent, #6366f1);
+        color: var(--sr-accent);
     }
     header .subtitle {
         margin: 0.6rem 0 0;
-        color: var(--fg-subtle, #4b5563);
+        color: var(--fg-subtle);
+        font-size: 0.95rem;
     }
 
-    /* Generic panel */
+    /* Generic panel — CALM by design: opaque, high-contrast, sober frame, since
+       these carry measured numbers (honesty core, not loud chrome). */
     .panel {
-        border: 1px solid var(--border, #e6e7eb);
-        border-radius: 16px;
-        padding: 1.4rem 1.5rem;
-        margin-bottom: 1.25rem;
-        background: var(--canvas-elevated, #fff);
-        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+        position: relative;
+        z-index: 1;
+        border: 2px solid var(--border);
+        border-radius: var(--sr-radius-lg);
+        padding: 1.6rem 1.7rem;
+        margin-bottom: 1.4rem;
+        background: var(--canvas-elevated);
+        box-shadow: var(--sr-shadow);
     }
     .panel.muted {
-        color: var(--fg-subtle, #6b7280);
+        color: var(--fg-subtle);
     }
     .panel.error {
-        border-color: #d9534f;
+        border-color: var(--sr-quaternary);
+        border-width: var(--sr-border);
     }
     .panel-head {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 0.75rem;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.6rem;
     }
     .panel-head h2 {
         margin: 0;
-        font-size: 1.05rem;
+        font-family: var(--sr-font-heading);
+        font-size: 1.2rem;
+        font-weight: 600;
     }
 
-    /* Three-signal row */
+    /* Three-signal row — bold frames, but the VALUE stays calm + high-contrast. */
     .signals {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-        gap: 0.85rem;
-        margin-bottom: 1.25rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.4rem;
     }
     .signal {
-        border: 1px solid var(--border, #e6e7eb);
-        border-top: 3px solid var(--signal-color, #9ca3af);
-        border-radius: 14px;
-        padding: 1.1rem 1.15rem 1.2rem;
-        background: var(--canvas-elevated, #fff);
-        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+        position: relative;
+        z-index: 1;
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: 1px solid var(--border);
+        border-top: 3px solid var(--signal-color, var(--sr-pending));
+        border-radius: var(--sr-radius);
+        padding: 1.2rem 1.25rem 1.3rem;
+        background: var(--canvas-elevated);
+        box-shadow: var(--sr-shadow-sm);
+        cursor: pointer;
+        transition:
+            transform 0.15s ease,
+            box-shadow 0.2s ease,
+            border-color 0.2s ease;
+    }
+    /* Clickable affordance: a calm lift, never a glow. */
+    .signal:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--sr-shadow);
+        border-color: var(--signal-color, var(--sr-pending));
+    }
+    .signal:active {
+        transform: translateY(0);
+    }
+    .signal:focus-visible {
+        outline: 2px solid var(--sr-focus);
+        outline-offset: 2px;
+    }
+    .explain-link {
+        margin: 0.85rem 0 0;
+        font-family: var(--sr-font-body);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        color: var(--sr-accent);
     }
     .signal.pending {
-        --signal-color: #9ca3af;
+        --signal-color: var(--sr-pending);
     }
     .signal.giveup {
-        --signal-color: #d69e2e;
+        --signal-color: var(--sr-progress);
     }
     .signal.score {
-        --signal-color: #38a169;
+        --signal-color: var(--sr-mastered);
     }
     .signal-head {
         display: flex;
         align-items: center;
-        gap: 0.4rem;
+        gap: 0.5rem;
     }
     .signal-head h2 {
         margin: 0;
-        font-size: 1rem;
+        font-family: var(--sr-font-heading);
+        font-size: 1.05rem;
         font-weight: 600;
     }
     .dot {
-        width: 8px;
-        height: 8px;
+        width: 10px;
+        height: 10px;
         border-radius: 50%;
-        background: var(--signal-color, #9ca3af);
+        background: var(--signal-color, var(--sr-pending));
         flex: 0 0 auto;
     }
     .signal .question {
-        margin: 0.35rem 0 0.75rem;
+        margin: 0.5rem 0 0.85rem;
         font-size: 0.82rem;
-        color: var(--fg-subtle, #6b7280);
+        color: var(--fg-subtle);
         min-height: 2.2em;
     }
     .signal .value {
         margin: 0;
-        font-size: 1.1rem;
-        font-weight: 700;
+        font-family: var(--sr-font-heading);
+        font-size: 1.3rem;
+        font-weight: 600;
+        line-height: 1.1;
+        color: var(--fg);
     }
     .signal .detail {
-        margin: 0.1rem 0 0;
+        margin: 0.25rem 0 0;
         font-size: 0.8rem;
-        color: var(--fg-subtle, #6b7280);
+        color: var(--fg-subtle);
     }
     .signal .source {
-        margin: 0.6rem 0 0;
-        font-size: 0.72rem;
-        letter-spacing: 0.02em;
+        margin: 0.7rem 0 0;
+        font-family: var(--sr-font-body);
+        font-size: 0.66rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--fg-subtle, #9ca3af);
+        color: var(--signal-color);
     }
 
-    /* Readiness detail */
+    /* Readiness detail. The ABSTAIN panel wears an honest amber frame (we're
+       withholding) — never a celebratory green/glow. When a real score exists
+       the panel uses a calm cyan frame. Numbers inside stay white + high-contrast. */
+    .detail-panel:not(.score-panel) {
+        border: 1px solid var(--border);
+        border-top: 3px solid var(--sr-progress);
+    }
+    .score-panel {
+        border: 1px solid var(--border);
+        border-top: 3px solid var(--sr-mastered);
+    }
     .badge {
         display: inline-block;
-        background: var(--signal-amber-bg, rgba(214, 158, 46, 0.16));
-        color: #915c05;
-        font-weight: 600;
-        border-radius: 999px;
-        padding: 0.2rem 0.7rem;
-        font-size: 0.78rem;
+        border: 1px solid var(--sr-progress);
+        color: var(--sr-progress);
+        font-family: var(--sr-font-body);
+        font-weight: 700;
+        font-size: 0.7rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border-radius: var(--sr-radius-pill);
+        padding: 0.25rem 0.7rem;
         white-space: nowrap;
     }
     .badge.ok {
-        background: rgba(56, 161, 105, 0.16);
-        color: #216c46;
+        border-color: var(--sr-mastered);
+        color: var(--sr-mastered);
     }
     .reason {
         margin: 0 0 1rem;
-        color: var(--fg, #1c1c1e);
+        color: var(--fg);
     }
     .metrics {
         display: grid;
@@ -445,71 +558,95 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .metric {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: 0.3rem;
     }
     .label {
-        font-size: 0.75rem;
+        font-family: var(--sr-font-body);
+        font-size: 0.7rem;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.03em;
-        color: var(--fg-subtle, #6b7280);
+        letter-spacing: 0.06em;
+        color: var(--fg-subtle);
     }
     .metric-value {
-        font-size: 1.5rem;
-        font-weight: 700;
-        line-height: 1.1;
+        font-family: var(--sr-font-heading);
+        font-size: 1.6rem;
+        font-weight: 600;
+        line-height: 1.05;
+        color: var(--fg);
     }
     .bar {
-        height: 6px;
-        border-radius: 999px;
-        background: var(--canvas-inset, #ececef);
+        height: 8px;
+        border-radius: var(--sr-radius-pill);
+        background: var(--canvas-inset);
+        border: 1px solid var(--border);
         overflow: hidden;
     }
     .bar-fill {
         display: block;
         height: 100%;
-        background: var(--fg-subtle, #6b7280);
-        border-radius: 999px;
+        background: var(--sr-progress);
+        border-radius: var(--sr-radius-pill);
     }
     .metric .hint,
     .score-panel .hint {
         font-size: 0.8rem;
-        color: var(--fg-subtle, #6b7280);
+        color: var(--fg-subtle);
     }
     .next-action {
-        border-top: 1px solid var(--border, #e2e2e5);
-        padding-top: 0.75rem;
+        border-top: 1px solid var(--border);
+        padding-top: 0.85rem;
+        margin-top: 0.25rem;
+    }
+    .next-action .label {
+        color: var(--sr-accent);
     }
     .next-action p {
-        margin: 0.25rem 0 0;
-        font-weight: 600;
+        margin: 0.3rem 0 0;
+        font-weight: 700;
+        font-size: 1.02rem;
     }
+    /* The score itself: large + white + calm. No glow, no pulse — a measured
+       number shown with its range, never dressed up. */
     .score-panel .point {
-        font-size: 2.4rem;
-        font-weight: 800;
+        font-family: var(--sr-font-heading);
+        font-size: 2.6rem;
+        font-weight: 600;
         line-height: 1;
+        color: var(--fg);
     }
     .score-panel .range {
-        font-size: 1rem;
-        font-weight: 400;
-        color: var(--fg-subtle, #6b7280);
+        font-family: var(--sr-font-body);
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--fg-subtle);
     }
     .pass-prob {
-        margin: 0.4rem 0 0;
+        margin: 0.5rem 0 0;
         font-size: 1rem;
     }
     .pass-prob b {
         font-size: 1.15rem;
     }
 
-    /* Honesty bundle */
+    /* Honesty bundle — a quiet panel with a plum top accent; the data list stays
+       high-contrast + readable. */
+    .bundle-panel {
+        border: 1px solid var(--border);
+        border-top: 3px solid var(--sr-quinary);
+        box-shadow: var(--sr-shadow);
+    }
     .bundle-panel h2 {
-        margin: 0 0 0.4rem;
-        font-size: 1.05rem;
+        margin: 0 0 0.5rem;
+        font-family: var(--sr-font-heading);
+        font-size: 1.2rem;
+        font-weight: 600;
     }
     .note {
-        margin: 0 0 0.75rem;
-        color: var(--fg-subtle, #4b5563);
+        margin: 0 0 0.9rem;
+        color: var(--fg-subtle);
         font-size: 0.88rem;
+        line-height: 1.55;
     }
     .bundle {
         margin: 0;
@@ -518,18 +655,22 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         justify-content: space-between;
         gap: 1rem;
-        padding: 0.5rem 0;
-        border-bottom: 1px solid var(--border-subtle, #efeff1);
+        padding: 0.6rem 0;
+        border-bottom: 1px solid var(--border-subtle);
     }
     .bundle > div:last-child {
         border-bottom: none;
     }
     .bundle dt {
-        color: var(--fg-subtle, #6b7280);
+        color: var(--fg-subtle);
+        font-family: var(--sr-font-body);
+        font-size: 0.82rem;
+        font-weight: 600;
     }
     .bundle dd {
         margin: 0;
         text-align: right;
-        font-weight: 600;
+        font-weight: 700;
+        color: var(--fg);
     }
 </style>

@@ -36,7 +36,7 @@ required Rust engine change. **[mastery model + ordering: built in Rust; live
 queue integration: built behind a default-off `speedrunMasteryScheduler` flag —
 `build_queues` reorders new cards by tier when it is on]**
 
-1. **Subtopic pile (Blocked)** — a small deck per subtopic, practised in
+1. **Subtopic pile (Blocked)** — a small deck per subtopic, practiced in
    isolation until its **mastery gate** clears (enough graded problems, high
    accuracy, strong FSRS retrievability).
 2. **Unit pile (Within-unit)** — once a subtopic clears, its cards join a larger

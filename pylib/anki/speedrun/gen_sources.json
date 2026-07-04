@@ -56,6 +56,83 @@
             "subtopic": "subtopic::multivariate::clt",
             "passage": "The central limit theorem states that the sample mean of many independent, identically distributed variables is approximately normal, with mean mu and variance sigma squared divided by n, for large n.",
             "key_terms": ["central limit", "normal", "sample mean", "sigma squared divided by n"]
+        },
+        {
+            "id": "src-sets-axioms",
+            "name": "Probability axioms note",
+            "subtopic": "subtopic::general::sets_axioms",
+            "passage": "A probability is a number between zero and one, the probability of the whole sample space is one, and for disjoint events the probability of their union is the sum of the probabilities. The complement rule says the probability of not A is one minus the probability of A.",
+            "key_terms": ["between zero and one", "sample space", "disjoint", "complement"]
+        },
+        {
+            "id": "src-combinatorics",
+            "name": "Counting note",
+            "subtopic": "subtopic::general::combinatorics",
+            "passage": "A permutation counts ordered arrangements and equals n factorial divided by n minus k factorial. A combination counts unordered selections and equals n factorial divided by k factorial times n minus k factorial. The multiplication principle multiplies the number of choices across independent stages.",
+            "key_terms": ["permutation", "combination", "n choose k", "multiplication principle"]
+        },
+        {
+            "id": "src-independence",
+            "name": "Independence note",
+            "subtopic": "subtopic::general::independence",
+            "passage": "Two events are independent when the probability of their intersection equals the product of their probabilities, equivalently when conditioning on one does not change the other. For independent components connected in series the system works with the product of the working probabilities.",
+            "key_terms": ["independent", "product", "intersection", "series"]
+        },
+        {
+            "id": "src-add-mult",
+            "name": "Addition and multiplication rules note",
+            "subtopic": "subtopic::general::add_mult_rules",
+            "passage": "The addition rule says the probability of A or B equals the probability of A plus the probability of B minus the probability of both. The multiplication rule says the probability of both equals the probability of A times the conditional probability of B given A. For mutually exclusive events the intersection is zero.",
+            "key_terms": ["addition rule", "multiplication rule", "mutually exclusive", "conditional"]
+        },
+        {
+            "id": "src-rv-basics",
+            "name": "PDF and CDF note",
+            "subtopic": "subtopic::univariate::rv_basics",
+            "passage": "A probability density function is nonnegative and integrates to one over its support. The cumulative distribution function at x is the probability that the variable is at most x, which is the integral of the density up to x, so the density is the derivative of the cumulative distribution function.",
+            "key_terms": ["density", "integrates to one", "cumulative distribution", "derivative"]
+        },
+        {
+            "id": "src-insurance",
+            "name": "Insurance payment note",
+            "subtopic": "subtopic::univariate::insurance_apps",
+            "passage": "With an ordinary deductible d, an insurance policy pays the loss minus d when the loss exceeds d and pays nothing otherwise, that is the maximum of the loss minus d and zero. A policy limit caps the payment. The expected payment integrates the payment function against the loss density.",
+            "key_terms": ["deductible", "policy limit", "maximum", "expected payment"]
+        },
+        {
+            "id": "src-joint",
+            "name": "Joint distribution note",
+            "subtopic": "subtopic::multivariate::joint_distributions",
+            "passage": "A joint density of two variables is nonnegative and integrates to one over the plane. The probability that the pair falls in a region is the double integral of the joint density over that region. For a discrete pair the joint probability mass function sums to one.",
+            "key_terms": ["joint density", "double integral", "integrates to one", "region"]
+        },
+        {
+            "id": "src-marginal",
+            "name": "Marginal and conditional note",
+            "subtopic": "subtopic::multivariate::marginal_conditional",
+            "passage": "The marginal density of X is obtained by integrating the joint density over the other variable. The conditional density of Y given X equals the joint density divided by the marginal density of X, defined wherever that marginal density is positive.",
+            "key_terms": ["marginal", "integrating over", "conditional density", "divided by"]
+        },
+        {
+            "id": "src-joint-moments",
+            "name": "Joint moments note",
+            "subtopic": "subtopic::multivariate::joint_moments",
+            "passage": "The expected value of a function of two variables is the double integral of the function times the joint density over the plane. In particular the expectation of the product XY is the double integral of xy times the joint density. Expectation is linear, so the expectation of a sum is the sum of the expectations.",
+            "key_terms": ["double integral", "joint density", "expectation of xy", "linear"]
+        },
+        {
+            "id": "src-order-stats",
+            "name": "Order statistics note",
+            "subtopic": "subtopic::multivariate::order_statistics",
+            "passage": "For a sample of n independent identically distributed variables, the maximum has cumulative distribution function equal to the common cumulative distribution raised to the n, and the minimum has cumulative distribution one minus one minus the common cumulative distribution raised to the n. Differentiating gives their densities.",
+            "key_terms": ["maximum", "minimum", "raised to the n", "order statistic"]
+        },
+        {
+            "id": "src-linear-combos",
+            "name": "Linear combinations note",
+            "subtopic": "subtopic::multivariate::linear_combinations",
+            "passage": "For a linear combination a times X plus b times Y, the mean is a times the mean of X plus b times the mean of Y. The variance is a squared times the variance of X plus b squared times the variance of Y plus two times a times b times the covariance. When X and Y are independent the covariance term is zero so the variances add.",
+            "key_terms": ["linear combination", "a squared", "covariance term", "variances add"]
         }
     ]
 }

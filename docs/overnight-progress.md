@@ -399,3 +399,65 @@ new-card stream; reviews were FSRS-timed (+ optional points-at-stake). Now, when
   syllabus cards). Undo still clean with both flags on (existing Python test).
 - Verified GREEN: `cargo test -p anki speedrun::` (53 tests),
   `check:format:rust`, `check:clippy`, `check:pytest:pylib`.
+
+### Autonomous session (2026-07-03 ~00:30 CT) — re-verify + sync + blockers
+
+Ran every runnable proof against the already-built engine in `out/` (the
+working tree has in-flight Rust WIP that doesn't compile yet — see blockers).
+All numbers below are reproducible via the named command.
+
+- **Two-way sync (7b)** — `make sync-test`: desktop 20 | phone 20, none
+  lost/doubled; same-card conflict keeps both revlog rows + deterministic
+  winner. **PASS.** (Fixed a regression first: `tools/speedrun/sync_test.py`
+  imported `anki.cards` before `anki.collection`, tripping a circular import;
+  reordered to import `collection` first — the order the app itself uses.)
+- **Phone runs OUR engine** — the arm64-v8a APK
+  (`Anki-Android/AnkiDroid/build/outputs/apk/play/debug/`) embeds
+  `librsdroid.so` whose strings carry `anki/rslib/src/speedrun/service.rs`,
+  `.../mastery.rs`, and the compiled `anki.speedrun.rs` proto — i.e. the SOA-P
+  speedrun engine, not just "an Anki engine."
+- **Paraphrase (7d)** — `make paraphrase`: recall 73.2% vs reworded 31.8% →
+  **+41.4% gap**; copycat control −0.7% (test correctly flags a memory-tracking
+  copy). Deterministic given `--students`/`--seed`.
+- **Ablation (§8)** — `make ablation`: with no assumed mechanism (disc_gain=0)
+  the three builds are identical (honest null); direction Full ≥ Ablated ≥ Plain
+  holds for any assumed effect. Deterministic.
+- **Performance model** — `make performance`: acc 0.783, AUC 0.826, beats
+  majority baseline 0.692, calibrated (Brier 0.157, ECE 0.071).
+  `ARGS=--persona`: acc 0.766, AUC 0.783, beats 0.724, ECE 0.023.
+- **Memory calibration** — `make calibration`: honestly abstains (0 graded
+  reviews on file; needs ≥100). No number shown (give-up rule).
+- **Practice-test readiness** — `make practice-test`: P(pass) 57%, coverage
+  100%, confidence 0.91, band + weakest-area next action (120 graded Qs, 61%).
+- **Crash (7g)** — `make crash-test`: survived 20× mid-review SIGKILL, SQLite
+  integrity clean every time. **PASS.**
+- **Speed (7h)** — `make bench` on 50k cards: next-card p95 0.11ms, mastery
+  query p95 0.23ms, mastery-ordered new cards p95 174ms, readiness p95 9.25ms.
+- **Tests** — `pytest test_speedrun_{paraphrase,ablation}.py` 11 passed;
+  `vitest routes/study-map` 22 passed.
+
+**Blockers left for Katie (need you / external):**
+
+1. **Rust test build is broken by in-flight `memory_recall` WIP** (uncommitted):
+   `proto/anki/speedrun.proto` adds `MemoryRecall memory_recall = 3` to
+   `ReadinessResult`, but the `ReadinessResult { .. }` initializers in
+   `rslib/src/speedrun/service.rs` (~lines 134, 685, 704) don't set it →
+   `error[E0063]: missing field memory_recall`, so `cargo test`/`./ninja check`
+   fail. Left untouched — it's your active feature + the honesty-critical core.
+   Finish wiring `memory_recall` (or set it in those initializers) to re-green.
+2. **On-device phone↔desktop recording** — the only installed emulator image is
+   `android-37.0`, which crashes at GPU init on every launch config tried
+   (headed/headless, swiftshader). The bundled `cmdline-tools` are too old to
+   fetch a stable image (SDK repo XML v4 > supported v3), so `sdkmanager` can't
+   download `android-34`. Fastest path: `adb install -r <arm64 APK>` on a real
+   Android phone; else update `cmdline-tools;latest` then pull an API≤35 image.
+   Sync + engine-sharing are already proven (above), so this is a recording, not
+   a correctness gap.
+3. **AI side-by-side eval** — `OPENAI_API_KEY` in `.env` is invalid (`401
+   Incorrect API key`). `make ai-eval` runs the baselines but can't run the AI
+   side until a valid key is set. NB: README/`docs/ai-results.md` cite measured
+   AI numbers (classifier 38%, generation 92%) — confirm those came from a
+   valid-key run so the claim stays honest.
+
+Nothing was committed this session: the tree holds your WIP (incl. the broken
+Rust), and committing a non-compiling state would be worse than leaving it.

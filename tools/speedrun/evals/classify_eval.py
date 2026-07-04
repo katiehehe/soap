@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import sys
 
@@ -216,6 +217,105 @@ def _ai_ranker():
         return [tag for tag, _score, _src in classify_subtopic_core(question, provider)]
 
     return ranker, provider
+
+
+def collect_results(run_ai: bool = True, limit: int = 0, seed: int = 0) -> dict:
+    """Machine-readable record for the committed AI-eval artifact (ai_eval.json).
+
+    The keyword baseline is always computed on the FULL held-out set; the AI cell
+    is populated only when a provider/key is configured AND ``run_ai`` is True,
+    else left ``None`` with a ``pending`` verdict — no AI number is ever
+    fabricated here. Pass ``run_ai=False`` to force the offline/baseline-only
+    record.
+
+    ``limit`` caps the AI side to a seeded random SUBSAMPLE of the held-out items
+    (cost control for a keyed smoke run). Sampling only chooses which held-out
+    items to *evaluate* — it never touches the classifier's index / training, so
+    there is no leakage. When it samples, the AI cell carries ``is_subsample``,
+    ``sample_size``, ``seed`` and an apples-to-apples ``baseline_on_sample``.
+    """
+    corpus = load_corpus()
+    items = gold_items()
+    leaks = leakage_over_ai_inputs(items)
+    base = evaluate(items)  # FULL keyword baseline (no API)
+
+    ai_cell: dict | None = None
+    ai_ran = False
+    verdict = "pending: run `make ai-report` with OPENAI_API_KEY to populate"
+    ai = _ai_ranker() if run_ai else None
+    if ai is not None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from anki.speedrun.ai import DEFAULT_OPENAI_MODEL
+
+        ranker, provider = ai
+        is_sub = bool(limit) and limit < len(items)
+        sample = random.Random(seed).sample(items, limit) if is_sub else items
+        base_sample = evaluate(sample)  # same-sample keyword baseline (no API)
+
+        # The AI ranker makes one API call per item; run them concurrently (they
+        # are I/O-bound) so the full 715-item held-out set completes in minutes,
+        # not ~15 min sequentially. A failed call returns [] (counts as wrong —
+        # this can only ever LOWER the AI score, never inflate it).
+        def _safe_rank(question: str) -> list[str]:
+            try:
+                return ranker(question)
+            except Exception:  # noqa: BLE001 — a failed classify counts as wrong
+                return []
+
+        questions = [it["question"] for it in sample]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            ranked = list(pool.map(_safe_rank, questions))
+        ranked_by_q = dict(zip(questions, ranked))
+        ai_res = evaluate(sample, ranker=lambda q: ranked_by_q.get(q, []))
+        margin = ai_res["top1"] - base_sample["top1"]
+        ai_ran = True
+        ai_cell = {
+            "provider": provider,
+            "model": DEFAULT_OPENAI_MODEL,
+            "is_subsample": is_sub,
+            "sample_size": len(sample),
+            "seed": seed,
+            "top1": round(ai_res["top1"], 4),
+            "top3": round(ai_res["top3"], 4),
+            "wrong_rate_top1": round(1.0 - ai_res["top1"], 4),
+            "baseline_on_sample": {
+                "top1": round(base_sample["top1"], 4),
+                "top3": round(base_sample["top3"], 4),
+                "wrong_rate_top1": round(1.0 - base_sample["top1"], 4),
+            },
+            "margin_top1_vs_baseline_on_sample": round(margin, 4),
+        }
+        scope = f"sample n={len(sample)}" if is_sub else "full set"
+        beat = margin >= AI_TOP1_MARGIN
+        verdict = (
+            f"{'PASS' if beat else 'BELOW bar'} on {scope}: AI top-1 "
+            f"{ai_res['top1']:.0%} vs baseline {base_sample['top1']:.0%} "
+            f"(margin {margin:+.0%})"
+        )
+
+    return {
+        "name": "Feature 1 — subtopic classifier",
+        "make_target": "make classify",
+        "baseline_vs": "keyword overlap",
+        "dataset": {
+            "gold_set": corpus.source,
+            "is_real_soa": corpus.is_real_soa,
+            "held_out_items": len(items),
+            "num_subtopics": 19,
+        },
+        "cutoff": {"ai_top1_margin": AI_TOP1_MARGIN},
+        "leakage_over_ai_inputs": {"leaks": leaks, "clean": leaks == 0},
+        "baseline": {
+            "method": "keyword overlap",
+            "top1": round(base["top1"], 4),
+            "top3": round(base["top3"], 4),
+            "wrong_rate_top1": round(1.0 - base["top1"], 4),
+        },
+        "ai": ai_cell,
+        "ai_ran": ai_ran,
+        "verdict": verdict,
+    }
 
 
 def main() -> None:

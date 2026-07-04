@@ -67,9 +67,14 @@ memory where transfer is weak.
   items with correctness labels, kept out of training and verified by the leakage
   scan. **Until that dataset exists, performance reads "not yet measured" — never
   a fabricated number.**
-- **Divergence check:** the paraphrase test (rubric 7d) compares clean-cue recall
-  against reworded-question accuracy and reports the gap, confirming performance
-  is not just memory in disguise.
+- **Divergence check (measured):** the paraphrase test (rubric 7d, `make
+  paraphrase`) compares clean-cue **card recall** against **reworded-question
+  accuracy** on 30 cards × 2 rewordings. Result on the synthetic cohort: recall
+  **73%** vs reworded **32%** → a **+41-point gap** in every subtopic, so
+  performance is a genuinely separate, harder signal — not memory in disguise. A
+  copycat control (performance model on both sides) collapses to ~0, confirming
+  the test would catch a performance signal that merely tracked memory.
+  [docs/paraphrase-test.md](./paraphrase-test.md).
 
 ## 3. Readiness — "would you pass today, and how sure are we?" **[built; give-up rule in Rust]**
 
@@ -101,8 +106,9 @@ type system) from graded **practice-test** evidence.
   `readiness_band_scales_and_bounds`, `wilson_interval_brackets_the_estimate`,
   `normal_cdf_is_calibrated_at_known_points`.
 - **Demo:** `make seed-persona` / `make practice-test` show a real, reproducible,
-  synthetic-persona readiness band (e.g. projected ~5.7, range ~4.8–6.5,
-  P(pass) ~23%) — computed by this exact code, never hardcoded.
+  synthetic-persona readiness band (e.g. projected ~5.5, range ~4.6–6.4,
+  P(pass) ~14%) plus a Memory band (mean FSRS retrievability ~90%, range
+  ~85–96%) — computed by this exact code, never hardcoded.
 
 ## Synthetic demo persona (honest "reasonable data")
 

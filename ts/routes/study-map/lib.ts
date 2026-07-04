@@ -1,6 +1,8 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { SIGNAL } from "../speedrun-ui/colors";
+
 // Pure geometry for the study-map concept map. Kept out of the Svelte component
 // so the layout can be unit-tested: bubbles must never overlap, every bubble
 // must fit inside the canvas, every edge must touch the borders of the two
@@ -19,6 +21,10 @@ export interface SubtopicDef {
     // Mirrors "prereqs" in pylib/anki/speedrun/exam_p_topics.json; cross-unit
     // order is expressed by UNIT_PREREQS below.
     prereqs: string[];
+    // Optional per-node angular fine-tune (degrees) applied on top of the even
+    // fan spacing. Used sparingly to stop a boundary spoke from clipping an inner
+    // sibling (e.g. the unit→Bayes line passing under Conditional prob.).
+    angleNudge?: number;
 }
 export interface UnitDef {
     id: string;
@@ -58,6 +64,10 @@ export const TAXONOMY: UnitDef[] = [
                 name: "Conditional prob.",
                 weight: 5.25,
                 prereqs: ["add_mult_rules"],
+                // Pull slightly toward the fan centre so the unit→Bayes spoke
+                // (the outer boundary node) clears this inner node instead of
+                // passing under it.
+                angleNudge: -5,
             },
             {
                 id: "bayes",
@@ -163,11 +173,15 @@ export const UNIT_PREREQS: Record<string, string[]> = {
 };
 
 // A calmer, cohesive palette (traffic-light meaning, softened).
+// Measured-mastery signal colours. These stay SEMANTIC (fixed meaning), sourced
+// from the shared honesty palette — never rotated through the decorative accents.
 export const COLORS = {
-    grey: "#a7b2c2", // not started
-    amber: "#e0a552", // in progress
-    green: "#57a37c", // mastered
-    accent: "#6486bf", // the central node
+    grey: SIGNAL.pending, // not started
+    amber: SIGNAL.progress, // in progress
+    green: SIGNAL.mastered, // mastered / strong
+    red: SIGNAL.weak, // performance: struggling
+    memory: SIGNAL.memory, // memory / spaced-repetition (secondary signal)
+    accent: "#8189d6", // periwinkle central node (decorative)
 };
 
 /** Total importance weight of a unit = the sum of its subtopic weights (which,
@@ -177,15 +191,21 @@ export function unitWeight(u: UnitDef): number {
     return u.subtopics.reduce((sum, s) => sum + s.weight, 0);
 }
 
-// Bubble radii. Importance maps to radius through the observed weight ranges so
-// the biggest exam topics read as the biggest bubbles. Radii are capped well
-// below the spacing between bubble centres (see the radial constants) so no two
-// bubbles can overlap — verified by lib.test.ts.
-export const CENTER_R = 52;
-const UNIT_R_MIN = 50;
-const UNIT_R_MAX = 62;
-const SUB_R_MIN = 48;
-const SUB_R_MAX = 64;
+// Bubble radii. Two things drive size, in priority order:
+//   1. TIER (structural importance): the whole exam (centre) is the biggest node,
+//      a unit/section is medium, a single subtopic is smallest. The three radius
+//      RANGES below don't overlap (centre > every unit > every subtopic), so the
+//      hierarchy always reads at a glance — verified by lib.test.ts.
+//   2. WEIGHT (exam importance) WITHIN a tier: a heavier unit is a bigger bubble
+//      than a lighter unit, and likewise for subtopics, so "size = importance"
+//      still holds inside each tier.
+// Radii stay capped well below the spacing between bubble centres (see the radial
+// constants) so no two bubbles overlap — also verified by lib.test.ts.
+export const CENTER_R = 82;
+const UNIT_R_MIN = 60;
+const UNIT_R_MAX = 70;
+const SUB_R_MIN = 44;
+const SUB_R_MAX = 54;
 
 const SUB_WEIGHTS = TAXONOMY.flatMap((u) => u.subtopics.map((s) => s.weight));
 const SUB_W_MIN = Math.min(...SUB_WEIGHTS);
@@ -268,7 +288,7 @@ export function computeLayout(): Layout {
         const uy = R_UNIT * Math.sin(base * DEG);
         const n = u.subtopics.length;
         const subs: LeafNode[] = u.subtopics.map((s, j) => {
-            const angle = (base + (j - (n - 1) / 2) * STEP_DEG) * DEG;
+            const angle = (base + (j - (n - 1) / 2) * STEP_DEG + (s.angleNudge ?? 0)) * DEG;
             const r = j % 2 === 0 ? R_IN : R_OUT;
             return {
                 id: s.id,
@@ -349,6 +369,31 @@ export function borderPoint(c: Circle, tx: number, ty: number): Point {
     return { x: c.x + (dx / dist) * c.r, y: c.y + (dy / dist) * c.r };
 }
 
+// ---------------------------------------------------------------------------
+// Visible vs. collision radius
+//
+// A bubble's layout radius `r` is its COLLISION radius (used for spacing so no
+// two bubbles overlap). The bubble is *rendered* smaller — `transform: scale()`
+// in +page.svelte insets it — so its VISIBLE border sits at NODE_TOUCH·r. Every
+// connector endpoint AND the SVG bubble-mask must aim at NODE_TOUCH·r, not the
+// full r: aim at the full r and the line stops in the empty ring between the
+// drawn bubble (NODE_TOUCH·r) and the collision circle (r), reading as a gap /
+// "floating" edge. Keep NODE_TOUCH in sync with the CSS `scale()` on .bubble /
+// .leaf so the geometry and the render agree and edges touch the bubbles.
+// ---------------------------------------------------------------------------
+
+/** Fraction of a bubble's collision radius at which its drawn border sits.
+ * Mirrors the `transform: scale(0.88)` on .bubble / .leaf in +page.svelte. */
+export const NODE_TOUCH = 0.88;
+
+/** `c` at a fraction `k` of its radius (same centre). Aiming edges, arrows and
+ * the bubble-mask at `shrinkCircle(node, NODE_TOUCH)` lands them on the VISIBLE
+ * bubble border, so every connector touches the bubble instead of stopping in
+ * the collision-radius ring around it. */
+export function shrinkCircle(c: Circle, k: number): Circle {
+    return { x: c.x, y: c.y, r: c.r * k };
+}
+
 export interface EdgeGeom {
     x1: number;
     y1: number;
@@ -362,6 +407,114 @@ export function edgeBetween(a: Circle, b: Circle): EdgeGeom {
     const start = borderPoint(a, b.x, b.y);
     const end = borderPoint(b, a.x, a.y);
     return { x1: start.x, y1: start.y, x2: end.x, y2: end.y };
+}
+
+// ---------------------------------------------------------------------------
+// Two-track edges (the dual-metric connectors)
+//
+// Between two connected bubbles the map draws TWO parallel lines, one per
+// signal — Memory and Performance — because there are two independent metrics
+// and they must never blend into one line. Each track is a chord offset from
+// the centre line by ±TRACK_OFFSET, so the two rails sit side by side and never
+// overlap, while both endpoints still land exactly on the two bubble borders
+// (an offset chord still meets the circle it is offset within).
+// ---------------------------------------------------------------------------
+
+/** Perpendicular half-separation (px) between the Memory and Performance rails
+ * along an edge — the two tracks are 2·TRACK_OFFSET apart, so they read as two
+ * clearly distinct, side-by-side lines (not a near-coincident pair) yet both
+ * still touch the bubbles they connect. Stays well under the clamp in
+ * `twoTrackEdges` (0.6·r of the smallest bubble ≈ 25px), so the chords remain
+ * real and the endpoints stay on the border. */
+export const TRACK_OFFSET = 10;
+
+export interface TwoTrackEdges {
+    /** The Memory rail (periwinkle track). */
+    memory: EdgeGeom;
+    /** The Performance rail (traffic-light track). */
+    performance: EdgeGeom;
+}
+
+/** Two parallel border-to-border segments between circles `a` and `b`, one per
+ * metric, each offset perpendicular to the a→b line by ±`offset`. Both segments
+ * are chords of the two circles, so each still starts on A's border and ends on
+ * B's border (touching both bubbles), while the opposite signs keep the Memory
+ * and Performance rails from ever overlapping. `offset` is clamped below each
+ * radius so the chords stay real for small bubbles. */
+export function twoTrackEdges(
+    a: Circle,
+    b: Circle,
+    offset: number = TRACK_OFFSET,
+): TwoTrackEdges {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ux = dx / dist; // along a→b
+    const uy = dy / dist;
+    const px = -uy; // perpendicular
+    const py = ux;
+    // Keep the chord real (and visibly inside) even for the smallest bubble.
+    const d = Math.min(offset, a.r * 0.6, b.r * 0.6);
+    const segFor = (s: number): EdgeGeom => {
+        // Axial distance from each centre to where the offset chord crosses that
+        // circle's border: sqrt(r² − s²). With the ±s perpendicular shift the
+        // endpoint is exactly r from the centre, so it lands on the border.
+        const aAxis = Math.sqrt(Math.max(0, a.r * a.r - s * s));
+        const bAxis = Math.sqrt(Math.max(0, b.r * b.r - s * s));
+        return {
+            x1: a.x + ux * aAxis + px * s,
+            y1: a.y + uy * aAxis + py * s,
+            x2: b.x - ux * bAxis + px * s,
+            y2: b.y - uy * bAxis + py * s,
+        };
+    };
+    return { memory: segFor(d), performance: segFor(-d) };
+}
+
+// ---------------------------------------------------------------------------
+// Hierarchical, upward-flowing fill (child → parent)
+//
+// The map is a hierarchy: subtopic leaves feed their unit, units feed the
+// central "Exam P" node. The fill on each pair of rails must read as flowing UP
+// that hierarchy — it originates at the CHILD end (the smaller/outer bubble) and
+// grows toward the PARENT — so a student sees each child's mastery feeding into
+// its parent (subtopic → unit, unit → exam). `hierEdges` fixes the orientation
+// (CHILD is `a`, so both rails' (x1,y1) land on the child's border); `fillSegment`
+// then grows the coloured fill from that child end. Memory keeps the +offset
+// rail and Performance the −offset rail, so each signal sits on a consistent
+// side of every edge.
+// ---------------------------------------------------------------------------
+
+/** Two parallel rails for a hierarchy edge, oriented CHILD → PARENT: every rail's
+ * (x1,y1) lands on the CHILD's border and (x2,y2) on the PARENT's border, so a
+ * fill grown from (x1,y1) flows UP from the child toward the parent (subtopic →
+ * unit, unit → exam). Memory is the +offset rail, Performance the −offset rail,
+ * so each signal keeps a consistent side on every edge. A thin, intent-revealing
+ * wrapper over the (symmetric) `twoTrackEdges`; the argument ORDER is the
+ * contract, so callers can't accidentally draw the fill flowing the wrong way. */
+export function hierEdges(
+    child: Circle,
+    parent: Circle,
+    offset: number = TRACK_OFFSET,
+): TwoTrackEdges {
+    return twoTrackEdges(child, parent, offset);
+}
+
+/** The filled sub-segment of a rail: it starts at the rail's CHILD end (x1,y1)
+ * and extends a fraction `progress` (0..1) toward the parent end. Because a
+ * hierarchy rail is oriented child → parent (see `hierEdges`), the fill always
+ * grows UP from the child — the visual "this child is feeding its parent". At
+ * progress 0 the segment collapses to the child endpoint (nothing drawn); at 1 it
+ * spans the whole rail. `progress` is clamped to [0,1] so bad inputs can't
+ * overshoot the parent bubble. */
+export function fillSegment(seg: EdgeGeom, progress: number): EdgeGeom {
+    const t = clamp01(progress);
+    return {
+        x1: seg.x1,
+        y1: seg.y1,
+        x2: seg.x1 + t * (seg.x2 - seg.x1),
+        y2: seg.y1 + t * (seg.y2 - seg.y1),
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -381,8 +534,12 @@ export interface PrereqEdge {
 
 /** All prerequisite arrows for the map: subtopic -> subtopic (within a unit)
  * and unit -> unit (the cross-unit order). Each runs border-to-border so it
- * visually touches both bubbles; the arrowhead sits at the dependent end. */
-export function prereqEdges(layout: Layout): PrereqEdge[] {
+ * visually touches both bubbles; the arrowhead sits at the dependent end.
+ * `nodeScale` shrinks both endpoints toward the VISIBLE bubble border (pass
+ * NODE_TOUCH), so the arrowhead lands on the drawn bubble, not the larger
+ * collision circle; the default 1 keeps the full-radius geometry. */
+export function prereqEdges(layout: Layout, nodeScale = 1): PrereqEdge[] {
+    const scale = (c: Circle) => shrinkCircle(c, nodeScale);
     const leafByTag = new Map<string, LeafNode>();
     for (const u of layout.units) {
         for (const s of u.subs) {
@@ -398,7 +555,7 @@ export function prereqEdges(layout: Layout): PrereqEdge[] {
                     edges.push({
                         from: p,
                         to: s.tag,
-                        geom: edgeBetween(from, s),
+                        geom: edgeBetween(scale(from), scale(s)),
                         kind: "subtopic",
                     });
                 }
@@ -413,7 +570,7 @@ export function prereqEdges(layout: Layout): PrereqEdge[] {
                 edges.push({
                     from: `unit::${p}`,
                     to: `unit::${u.id}`,
-                    geom: edgeBetween(from, u),
+                    geom: edgeBetween(scale(from), scale(u)),
                     kind: "unit",
                 });
             }
@@ -566,6 +723,138 @@ export function hasEnoughEvidence(m?: SubtopicEvidence | null): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Performance-first status (the spine of this app)
+//
+// The bubble COLOUR reflects PERFORMANCE — how well the learner solves this
+// topic's exam-style problems — mirroring the Rust thresholds
+// (MIN_PERF_QUESTIONS / MIN_PERF_ACCURACY in rslib/src/speedrun/mastery.rs).
+// Memory (spaced repetition) is a SUPPORT signal: it only tints a bubble when
+// there is no performance evidence yet, and always in a distinct (periwinkle)
+// hue, so performance and memory never blend into one number.
+// ---------------------------------------------------------------------------
+
+export const MIN_PERF_QUESTIONS = 5; // mirrors rslib MIN_PERF_QUESTIONS
+export const PERF_MASTERED = 0.8; // mirrors rslib MIN_PERF_ACCURACY
+
+/** A subtopic's practice-test performance; a subset of SubtopicMastery. */
+export interface PerfEvidence {
+    perfQuestions: number;
+    perfCorrect: number;
+    perfAccuracy: number;
+    performanceMastered: boolean;
+}
+
+export type PerfStatus = "untested" | "thin" | "weak" | "practicing" | "strong";
+
+/** Honest performance status: no judgement below MIN_PERF_QUESTIONS graded
+ * questions ("thin"), then weak / practicing / strong by accuracy. */
+export function perfStatus(p?: PerfEvidence | null): PerfStatus {
+    if (!p || p.perfQuestions <= 0) {
+        return "untested";
+    }
+    if (p.perfQuestions < MIN_PERF_QUESTIONS) {
+        return "thin";
+    }
+    if (p.performanceMastered) {
+        return "strong";
+    }
+    return p.perfAccuracy >= 0.5 ? "practicing" : "weak";
+}
+
+/** Short label for a subtopic's performance. */
+export function perfStatusLabel(p?: PerfEvidence | null): string {
+    switch (perfStatus(p)) {
+        case "untested":
+            return "not practiced";
+        case "thin":
+            return `practicing (${p!.perfQuestions}/${MIN_PERF_QUESTIONS})`;
+        case "weak":
+            return "struggling";
+        case "practicing":
+            return "practicing";
+        case "strong":
+            return "strong";
+    }
+}
+
+/** Traffic-light colour for a performance level. */
+export function perfColor(p?: PerfEvidence | null): string {
+    switch (perfStatus(p)) {
+        case "strong":
+            return COLORS.green;
+        case "practicing":
+        case "thin":
+            return COLORS.amber;
+        case "weak":
+            return COLORS.red;
+        case "untested":
+            return COLORS.grey;
+    }
+}
+
+/** Fill fraction (0..1) for a subtopic's PERFORMANCE track — how far practice
+ * has carried this topic toward the mastery bar. Uncapped by time: it reflects
+ * accumulated practice, independent of the FSRS/spaced schedule that drives the
+ * Memory track. Kept honest with the same discipline as `leafProgress`: below
+ * MIN_PERF_QUESTIONS graded questions we only show how much evidence exists yet
+ * (capped at 0.4 so thin data can never look near-mastered), and once there is
+ * enough to judge, the fill never reaches 1 until performance is actually
+ * mastered. Mirrors the Rust thresholds so the map never overstates. */
+export function perfProgress(p?: PerfEvidence | null): number {
+    switch (perfStatus(p)) {
+        case "untested":
+            return 0;
+        case "strong":
+            return 1;
+        case "thin":
+            // Only how much evidence exists yet — capped at 0.4, same floor the
+            // memory track uses for "gathering data".
+            return 0.4 * Math.min(1, p!.perfQuestions / MIN_PERF_QUESTIONS);
+        case "weak":
+        case "practicing": {
+            // Enough graded questions to judge: honest distance to the mastery
+            // bar, never full until performance is actually mastered.
+            const acc = Math.min(1, p!.perfAccuracy / PERF_MASTERED);
+            return Math.min(0.92, 0.4 + 0.5 * acc);
+        }
+    }
+}
+
+/** Bubble colour: PERFORMANCE first; a muted MEMORY hint only when there is no
+ * performance evidence yet (reviewed but not practiced → go practice); grey
+ * when neither. Keeps performance primary, memory a distinct secondary cue. */
+export function bubbleColor(p?: PerfEvidence | null, memReviews = 0): string {
+    if (perfStatus(p) !== "untested") {
+        return perfColor(p);
+    }
+    return memReviews > 0 ? COLORS.memory : COLORS.grey;
+}
+
+/** Scope of a practice test: one subtopic, a whole unit, or the whole exam. */
+export type TestScope =
+    | { kind: "all" }
+    | { kind: "unit"; id: string }
+    | { kind: "subtopic"; tag: string };
+
+/** Pool a set of subtopics' performance so a unit's (or the whole exam's)
+ * colour reflects how it is doing overall. */
+export function rollupPerf(subs: PerfEvidence[]): PerfEvidence {
+    let q = 0;
+    let c = 0;
+    for (const s of subs) {
+        q += s.perfQuestions;
+        c += s.perfCorrect;
+    }
+    const acc = q > 0 ? c / q : 0;
+    return {
+        perfQuestions: q,
+        perfCorrect: c,
+        perfAccuracy: acc,
+        performanceMastered: q >= MIN_PERF_QUESTIONS && acc >= PERF_MASTERED,
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Today's tiered study plan
 //
 // The engine (GetStudyPlan) returns the decks with something due today, each
@@ -637,28 +926,35 @@ export function groupPlanByTier<T extends TieredItem>(items: T[]): PlanGroup<T>[
 }
 
 // ---------------------------------------------------------------------------
-// Exam-coverage pace
+// Mastery pace
 //
-// The engine (GetStudyPace) reports whether the student is introducing new
-// cards fast enough to cover the syllabus before their exam. paceTone is the
-// pure decision (no exam date / date passed / on track / behind) so it can be
-// unit-tested; the component turns it into colour + copy.
+// The engine (GetStudyPace) reports how many syllabus subtopics have cleared
+// their mastery gate and how fast they are clearing (observed over the study
+// history), so we can say whether the student is mastering the syllabus fast
+// enough for exam day — NOT just whether they have SEEN every card. paceTone is
+// the pure decision (no date / date passed / not enough history yet / on track
+// / behind) so it can be unit-tested; the component turns it into colour + copy.
 // ---------------------------------------------------------------------------
 
 export interface PaceView {
     hasExamDate: boolean;
     daysLeft: number;
-    remainingNew: number;
-    currentNewPerDay: number;
-    recommendedNewPerDay: number;
+    remainingSubtopics: number;
+    masteredSubtopics: number;
+    totalSubtopics: number;
+    daysStudied: number;
+    currentPerWeek: number;
+    recommendedPerWeek: number;
     projectedDaysToFinish: number;
     onTrack: boolean;
 }
 
-export type PaceTone = "none" | "past" | "ok" | "behind";
+export type PaceTone = "none" | "past" | "gathering" | "ok" | "behind";
 
-/** Which state to show the pace card in. "none" = no exam date set yet;
- * "past" = the date is behind us; otherwise on track / behind. */
+/** Which state to show the pace card in. "none" = no exam date set yet; "past"
+ * = the date has passed; "gathering" = a date is set but not enough is mastered
+ * / not enough study history to project a finish (we abstain, never guess);
+ * otherwise on track / behind. */
 export function paceTone(p: PaceView): PaceTone {
     if (!p.hasExamDate) {
         return "none";
@@ -666,5 +962,58 @@ export function paceTone(p: PaceView): PaceTone {
     if (p.daysLeft < 0) {
         return "past";
     }
+    if (p.remainingSubtopics === 0) {
+        return "ok"; // whole syllabus mastered
+    }
+    if (p.projectedDaysToFinish <= 0) {
+        return "gathering"; // not enough mastered / history to project yet
+    }
     return p.onTrack ? "ok" : "behind";
+}
+
+/** Round a projected finish (in days) to whole WEEKS for display, never below 1.
+ * The pace card speaks in weeks ("in about N weeks") since mastering subtopics to
+ * the gate realistically spans weeks; the honest projection itself is computed in
+ * days by the engine and only rounded here for readability. Always ≥ 1 so a very
+ * near finish never reads as "0 weeks". */
+export function projectedFinishWeeks(days: number): number {
+    return Math.max(1, Math.round(days / 7));
+}
+
+// ---------------------------------------------------------------------------
+// Shared engine request
+//
+// The taxonomy the map draws IS the taxonomy the engine gates on, so build the
+// MasteryRequest inputs (weights + prerequisite DAG) once, from TAXONOMY, and
+// reuse them for every RPC (get_mastery_state / get_study_plan / get_study_pace).
+// Kept here so the home shell can ask "is anything due?" with the same inputs the
+// map uses, without duplicating the taxonomy wiring.
+// ---------------------------------------------------------------------------
+
+export interface MasteryInputs {
+    expectedSubtopics: string[];
+    units: { unitId: string; weight: number }[];
+    subtopicWeights: { tag: string; weight: number }[];
+    subtopicPrereqs: { tag: string; prereqs: string[] }[];
+    unitPrereqs: { unitId: string; prereqs: string[] }[];
+}
+
+export function masteryInputs(): MasteryInputs {
+    return {
+        expectedSubtopics: TAXONOMY.flatMap((u) => u.subtopics.map((s) => subtopicTag(u.id, s.id))),
+        units: TAXONOMY.map((u) => ({ unitId: u.id, weight: unitWeight(u) })),
+        subtopicWeights: TAXONOMY.flatMap((u) =>
+            u.subtopics.map((s) => ({ tag: subtopicTag(u.id, s.id), weight: s.weight }))
+        ),
+        subtopicPrereqs: TAXONOMY.flatMap((u) =>
+            u.subtopics.map((s) => ({
+                tag: subtopicTag(u.id, s.id),
+                prereqs: s.prereqs.map((p) => subtopicTag(u.id, p)),
+            }))
+        ),
+        unitPrereqs: TAXONOMY.map((u) => ({
+            unitId: u.id,
+            prereqs: UNIT_PREREQS[u.id] ?? [],
+        })),
+    };
 }

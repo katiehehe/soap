@@ -61,13 +61,26 @@ class Overview:
         av_player.stop_and_clear_queue()
         self.web.set_bridge_command(self._linkHandler, self)
         self.mw.setStateShortcuts(self._shortcutKeys())
+        # Speedrun (SOA Exam P fork): the "finished" screen is a full-bleed custom
+        # congrats page. Hide Anki's overview bottom bar up front — before
+        # moveToState's height pass — so its "Options / Custom study" chrome never
+        # shows under it. Read-only queue build (no writes). The normal (not
+        # finished) overview keeps its bottom bar.
+        if self.mw.col.sched._is_finished():
+            self.mw.bottomWeb.hide()
         self.refresh()
 
     def refresh(self) -> None:
         def success(_counts: tuple) -> None:
             self._refresh_needed = False
             self._renderPage()
-            self._renderBottom()
+            # Speedrun: keep the bottom bar hidden on the full-bleed congrats
+            # screen (it carries its own links + "← Exam P" bar); draw it as usual
+            # on a normal deck overview.
+            if self.mw.col.sched._is_finished():
+                self.mw.bottomWeb.hide()
+            else:
+                self._renderBottom()
             self.mw.web.setFocus()
             gui_hooks.overview_did_refresh(self)
 

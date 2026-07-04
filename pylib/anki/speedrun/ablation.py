@@ -152,7 +152,9 @@ def p_correct_confusable(
     removes it entirely, so all builds coincide (the null).
     """
     skill = persona.skill_for(subtopic)
-    logit = -1.0 + 3.0 * skill - 1.5 * difficulty_num(difficulty) + disc_gain * interleave
+    logit = (
+        -1.0 + 3.0 * skill - 1.5 * difficulty_num(difficulty) + disc_gain * interleave
+    )
     return _sigmoid(logit)
 
 

@@ -253,7 +253,10 @@ class BottomWebView(ToolbarWebView):
             # delay to account for reflow
             def cb(height: int | None):
                 # "When QWebEnginePage is deleted, the callback is triggered with an invalid value"
-                if height is not None:
+                # Speedrun (SOA Exam P fork): if the bar was hidden while this
+                # delayed callback was pending (e.g. we left review for a
+                # full-bleed custom screen), don't undo that hide.
+                if height is not None and not self.hidden:
                     self.animate_height(height)
 
             self.mw.progress.single_shot(

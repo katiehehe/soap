@@ -42,6 +42,11 @@ for _p in (os.path.join(_REPO, "pylib"), os.path.join(_REPO, "out", "pylib")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+# anki.cards imports anki.collection at module top, so importing cards *first*
+# (before collection is loaded) trips a circular import via the generated hooks.
+# Preload collection (the order the app itself uses) to initialise the module
+# graph; the from-imports below then stay in normal sorted order.
+import anki.collection  # noqa: E402,F401
 from anki.cards import CardId  # noqa: E402
 from anki.collection import Collection  # noqa: E402
 from anki.speedrun.seed import build_deck  # noqa: E402
@@ -164,11 +169,14 @@ def main() -> int:
         answer_cards(phone, p_ids)
 
         # 4. Sync both ways: phone first, desktop pulls phone's, phone pulls desktop's.
+        # Time the whole two-way reconcile as the "normal session" sync (§10).
         d_auth = desktop.sync_login(USER, PASS, endpoint)
         p_auth = phone.sync_login(USER, PASS, endpoint)
+        sync_start = time.perf_counter()
         do_sync(desktop, d_auth)
         do_sync(phone, p_auth)
         do_sync(desktop, d_auth)
+        sync_secs = time.perf_counter() - sync_start
 
         d_total = revlog_count(desktop) - base_reviews
         p_total = revlog_count(phone) - base_reviews
@@ -181,6 +189,17 @@ def main() -> int:
         landed = d_total == expected and p_total == expected
         print(f"none lost/doubled: {'PASS' if landed else 'FAIL'}")
         ok = ok and landed
+
+        # §10 target: a normal-session sync completes in < 5 s. This is over the
+        # loopback sync server, so it measures protocol + DB overhead only; a
+        # real network adds its round-trip on top. Reported, not gated, so a slow
+        # machine never turns the correctness test red.
+        print("\n=== normal-session sync time (\u00a710) ===")
+        print(
+            f"two-way reconcile of {expected} reviews: {sync_secs:.2f}s over loopback "
+            f"(target < 5s; a real network adds RTT)"
+        )
+        print(f"under 5s: {'PASS' if sync_secs < 5.0 else 'REVIEW'}")
 
         # 5. Same-card conflict: both review the SAME card offline, then sync.
         conflict = cards[2 * n]

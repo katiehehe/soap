@@ -30,7 +30,7 @@ service SpeedrunService {
   rpc GetMasteryState(MasteryRequest) returns (MasteryState);
 
   // The collection's new cards, ordered by mastery tier: blocked subtopics
-  // first (practised in isolation), then within-unit interleaving, then
+  // first (practiced in isolation), then within-unit interleaving, then
   // cross-unit interleaving. This is the topic-aware scheduling order.
   rpc GetMasteryOrderedNewCards(MasteryRequest) returns (MasteryOrderedCards);
 
@@ -48,11 +48,12 @@ service SpeedrunService {
   // tier from real gate state; it never fabricates a score.
   rpc GetStudyPlan(MasteryRequest) returns (StudyPlan);
 
-  // Coverage pace vs a target exam date: how many new (unstudied) syllabus
-  // cards remain, the current new-cards/day limit, and the pace needed to
-  // introduce them all before the exam. Pure arithmetic over MEASURED counts +
-  // the user's exam date (config key speedrunExamDate); this is a *coverage*
-  // pace, never the readiness score (that stays behind the give-up rule).
+  // Mastery pace vs a target exam date: how many syllabus subtopics have
+  // cleared their mastery gate, how fast they are clearing (observed over the
+  // study history), and the pace needed to master the rest before the exam.
+  // Pure arithmetic over MEASURED counts + the user's exam date (config key
+  // speedrunExamDate); this is a *mastery* pace, never the readiness score
+  // (that stays behind the give-up rule).
   rpc GetStudyPace(MasteryRequest) returns (StudyPace);
 }
 
@@ -122,6 +123,24 @@ message ReadinessResult {
     NoScore no_score = 1;
     ReadinessScore score = 2;
   }
+  // Memory-recall signal, computed INDEPENDENTLY of the readiness give-up rule
+  // (memory can be shown as soon as there are reviews, even while readiness
+  // abstains). Mean FSRS retrievability over reviewed syllabus cards with a
+  // 10th-90th percentile band. Abstains (has_data = false) until there are
+  // reviewed cards. MEASURED, never fabricated.
+  MemoryRecall memory_recall = 3;
+}
+
+// The Memory signal (challenge: three scores, each WITH A RANGE). A point
+// estimate (mean FSRS retrievability = P(recall today)) plus a 10th-90th
+// percentile band across the reviewed cards, so the spread is honest rather
+// than a single number. has_data is false when nothing has been reviewed yet.
+message MemoryRecall {
+  bool has_data = 1;
+  double point = 2;
+  double low = 3;
+  double high = 4;
+  uint32 reviewed_cards = 5;
 }
 
 message MasteryRequest {
@@ -163,7 +182,7 @@ message UnitPrereqs {
   repeated string prereqs = 2;  // prerequisite unit ids
 }
 
-// Which tier a subtopic is in. Blocked -> practise in isolation; WithinUnit ->
+// Which tier a subtopic is in. Blocked -> practice in isolation; WithinUnit ->
 // interleave against confusable sub-types in the same unit; CrossUnit -> the
 // unit is mastered, interleave across units for spacing.
 enum MasteryPool {
@@ -203,6 +222,11 @@ message SubtopicMastery {
   // prereqs surface here too, as a representative unlocked subtopic of the
   // blocking unit.
   repeated string unmet_prereqs = 16;
+  // Memory-recall BAND for this subtopic: 10th/90th percentile of its reviewed
+  // cards' FSRS retrievability (the point estimate is mean_retrievability
+  // above). Both 0 when the subtopic has no reviewed cards. MEASURED.
+  double recall_low = 17;
+  double recall_high = 18;
 }
 
 message UnitMastery {
@@ -261,7 +285,7 @@ message StudyPriority {
 // Which tier of practice to recommend next, so study progresses block ->
 // within-unit interleave -> cross-unit interleave rather than staying blocked.
 enum StudyMode {
-  STUDY_MODE_BLOCKED = 0;       // practise one subtopic in isolation
+  STUDY_MODE_BLOCKED = 0;       // practice one subtopic in isolation
   STUDY_MODE_WITHIN_UNIT = 1;   // interleave a unit's confusable sub-types
   STUDY_MODE_CROSS_UNIT = 2;    // interleave across units (spacing)
   STUDY_MODE_ALL_MASTERED = 3;  // nothing left to clear; review everything
@@ -291,6 +315,10 @@ message MasteryState {
   // config speedrunGuidedMode (default true). The UI reflects this in its
   // "Guided sequence" toggle.
   bool guided_mode = 6;
+  // Whether the three-tier mastery scheduler is currently ON in the live queue.
+  // Mirrors config speedrunMasteryScheduler. The UI reflects this in a toggle
+  // so the tier-aware ordering (Full) vs plain Anki can be flipped for a demo.
+  bool mastery_scheduler_on = 7;
 }
 
 message MasteryOrderedCards {
@@ -342,9 +370,12 @@ message StudyPlan {
   repeated StudyPlanItem items = 1;
 }
 
-// Coverage pace vs a target exam date. All fields are MEASURED counts or plain
-// arithmetic over them + the user's exam date; this is a syllabus-coverage
-// pace, NOT a predicted exam score.
+// Mastery pace vs a target exam date. All fields are MEASURED counts (syllabus
+// subtopics whose mastery gate is cleared) or plain arithmetic over them + the
+// user's exam date and study history. This is a *mastery* pace (are you
+// mastering the syllabus fast enough?), NOT a predicted exam score (that stays
+// behind the give-up rule). "Mastered" is the exact same gate the map and the
+// Overall-mastery stat use, so the pace burns down to the same 100%.
 message StudyPace {
   // Whether the user has set an exam date (config key speedrunExamDate).
   bool has_exam_date = 1;
@@ -352,18 +383,25 @@ message StudyPace {
   int64 exam_timestamp = 2;
   // Whole days from now to the exam (can be negative if the date has passed).
   int64 days_left = 3;
-  // New (unstudied) syllabus cards still to be introduced.
-  uint32 remaining_new = 4;
-  // The current new-cards/day limit on the exam deck (0 if unknown).
-  uint32 current_new_per_day = 5;
-  // New cards/day needed to introduce all remaining before the exam
-  // (ceil(remaining / days_left)); equals remaining when the exam is
-  // today/past.
-  uint32 recommended_new_per_day = 6;
-  // Days to finish introducing all new cards at the current pace
-  // (ceil(remaining / current_new_per_day)); 0 when the pace is unknown.
-  uint32 projected_days_to_finish = 7;
-  // True when, at the current pace, all new cards are introduced on/before the
-  // exam (or nothing is left to introduce). Always false without an exam date.
-  bool on_track = 8;
+  // Syllabus subtopics whose mastery gate is NOT yet cleared (left to master).
+  uint32 remaining_subtopics = 4;
+  // Subtopics whose mastery gate IS cleared (mastered so far).
+  uint32 mastered_subtopics = 5;
+  // Total syllabus subtopics.
+  uint32 total_subtopics = 6;
+  // Whole days of study history so far (now - first graded review); 0 if none.
+  uint32 days_studied = 7;
+  // Observed average mastery rate so far, in subtopics/week (mastered over the
+  // study history). 0.0 when there is no history yet or nothing is mastered, so
+  // it is never extrapolated from too little evidence.
+  double current_per_week = 8;
+  // Subtopics/week needed to master all remaining before the exam
+  // (remaining / weeks_left). 0.0 without a future exam date.
+  double recommended_per_week = 9;
+  // Projected days to master all remaining at the current rate; 0 when the rate
+  // is unknown (nothing mastered yet, or too little history to project).
+  uint32 projected_days_to_finish = 10;
+  // True when, at the current rate, all subtopics are mastered on/before the
+  // exam. Always false without an exam date or a known rate.
+  bool on_track = 11;
 }

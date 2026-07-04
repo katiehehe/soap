@@ -16,7 +16,7 @@ from anki.speedrun import (
     unit_prereqs,
     unit_weights,
 )
-from anki.speedrun.seed import SEED_CARDS, build_deck
+from anki.speedrun.seed import ROOT_DECK, SEED_CARDS, build_deck
 from tests.shared import getEmptyCol
 
 # MasteryPool enum values (from proto): BLOCKED=0, WITHIN_UNIT=1, CROSS_UNIT=2
@@ -215,8 +215,10 @@ def test_study_plan_blocked_on_fresh_deck():
 
 def test_study_plan_counts_match_seeded_cards():
     # The plan's counts are Anki's own deck-tree numbers, not fabricated: each
-    # subtopic deck's "new" count equals how many cards the seed put in it (all
-    # new, under the daily cap).
+    # subtopic deck's "new" count equals how many cards the seed put in it,
+    # capped by that deck's new-cards/day limit. Subtopics seeded with more cards
+    # than the daily cap (the single-fact distribution decks) show the capped
+    # count Anki will actually serve today.
     from collections import Counter
 
     col = getEmptyCol()
@@ -232,10 +234,15 @@ def test_study_plan_counts_match_seeded_cards():
     )
     want = Counter(subtopic_tag(c.unit_id, c.subtopic_id) for c in SEED_CARDS)
     got = {it.subtopic_tag: it.new_count for it in items}
-    # Every seeded subtopic appears with exactly its seeded card count.
+    # Every seeded subtopic appears in the plan.
     assert set(got) == set(want)
+    # Each plan count is the seeded count capped by the deck's new-cards/day
+    # limit (still Anki's own deck-tree number, never fabricated).
+    new_per_day = col.decks.config_dict_for_deck_id(col.decks.id(ROOT_DECK))["new"][
+        "perDay"
+    ]
     for tag, n in want.items():
-        assert got[tag] == n, (tag, got[tag], n)
+        assert got[tag] == min(n, new_per_day), (tag, got[tag], n)
 
 
 def test_study_plan_drops_decks_with_nothing_due():
@@ -270,44 +277,46 @@ def _prereq_msgs() -> tuple[
     return sp, up
 
 
-def test_guided_gate_locks_downstream_and_keeps_performance_separate():
-    # End-to-end through the engine: a fresh beginner (guided default on) sees
-    # only the curriculum roots open; downstream subtopics and the next unit are
-    # locked. Performance is reported as its OWN signal, abstaining with no data.
+def test_guided_is_advisory_by_default_and_gate_still_works_when_enabled():
+    # Performance-first app: a freshly built deck has the guided gate OFF, so
+    # NOTHING is ever locked — the guided sequence is advice (recommended order +
+    # arrows), not a gate. unmet_prereqs is still populated (the advice), and
+    # performance is reported as its OWN signal, abstaining with no data.
     col = getEmptyCol()
     build_deck(col)
     sp, up = _prereq_msgs()
-    state = col._backend.get_mastery_state(
-        expected_subtopics=expected_subtopic_tags(),
-        units=[],
-        subtopic_weights=[],
-        subtopic_prereqs=sp,
-        unit_prereqs=up,
-    )
-    assert state.guided_mode is True
-    by_tag = {s.tag: s for s in state.subtopics}
-    # A root of general is open; its downstream + all of multivariate are locked.
-    assert by_tag["subtopic::general::sets_axioms"].locked is False
-    assert by_tag["subtopic::general::bayes"].locked is True
-    assert by_tag["subtopic::multivariate::joint_distributions"].locked is True
-    # Lock reason names an unmet prerequisite (never a fabricated number).
+
+    def mastery():
+        return col._backend.get_mastery_state(
+            expected_subtopics=expected_subtopic_tags(),
+            units=[],
+            subtopic_weights=[],
+            subtopic_prereqs=sp,
+            unit_prereqs=up,
+        )
+
+    default = mastery()
+    assert default.guided_mode is False  # advisory by default (no gate)
+    assert all(not s.locked for s in default.subtopics)
+    by_tag = {s.tag: s for s in default.subtopics}
+    # The recommended order is still exposed (unmet prereqs), just never a lock.
     assert by_tag["subtopic::general::bayes"].unmet_prereqs
     # Performance stays a SEPARATE signal, abstaining with no practice yet.
     bayes = by_tag["subtopic::general::bayes"]
     assert bayes.perf_questions == 0
     assert bayes.performance_mastered is False
 
-    # Free mode (global bypass): nothing is locked.
-    col.set_config("speedrunGuidedMode", False)
-    free = col._backend.get_mastery_state(
-        expected_subtopics=expected_subtopic_tags(),
-        units=[],
-        subtopic_weights=[],
-        subtopic_prereqs=sp,
-        unit_prereqs=up,
-    )
-    assert free.guided_mode is False
-    assert all(not s.locked for s in free.subtopics)
+    # The gate MECHANISM still works when explicitly enabled (kept for the
+    # study-feature ablation + this test): downstream + the next unit lock behind
+    # their prerequisites, and the lock reason names an unmet prerequisite.
+    col.set_config("speedrunGuidedMode", True)
+    gated = mastery()
+    assert gated.guided_mode is True
+    by_tag = {s.tag: s for s in gated.subtopics}
+    assert by_tag["subtopic::general::sets_axioms"].locked is False
+    assert by_tag["subtopic::general::bayes"].locked is True
+    assert by_tag["subtopic::multivariate::joint_distributions"].locked is True
+    assert by_tag["subtopic::general::bayes"].unmet_prereqs
 
 
 def test_performance_satisfies_a_prereq_without_flashcards():
@@ -317,6 +326,9 @@ def test_performance_satisfies_a_prereq_without_flashcards():
     col = getEmptyCol()
     build_deck(col)
     sp, up = _prereq_msgs()
+    # Enable the gate explicitly to exercise the unlock mechanism (the app runs
+    # advisory/ungated; the Rust gate is kept for the ablation + this test).
+    col.set_config("speedrunGuidedMode", True)
     col.set_config(
         "speedrunPerformanceBySubtopic",
         {"subtopic::general::sets_axioms": {"questions": 8, "correct": 8}},
@@ -335,8 +347,11 @@ def test_performance_satisfies_a_prereq_without_flashcards():
     # ...but the MEMORY gate is untouched (no reviews) — the two never blend.
     assert sa.gate_cleared is False
     assert sa.reviews == 0
-    # combinatorics depends only on sets_axioms, so performance unlocks it.
+    # combinatorics depends only on sets_axioms, so performance unlocks it...
     assert by_tag["subtopic::general::combinatorics"].locked is False
+    # ...while bayes (its prereq chain unsatisfied) stays locked — proving the
+    # gate is active and performance specifically cleared combinatorics.
+    assert by_tag["subtopic::general::bayes"].locked is True
 
 
 def test_exam_date_round_trips_through_config():
@@ -352,7 +367,8 @@ def test_exam_date_round_trips_through_config():
 
 
 def test_study_pace_without_exam_date():
-    # No deadline set: report the measured counts but never claim on/off track.
+    # No deadline set: report the measured subtopic counts (none mastered yet on
+    # a freshly built deck) but never claim on/off track without a deadline.
     col = getEmptyCol()
     build_deck(col)
     pace = col._backend.get_study_pace(
@@ -363,17 +379,20 @@ def test_study_pace_without_exam_date():
         unit_prereqs=[],
     )
     assert pace.has_exam_date is False
-    assert pace.remaining_new == len(SEED_CARDS)  # all seeded cards are new
-    assert pace.current_new_per_day == 20  # default deck preset
+    assert pace.total_subtopics == len(expected_subtopic_tags())
+    assert pace.mastered_subtopics == 0  # nothing reviewed -> nothing mastered
+    assert pace.remaining_subtopics == pace.total_subtopics
     assert pace.on_track is False
 
 
-def test_study_pace_on_track_and_behind_with_exam_date():
+def test_study_pace_gathers_before_projecting_without_mastery():
+    # A mastery pace can't project until subtopics start clearing their gate. On
+    # a freshly built deck nothing is mastered, so even with a deadline we show
+    # the needed weekly rate but abstain from an on/off-track verdict (the
+    # give-up rule applied to the pace).
     col = getEmptyCol()
     build_deck(col)
 
-    # A distant exam: the default 20/day clears the ~42 new cards with room to
-    # spare, so we're on track.
     far = (date.today() + timedelta(days=365)).isoformat()
     assert set_exam_date(col, far)
     pace = col._backend.get_study_pace(
@@ -385,21 +404,12 @@ def test_study_pace_on_track_and_behind_with_exam_date():
     )
     assert pace.has_exam_date is True
     assert pace.days_left >= 360
-    assert pace.on_track is True
-
-    # An imminent exam: can't introduce everything by tomorrow at 20/day, so
-    # we're behind and the recommended pace rises above the current one.
-    soon = (date.today() + timedelta(days=1)).isoformat()
-    assert set_exam_date(col, soon)
-    pace = col._backend.get_study_pace(
-        expected_subtopics=expected_subtopic_tags(),
-        units=[],
-        subtopic_weights=[],
-        subtopic_prereqs=[],
-        unit_prereqs=[],
-    )
+    assert pace.mastered_subtopics == 0
+    # Nothing mastered -> the observed rate is undefined, so no projection.
+    assert pace.projected_days_to_finish == 0
     assert pace.on_track is False
-    assert pace.recommended_new_per_day > pace.current_new_per_day
+    # The rate needed to master everything in time is still shown.
+    assert pace.recommended_per_week > 0
 
 
 def test_ablation_build_configs_build_a_valid_queue():

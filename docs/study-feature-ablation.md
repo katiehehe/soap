@@ -8,7 +8,7 @@ is honest. (Written Wednesday; the run happens Sunday.)
 ## The feature under test
 
 The **within-unit interleaving tier** of the three-tier mastery-gated scheduler
-(Spiky POV 1). Full scheduler: Blocked (practise a subtopic alone) → Within-unit
+(Spiky POV 1). Full scheduler: Blocked (practice a subtopic alone) → Within-unit
 (interleave confusable sub-types in a unit) → Cross-unit (interleave across
 units). The ablation **removes the middle tier**: a cleared subtopic goes
 straight into a single global mixed pool.
@@ -89,13 +89,13 @@ conclusion:
 Within-unit interleaving exposure (the mechanism's input): Full 0.715 ·
 Ablated 0.636 · **Plain 0.106**.
 
-| disc_gain | Full | Ablated | Plain |
-|---|---|---|---|
-| **0.0 (null)** | 0.486 | 0.486 | 0.486 |
-| 0.5 | 0.568 | 0.559 | 0.499 |
-| 1.0 | 0.647 | 0.630 | 0.511 |
-| 1.5 | 0.719 | 0.696 | 0.523 |
-| 2.0 | 0.782 | 0.755 | 0.535 |
+| disc_gain      | Full  | Ablated | Plain |
+| -------------- | ----- | ------- | ----- |
+| **0.0 (null)** | 0.486 | 0.486   | 0.486 |
+| 0.5            | 0.568 | 0.559   | 0.499 |
+| 1.0            | 0.647 | 0.630   | 0.511 |
+| 1.5            | 0.719 | 0.696   | 0.523 |
+| 2.0            | 0.782 | 0.755   | 0.535 |
 
 - **Null check passes**: at `disc_gain = 0` the three builds are identical
   (spread 0.0000) — the harness has no built-in bias.

@@ -78,8 +78,12 @@ def main() -> int:
     print("=" * 76)
     print("STUDY-FEATURE ABLATION (section 8) — within-unit interleaving tier")
     print("Builds: Full / Ablated (tier removed) / Plain. Metric: accuracy on")
-    print(f"{len(items)} held-out exam-style questions ({corpus.source}, {provenance}).")
-    print(f"SYNTHETIC cohort of {args.students} students (seed {args.seed}). Not real students.")
+    print(
+        f"{len(items)} held-out exam-style questions ({corpus.source}, {provenance})."
+    )
+    print(
+        f"SYNTHETIC cohort of {args.students} students (seed {args.seed}). Not real students."
+    )
     print("=" * 76)
 
     # Equal study time — the invariant that keeps the test fair.
@@ -91,9 +95,7 @@ def main() -> int:
 
     # Held-out / leakage: the exam questions must not be near-copies of the study
     # material (the committed study cards), or 'held-out' would be a fiction.
-    study = [
-        (c.id, f"{c.fact} {c.card_prompt}") for c in load_paraphrase_cards()
-    ]
+    study = [(c.id, f"{c.fact} {c.card_prompt}") for c in load_paraphrase_cards()]
     evalq = [(it.id, it.question) for it in items]
     leaks = find_leaks(study, evalq)
     print(
@@ -134,8 +136,10 @@ def main() -> int:
         null_res[b].accuracy_mean for b in BUILDS
     )
     print("\n" + "-" * 76)
-    print(f"NULL check (disc_gain = 0): build spread = {null_spread:.4f} "
-          f"({'PASS — builds coincide with no assumed effect' if null_spread < 1e-9 else 'FAIL — bias in the harness'})")
+    print(
+        f"NULL check (disc_gain = 0): build spread = {null_spread:.4f} "
+        f"({'PASS — builds coincide with no assumed effect' if null_spread < 1e-9 else 'FAIL — bias in the harness'})"
+    )
 
     if reference:
         full, ablated, plain = (

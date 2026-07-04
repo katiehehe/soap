@@ -168,15 +168,26 @@ class OpenAiClient(LlmClient):
     """OpenAI-backed provider. Reads the key from ``OPENAI_API_KEY``; the model is
     configurable. Imports ``openai`` lazily so this module loads without it."""
 
-    def __init__(self, model: str = DEFAULT_OPENAI_MODEL) -> None:
+    def __init__(
+        self,
+        model: str = DEFAULT_OPENAI_MODEL,
+        *,
+        timeout: float = 60.0,
+        max_retries: int = 2,
+    ) -> None:
         self.model = model
         self.name = f"openai:{model}"
+        # Bound each request so an eval / generation run can never hang: a stuck
+        # call fails after ``timeout`` seconds (a few bounded retries), rather
+        # than blocking indefinitely on the network.
+        self.timeout = timeout
+        self.max_retries = max_retries
 
     def _client(self) -> Any:
         # lazy: only needed when actually calling out; optional dependency.
         from openai import OpenAI  # type: ignore[import-not-found]
 
-        return OpenAI()
+        return OpenAI(timeout=self.timeout, max_retries=self.max_retries)
 
     def _chat_json(self, system: str, user: str) -> Any:
         resp = self._client().chat.completions.create(
@@ -189,6 +200,10 @@ class OpenAiClient(LlmClient):
             response_format={"type": "json_object"},
         )
         return json.loads(resp.choices[0].message.content or "{}")
+
+    def chat_json(self, system: str, user: str) -> Any:
+        """Public JSON chat, reused by the problem generator (problem_gen.py)."""
+        return self._chat_json(system, user)
 
     def classify(
         self, question: str, labels: list[tuple[str, str]]

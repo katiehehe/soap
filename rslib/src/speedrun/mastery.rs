@@ -103,9 +103,17 @@ pub(crate) struct SubtopicStats {
     pub correct: u32,
     pub retr_sum: f64,
     pub retr_count: u32,
+    /// Per-reviewed-card FSRS retrievability, kept so we can report a MEASURED
+    /// recall band (percentiles) alongside the mean, not just a point.
+    pub retr_values: Vec<f64>,
     /// Relative importance weight from the topic map (0 when none supplied).
     /// Set by the caller from the request; used only for the weighted rollup.
     pub weight: f64,
+    /// Practice-test PERFORMANCE for this subtopic (a SEPARATE signal from the
+    /// memory gate). Set by the caller from config; used only to decide FULL
+    /// mastery (memory gate AND performance) — never folded into memory accuracy
+    /// or retrievability.
+    pub performance: Performance,
 }
 
 impl SubtopicStats {
@@ -137,11 +145,93 @@ impl SubtopicStats {
         }
     }
 
-    /// The subtopic gate: enough graded problems, accurate, and well-retained.
+    /// (low, high) = 10th/90th percentile of this subtopic's reviewed-card
+    /// retrievability, so the memory signal carries a MEASURED range, not just
+    /// a mean. (0.0, 0.0) when the subtopic has no reviewed cards.
+    pub(crate) fn recall_band(&self) -> (f64, f64) {
+        percentile_band(&self.retr_values)
+    }
+
+    /// The subtopic MEMORY gate: enough graded problems, accurate, and
+    /// well-retained. This drives flashcard-scheduling tiers and the memory
+    /// signal; FULL mastery additionally requires performance (see
+    /// `fully_mastered`).
     pub(crate) fn gate_cleared(&self) -> bool {
         self.reviews >= MIN_PROBLEMS
             && self.accuracy() >= MIN_ACCURACY
             && self.mean_retrievability() >= MIN_RETRIEVABILITY
+    }
+
+    /// FULL mastery: the memory gate is cleared AND practice-test PERFORMANCE is
+    /// mastered — you can both RECALL the fact and SOLVE exam-style problems with
+    /// it. This is the "done" bar the Overall-mastery rollups and the mastery
+    /// pace burn down to. Memory and Performance stay SEPARATE signals (each
+    /// shown with its own range); this only ANDs their two gates, it never
+    /// averages them into one blended score.
+    pub(crate) fn fully_mastered(&self) -> bool {
+        self.gate_cleared() && self.performance.mastered()
+    }
+}
+
+/// The 10th and 90th percentiles of a set of values (linear interpolation
+/// between ranks). Returns (0.0, 0.0) for an empty slice. Used for the MEASURED
+/// memory-recall band (per subtopic and overall).
+pub(crate) fn percentile_band(values: &[f64]) -> (f64, f64) {
+    if values.is_empty() {
+        return (0.0, 0.0);
+    }
+    let mut v = values.to_vec();
+    v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    (percentile(&v, 0.10), percentile(&v, 0.90))
+}
+
+fn percentile(sorted: &[f64], p: f64) -> f64 {
+    match sorted.len() {
+        0 => 0.0,
+        1 => sorted[0],
+        n => {
+            let rank = p * (n as f64 - 1.0);
+            let lo = rank.floor() as usize;
+            let hi = rank.ceil() as usize;
+            if lo == hi {
+                sorted[lo]
+            } else {
+                let frac = rank - lo as f64;
+                sorted[lo] * (1.0 - frac) + sorted[hi] * frac
+            }
+        }
+    }
+}
+
+/// Overall memory-recall signal across all reviewed syllabus cards.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct MemoryRecallData {
+    pub has_data: bool,
+    pub point: f64,
+    pub low: f64,
+    pub high: f64,
+    pub reviewed_cards: u32,
+}
+
+/// Mean FSRS retrievability (point) + 10th-90th percentile band over every
+/// reviewed syllabus card. Abstains (`has_data = false`) when nothing has been
+/// reviewed yet, so the Memory signal is never a fabricated number.
+pub(crate) fn memory_recall(stats: &[SubtopicStats]) -> MemoryRecallData {
+    let mut all: Vec<f64> = Vec::new();
+    for s in stats {
+        all.extend_from_slice(&s.retr_values);
+    }
+    if all.is_empty() {
+        return MemoryRecallData::default();
+    }
+    let point = all.iter().sum::<f64>() / all.len() as f64;
+    let (low, high) = percentile_band(&all);
+    MemoryRecallData {
+        has_data: true,
+        point,
+        low,
+        high,
+        reviewed_cards: all.len() as u32,
     }
 }
 
@@ -231,15 +321,24 @@ pub(crate) struct LockState {
 /// stay separate; this only ORs them for the gate decision.
 fn prereq_satisfied(
     tag: &str,
+    started: &HashMap<String, bool>,
     gate: &HashMap<String, bool>,
     perf: &HashMap<String, Performance>,
 ) -> bool {
     // Unknown prereq (not among the syllabus stats): fail OPEN so a data gap
     // can't permanently lock the tree. Known prereqs must actually be satisfied.
-    let Some(&cleared) = gate.get(tag) else {
+    if !gate.contains_key(tag) {
         return true;
-    };
-    cleared || perf.get(tag).map(|p| p.mastered()).unwrap_or(false)
+    }
+    // Softened guided gate: a prerequisite counts as satisfied once you've
+    // STARTED it (studied it at all — "in progress"), not only when it is fully
+    // mastered. Full mastery and a passed practice test still satisfy it. This
+    // keeps the guided ORDER (roots first, then their dependents) without forcing
+    // full mastery of each step before the next opens, so FSRS spacing out a
+    // topic's reviews never leaves the learner with nothing new to do.
+    started.get(tag).copied().unwrap_or(false)
+        || gate.get(tag).copied().unwrap_or(false)
+        || perf.get(tag).map(|p| p.mastered()).unwrap_or(false)
 }
 
 /// Compute the guided-learning lock for every subtopic. A subtopic is locked
@@ -259,6 +358,10 @@ pub(crate) fn compute_locks(
 ) -> HashMap<String, LockState> {
     // Memory-gate state per subtopic tag.
     let gate: HashMap<String, bool> = stats.iter().map(|s| (s.tag(), s.gate_cleared())).collect();
+    // "Started" state per subtopic tag: has it been studied at all? A prereq is
+    // satisfied once it's in progress (not only when mastered), so the guided
+    // order never forces full mastery of each step before the next unlocks.
+    let started: HashMap<String, bool> = stats.iter().map(|s| (s.tag(), s.reviews > 0)).collect();
 
     // Subtopics grouped by unit, for whole-unit satisfaction.
     let mut unit_subs: HashMap<String, Vec<String>> = HashMap::new();
@@ -273,7 +376,9 @@ pub(crate) fn compute_locks(
     // multivariate". An unknown/empty unit imposes no gate.
     let unit_satisfied = |unit: &str| -> bool {
         match unit_subs.get(unit) {
-            Some(tags) if !tags.is_empty() => tags.iter().all(|t| prereq_satisfied(t, &gate, perf)),
+            Some(tags) if !tags.is_empty() => tags
+                .iter()
+                .all(|t| prereq_satisfied(t, &started, &gate, perf)),
             _ => true,
         }
     };
@@ -282,7 +387,7 @@ pub(crate) fn compute_locks(
         unit_subs
             .get(unit)?
             .iter()
-            .find(|t| !prereq_satisfied(t, &gate, perf))
+            .find(|t| !prereq_satisfied(t, &started, &gate, perf))
             .cloned()
     };
 
@@ -294,7 +399,7 @@ pub(crate) fn compute_locks(
             // Direct subtopic prerequisites.
             if let Some(ps) = subtopic_prereqs.get(&tag) {
                 for p in ps {
-                    if !prereq_satisfied(p, &gate, perf) {
+                    if !prereq_satisfied(p, &started, &gate, perf) {
                         unmet.push(p.clone());
                     }
                 }
@@ -338,13 +443,15 @@ pub(crate) struct MasteryOverallCounts {
 }
 
 /// Roll up per-subtopic stats into honest overall counts. A subtopic is
-/// `not_started` with zero reviews, `mastered` once its gate is cleared, and
-/// `in_progress` otherwise; the three partition the syllabus so nothing is
-/// double-counted or invented. A unit is mastered when it has >= 1 subtopic and
-/// all of them are cleared.
+/// `not_started` with zero reviews, `mastered` once it is FULLY mastered (memory
+/// gate cleared AND practice-test performance mastered), and `in_progress`
+/// otherwise; the three partition the syllabus so nothing is double-counted or
+/// invented. A unit is mastered when it has >= 1 subtopic and all are fully
+/// mastered. (Callers must attach each stat's `performance`; unset performance
+/// counts as not-yet-mastered.)
 pub(crate) fn mastery_overall(stats: &[SubtopicStats]) -> MasteryOverallCounts {
     let subtopics_total = stats.len() as u32;
-    let subtopics_mastered = stats.iter().filter(|s| s.gate_cleared()).count() as u32;
+    let subtopics_mastered = stats.iter().filter(|s| s.fully_mastered()).count() as u32;
     let subtopics_not_started = stats.iter().filter(|s| s.reviews == 0).count() as u32;
     let subtopics_in_progress = subtopics_total
         .saturating_sub(subtopics_mastered)
@@ -354,7 +461,7 @@ pub(crate) fn mastery_overall(stats: &[SubtopicStats]) -> MasteryOverallCounts {
     let mut unit_cleared: HashMap<&str, u32> = HashMap::new();
     for s in stats {
         *unit_total.entry(s.unit_id.as_str()).or_default() += 1;
-        if s.gate_cleared() {
+        if s.fully_mastered() {
             *unit_cleared.entry(s.unit_id.as_str()).or_default() += 1;
         }
     }
@@ -375,11 +482,12 @@ pub(crate) fn mastery_overall(stats: &[SubtopicStats]) -> MasteryOverallCounts {
 }
 
 /// Importance-weighted mastery rollup. `overall_pct` and each unit's pct are
-/// the share of that group's total weight that sits on gate-cleared subtopics.
-/// When no weights are supplied (total weight 0) it falls back to the plain
-/// cleared/total count fraction, so a caller that omits weights still gets a
-/// sensible number. Every value is MEASURED demonstrated mastery, never a
-/// predicted score.
+/// the share of that group's total weight that sits on FULLY-mastered subtopics
+/// (memory gate cleared AND practice-test performance mastered). When no weights
+/// are supplied (total weight 0) it falls back to the plain mastered/total count
+/// fraction, so a caller that omits weights still gets a sensible number. Every
+/// value is MEASURED demonstrated mastery, never a predicted score. (Callers must
+/// attach each stat's `performance`.)
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct WeightedMastery {
     pub overall_pct: f64,
@@ -396,7 +504,7 @@ pub(crate) fn weighted_mastery(stats: &[SubtopicStats]) -> WeightedMastery {
     let mut unit_total: HashMap<String, u32> = HashMap::new();
     let mut unit_cleared_count: HashMap<String, u32> = HashMap::new();
     for s in stats {
-        let cleared = s.gate_cleared();
+        let cleared = s.fully_mastered();
         *unit_weight.entry(s.unit_id.clone()).or_default() += s.weight;
         *unit_total.entry(s.unit_id.clone()).or_default() += 1;
         if cleared {
@@ -431,11 +539,11 @@ pub(crate) fn weighted_mastery(stats: &[SubtopicStats]) -> WeightedMastery {
     let overall_weight: f64 = stats.iter().map(|s| s.weight).sum();
     let cleared_weight: f64 = stats
         .iter()
-        .filter(|s| s.gate_cleared())
+        .filter(|s| s.fully_mastered())
         .map(|s| s.weight)
         .sum();
     let total_n = stats.len() as u32;
-    let cleared_n = stats.iter().filter(|s| s.gate_cleared()).count() as u32;
+    let cleared_n = stats.iter().filter(|s| s.fully_mastered()).count() as u32;
     let overall_pct = frac(cleared_weight, overall_weight, cleared_n, total_n);
 
     WeightedMastery {
@@ -482,7 +590,7 @@ fn priority_reason(s: &SubtopicStats) -> String {
         "Not studied yet — start here to cover a high-weight subtopic.".to_string()
     } else if s.reviews < MIN_PROBLEMS {
         format!(
-            "Only {}/{} graded reviews — keep practising to build enough evidence.",
+            "Only {}/{} graded reviews — keep practicing to build enough evidence.",
             s.reviews, MIN_PROBLEMS
         )
     } else {
@@ -745,59 +853,86 @@ pub(crate) fn build_study_plan(
     items
 }
 
-/// Coverage-pace arithmetic: given the new cards still to introduce, the
-/// current new-cards/day limit, and days until the exam, work out the pace
-/// needed and whether the current pace makes it in time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Pace {
-    pub recommended_new_per_day: u32,
+/// Minimum study history (in days) before we extrapolate a mastery finish date.
+/// Below this we have too little history to project a rate honestly, so the pace
+/// reports the raw counts but abstains from a projection / on-track verdict —
+/// the same give-up discipline the scores use, applied to the pace.
+pub(crate) const MIN_PACE_HISTORY_DAYS: i64 = 7;
+
+/// Mastery-pace arithmetic: given the subtopics still to master, how many are
+/// already mastered, how long the student has been studying, and days until the
+/// exam, work out the observed rate and whether it lands in time.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct MasteryPace {
+    /// Observed average mastery rate so far (subtopics/week); 0 when unknown.
+    pub current_per_week: f64,
+    /// Rate needed to master the rest before the exam (subtopics/week); 0 with
+    /// no future exam date or nothing remaining.
+    pub recommended_per_week: f64,
+    /// Projected days to master all remaining at the current rate; 0 when the
+    /// rate is unknown.
     pub projected_days_to_finish: u32,
     pub on_track: bool,
 }
 
-/// Pure pace maths (no I/O), so it can be unit-tested. Everything is a plain
-/// function of MEASURED counts + the user's date; it is a syllabus-coverage
-/// pace, never a predicted exam score. With nothing left to introduce the user
-/// is trivially "on track". `recommended` is ceil(remaining / days_left) (or
-/// all of them if the exam is today/past); `projected` is how many days the
-/// current pace needs; `on_track` is true only with an exam date, a known
-/// pace, and days remaining, when the projection lands on/before the exam.
-pub(crate) fn compute_pace(
-    remaining_new: u32,
-    current_new_per_day: u32,
+/// Pure mastery-pace maths (no I/O), so it can be unit-tested. Everything is a
+/// plain function of MEASURED counts + the user's date; it is a *mastery* pace
+/// (subtopics clearing their gate), never a predicted exam score. With nothing
+/// left to master the user is trivially "on track". The observed rate is the
+/// average over the whole study history (mastered / weeks studied); we only
+/// extrapolate it once something is mastered AND there is at least
+/// MIN_PACE_HISTORY_DAYS of history, so a single fast day can't fake a pace.
+/// `recommended` is remaining / weeks_left; `on_track` needs an exam date, a
+/// known rate, and days remaining, with the projection landing on/before the
+/// exam.
+pub(crate) fn compute_mastery_pace(
+    remaining: u32,
+    mastered: u32,
+    days_studied: i64,
     days_left: i64,
     has_exam_date: bool,
-) -> Pace {
-    if remaining_new == 0 {
-        return Pace {
-            recommended_new_per_day: 0,
+) -> MasteryPace {
+    let recommended_per_week = if has_exam_date && days_left > 0 && remaining > 0 {
+        remaining as f64 / (days_left as f64 / 7.0)
+    } else {
+        0.0
+    };
+    if remaining == 0 {
+        // Whole syllabus mastered -> trivially on track, nothing to project.
+        return MasteryPace {
+            current_per_week: 0.0,
+            recommended_per_week: 0.0,
             projected_days_to_finish: 0,
             on_track: true,
         };
     }
-    let recommended_new_per_day = if days_left > 0 {
-        (remaining_new as f64 / days_left as f64).ceil() as u32
+    // Only project once something is mastered AND there is enough history; below
+    // that the average rate is undefined / too noisy to extrapolate honestly.
+    let can_project = mastered > 0 && days_studied >= MIN_PACE_HISTORY_DAYS;
+    let current_per_week = if can_project {
+        mastered as f64 / (days_studied as f64 / 7.0)
     } else {
-        remaining_new
+        0.0
     };
-    let projected_days_to_finish = if current_new_per_day > 0 {
-        (remaining_new as f64 / current_new_per_day as f64).ceil() as u32
+    let projected_days_to_finish = if can_project {
+        (remaining as f64 * days_studied as f64 / mastered as f64).ceil() as u32
     } else {
         0
     };
     let on_track = has_exam_date
-        && current_new_per_day > 0
+        && can_project
         && days_left > 0
         && (projected_days_to_finish as i64) <= days_left;
-    Pace {
-        recommended_new_per_day,
+    MasteryPace {
+        current_per_week,
+        recommended_per_week,
         projected_days_to_finish,
         on_track,
     }
 }
 
 /// Order new cards by tier: blocked subtopics first (grouped so each is
-/// practised in isolation), then within-unit interleaving, then cross-unit
+/// practiced in isolation), then within-unit interleaving, then cross-unit
 /// interleaving. Cards whose subtopic is unknown sort last, preserving their
 /// input order.
 pub(crate) fn order_new_cards(
@@ -822,7 +957,7 @@ pub(crate) fn order_new_cards(
             None => 3,
         }
     };
-    // Grouping key within a tier: Blocked practises one subtopic at a time (group
+    // Grouping key within a tier: Blocked practices one subtopic at a time (group
     // by subtopic); the Full within-unit tier groups by UNIT so a unit's
     // confusable cleared subtopics stay together (this IS the within-unit
     // interleaving the ablation removes); the ablated mixed pool and the
@@ -988,6 +1123,7 @@ impl Collection {
                     if let Some(r) = retr {
                         stat.retr_sum += r;
                         stat.retr_count += 1;
+                        stat.retr_values.push(r);
                     }
                 }
             }
@@ -1069,8 +1205,13 @@ impl Collection {
     ) -> Result<HashMap<String, i64>> {
         use std::collections::HashSet;
         let expected: HashSet<&str> = expected_subtopics.iter().map(String::as_str).collect();
+        // Attribute each card to its HOME deck: a card pulled into a filtered
+        // ("cram") deck has `did` = the filtered deck and `odid` = its real deck,
+        // so use `odid` when set. Without this, cramming (e.g. "Review everything")
+        // makes every subtopic resolve to the one filtered deck, and the study
+        // plan shows that deck's whole count for each subtopic.
         let sql = "
-            SELECT c.did, n.tags
+            SELECT (CASE WHEN c.odid != 0 THEN c.odid ELSE c.did END), n.tags
             FROM cards c JOIN notes n ON c.nid = n.id
             WHERE n.tags LIKE '% subtopic::%'";
         let mut stmt = self.storage.db.prepare_cached(sql)?;
@@ -1092,43 +1233,6 @@ impl Collection {
             }
         }
         Ok(best.into_iter().map(|(tag, (did, _))| (tag, did)).collect())
-    }
-
-    /// The new-cards/day limit on the syllabus root deck (the first path
-    /// segment of any subtopic deck's name, e.g. "SOA Exam P"). This is the
-    /// intake cap the coverage pace projects against. `None` when no
-    /// syllabus deck exists. Read-only.
-    pub(crate) fn speedrun_root_new_per_day(
-        &mut self,
-        expected_subtopics: &[String],
-    ) -> Result<Option<u32>> {
-        let tag_deck = self.speedrun_subtopic_deck_ids(expected_subtopics)?;
-        let Some(&sub_did) = tag_deck.values().next() else {
-            return Ok(None);
-        };
-        let names: HashMap<i64, String> = self
-            .storage
-            .get_all_deck_names()?
-            .into_iter()
-            .map(|(id, name)| (id.0, name))
-            .collect();
-        let Some(full) = names.get(&sub_did) else {
-            return Ok(None);
-        };
-        let root_name = full.split("::").next().unwrap_or(full);
-        let Some(root_id) = self.get_deck_id(root_name)? else {
-            return Ok(None);
-        };
-        let Some(deck) = self.get_deck(root_id)? else {
-            return Ok(None);
-        };
-        let Some(config_id) = deck.config_id() else {
-            return Ok(None);
-        };
-        let Some(config) = self.get_deck_config(config_id, true)? else {
-            return Ok(None);
-        };
-        Ok(Some(config.inner.new_per_day))
     }
 
     /// Whether the opt-in three-tier mastery scheduler is enabled. Reads a
@@ -1226,10 +1330,10 @@ impl Collection {
         Ok(out)
     }
 
-    /// Reorder already-gathered new cards by mastery tier: Blocked (practise a
+    /// Reorder already-gathered new cards by mastery tier: Blocked (practice a
     /// subtopic in isolation) -> WithinUnit (interleave confusable sub-types)
     /// -> CrossUnit (spacing). Blocked subtopics are grouped so each is
-    /// practised together. Cards without a subtopic tag keep their relative
+    /// practiced together. Cards without a subtopic tag keep their relative
     /// order at the end, so non-syllabus decks are unaffected. Read-only
     /// (no writes, so undo and integrity are untouched); only called when
     /// the flag is on.
@@ -1483,7 +1587,17 @@ mod tests {
             correct,
             retr_sum: mean_r * reviews.max(1) as f64,
             retr_count: reviews.max(1),
+            // Flat values at the mean, so the mean matches and helpers don't panic;
+            // tests that need a spread build retr_values explicitly.
+            retr_values: vec![mean_r; reviews.max(1) as usize],
             weight: 0.0,
+            // Default to performance-mastered so `fully_mastered()` tracks the
+            // memory gate for tests that only exercise the memory rollup; the
+            // combined-gate test sets performance explicitly.
+            performance: Performance {
+                questions: MIN_PERF_QUESTIONS,
+                correct: MIN_PERF_QUESTIONS,
+            },
         }
     }
 
@@ -1499,6 +1613,50 @@ mod tests {
             weight,
             ..stat(unit, sub, reviews, correct, mean_r)
         }
+    }
+
+    #[test]
+    fn percentile_band_brackets_the_spread() {
+        // A clean 0.0..=1.0 ramp: 10th/90th percentiles sit near the ends but
+        // inside them, and single/empty inputs degrade gracefully.
+        let vals: Vec<f64> = (0..=10).map(|i| i as f64 / 10.0).collect();
+        let (lo, hi) = percentile_band(&vals);
+        assert!(lo > 0.0 && lo < 0.2, "lo={lo}");
+        assert!(hi > 0.8 && hi < 1.0, "hi={hi}");
+        assert_eq!(percentile_band(&[]), (0.0, 0.0));
+        assert_eq!(percentile_band(&[0.7]), (0.7, 0.7));
+    }
+
+    #[test]
+    fn memory_recall_is_measured_with_a_band_and_abstains_when_empty() {
+        // No reviewed cards anywhere -> abstain (has_data false), never a number.
+        let empty = vec![stat("u", "a", 0, 0, 0.0)];
+        let mr = memory_recall(&empty);
+        // stat() with 0 reviews still seeds one flat value; force a truly empty case:
+        let mut truly_empty = stat("u", "a", 0, 0, 0.0);
+        truly_empty.retr_values.clear();
+        let mr_empty = memory_recall(&[truly_empty]);
+        assert!(!mr_empty.has_data);
+        assert_eq!(mr_empty.reviewed_cards, 0);
+        // With a real spread of per-card retrievabilities, the point is the mean
+        // and low < point < high.
+        let mut s = stat("u", "a", 0, 0, 0.0);
+        s.retr_values = vec![0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99];
+        let mr2 = memory_recall(&[s]);
+        assert!(mr2.has_data);
+        assert_eq!(mr2.reviewed_cards, 7);
+        assert!(mr2.low < mr2.point && mr2.point < mr2.high);
+        // `mr` (flat 0-review seed) is just used to prove the fn accepts it.
+        let _ = mr;
+    }
+
+    #[test]
+    fn recall_band_matches_the_subtopics_values() {
+        let mut s = stat("u", "a", 0, 0, 0.0);
+        s.retr_values = vec![0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+        let (lo, hi) = s.recall_band();
+        assert!((0.4..0.6).contains(&lo));
+        assert!(hi > 0.8 && hi <= 0.9);
     }
 
     #[test]
@@ -1658,6 +1816,35 @@ mod tests {
     fn overall_on_empty_syllabus_is_all_zero() {
         let o = mastery_overall(&[]);
         assert_eq!(o, MasteryOverallCounts::default());
+    }
+
+    #[test]
+    fn full_mastery_requires_both_memory_and_performance() {
+        // A subtopic can clear the MEMORY gate (enough accurate, well-retained
+        // reviews) yet still not be "mastered" until practice-test PERFORMANCE is
+        // mastered too — the two gates are AND-ed, never averaged.
+        let mut memory_only = stat("gp", "a", 12, 12, 0.95); // memory gate cleared
+        memory_only.performance = Performance {
+            questions: 2, // below the sample floor -> performance abstains
+            correct: 2,
+        };
+        assert!(memory_only.gate_cleared());
+        assert!(!memory_only.performance.mastered());
+        assert!(!memory_only.fully_mastered());
+
+        // With performance also mastered, it becomes fully mastered.
+        let mut both = memory_only.clone();
+        both.performance = Performance {
+            questions: MIN_PERF_QUESTIONS,
+            correct: MIN_PERF_QUESTIONS,
+        };
+        assert!(both.fully_mastered());
+
+        // In the rollup: the memory-only subtopic is in-progress, not mastered.
+        let o = mastery_overall(&[memory_only, both]);
+        assert_eq!(o.subtopics_mastered, 1);
+        assert_eq!(o.subtopics_in_progress, 1);
+        assert_eq!(o.subtopics_not_started, 0);
     }
 
     #[test]
@@ -1886,48 +2073,79 @@ mod tests {
         assert_eq!(plan[0].subtopic_tag.as_deref(), Some("subtopic::gp::b"));
     }
 
-    // --- coverage pace vs exam date ---
+    // --- mastery pace vs exam date ---
+
+    fn approx_eq(a: f64, b: f64) {
+        assert!((a - b).abs() < 1e-9, "expected {b}, got {a}");
+    }
 
     #[test]
-    fn pace_on_track_when_current_rate_finishes_in_time() {
-        // 100 new left, 20/day -> finish in 5 days; exam in 10 -> on track.
-        let p = compute_pace(100, 20, 10, true);
-        assert_eq!(p.recommended_new_per_day, 10); // ceil(100/10)
-        assert_eq!(p.projected_days_to_finish, 5); // ceil(100/20)
+    fn mastery_pace_on_track_when_current_rate_finishes_in_time() {
+        // 5 mastered over 14 days -> 2.5/week; 10 left projects 28 days; exam in
+        // 40 -> on track.
+        let p = compute_mastery_pace(10, 5, 14, 40, true);
+        approx_eq(p.current_per_week, 2.5);
+        assert_eq!(p.projected_days_to_finish, 28); // ceil(10 * 14 / 5)
         assert!(p.on_track);
+        approx_eq(p.recommended_per_week, 10.0 / (40.0 / 7.0));
     }
 
     #[test]
-    fn pace_behind_needs_a_higher_rate() {
-        // 100 new left, 20/day -> finish in 5 days; exam in 3 -> behind, and the
-        // recommended rate rises to clear them in time.
-        let p = compute_pace(100, 20, 3, true);
-        assert_eq!(p.recommended_new_per_day, 34); // ceil(100/3)
-        assert_eq!(p.projected_days_to_finish, 5);
+    fn mastery_pace_behind_needs_a_higher_rate() {
+        // 2 mastered over 14 days -> 1/week; 10 left projects 70 days; exam in
+        // 40 -> behind, and the needed weekly rate is higher than current.
+        let p = compute_mastery_pace(10, 2, 14, 40, true);
+        approx_eq(p.current_per_week, 1.0);
+        assert_eq!(p.projected_days_to_finish, 70); // ceil(10 * 14 / 2)
         assert!(!p.on_track);
+        assert!(p.recommended_per_week > p.current_per_week);
     }
 
     #[test]
-    fn pace_done_when_nothing_left() {
-        // Nothing new to introduce -> trivially on track, no pace needed.
-        let p = compute_pace(0, 20, 3, true);
-        assert_eq!(p.recommended_new_per_day, 0);
+    fn mastery_pace_done_when_nothing_left() {
+        // Whole syllabus mastered -> trivially on track, no projection.
+        let p = compute_mastery_pace(0, 19, 30, 10, true);
         assert_eq!(p.projected_days_to_finish, 0);
+        approx_eq(p.recommended_per_week, 0.0);
         assert!(p.on_track);
     }
 
     #[test]
-    fn pace_never_on_track_without_an_exam_date() {
-        // No exam date -> we never claim on/off track (and never invent one).
-        let p = compute_pace(100, 20, 0, false);
+    fn mastery_pace_never_on_track_without_an_exam_date() {
+        // No exam date -> we never claim on/off track (and never invent one),
+        // but the observed rate is still reported.
+        let p = compute_mastery_pace(10, 5, 14, 0, false);
+        approx_eq(p.current_per_week, 2.5);
+        approx_eq(p.recommended_per_week, 0.0);
         assert!(!p.on_track);
     }
 
     #[test]
-    fn pace_exam_today_or_past_needs_all_now() {
-        // days_left <= 0 -> the honest recommendation is "all of them now".
-        let p = compute_pace(40, 20, 0, true);
-        assert_eq!(p.recommended_new_per_day, 40);
+    fn mastery_pace_abstains_with_too_little_history() {
+        // Something mastered but < a week of history -> we do NOT extrapolate a
+        // rate or a finish date (one fast day can't fake a pace).
+        let p = compute_mastery_pace(10, 3, 3, 40, true);
+        approx_eq(p.current_per_week, 0.0);
+        assert_eq!(p.projected_days_to_finish, 0);
+        assert!(!p.on_track);
+        // The needed rate is still shown (it doesn't depend on history).
+        assert!(p.recommended_per_week > 0.0);
+    }
+
+    #[test]
+    fn mastery_pace_abstains_when_nothing_mastered_yet() {
+        // Long history but nothing cleared -> rate undefined, so no projection.
+        let p = compute_mastery_pace(19, 0, 60, 40, true);
+        approx_eq(p.current_per_week, 0.0);
+        assert_eq!(p.projected_days_to_finish, 0);
+        assert!(!p.on_track);
+    }
+
+    #[test]
+    fn mastery_pace_exam_past_is_never_on_track() {
+        // days_left <= 0 -> never on track, and no recommended rate.
+        let p = compute_mastery_pace(10, 5, 14, -2, true);
+        approx_eq(p.recommended_per_week, 0.0);
         assert!(!p.on_track);
     }
 
@@ -2241,6 +2459,51 @@ mod tests {
         let locks2 = compute_locks(&stats2, &perf, &prereqs, &HashMap::new(), &unlocked, true);
         assert!(!locks2["subtopic::u::b"].locked);
         assert!(locks2["subtopic::u::c"].locked);
+    }
+
+    #[test]
+    fn in_progress_prereq_unlocks_downstream() {
+        // Softened gate: `a` is STARTED (studied) but NOT fully mastered (too few
+        // reviews, low retention). Its dependent `b` should still unlock, so a
+        // learner isn't blocked waiting to master `a` before ever seeing `b`.
+        let prereqs = HashMap::from([
+            ("subtopic::u::a".to_string(), vec![]),
+            (
+                "subtopic::u::b".to_string(),
+                vec!["subtopic::u::a".to_string()],
+            ),
+        ]);
+        let empty_unlocked = std::collections::HashSet::new();
+
+        let in_progress = vec![stat("u", "a", 3, 2, 0.5), stat("u", "b", 0, 0, 0.0)];
+        assert!(!in_progress[0].gate_cleared(), "a is not fully mastered");
+        let locks = compute_locks(
+            &in_progress,
+            &HashMap::new(),
+            &prereqs,
+            &HashMap::new(),
+            &empty_unlocked,
+            true,
+        );
+        assert!(
+            !locks["subtopic::u::b"].locked,
+            "started prereq should unlock its dependent"
+        );
+
+        // A truly UNSTARTED prereq (0 reviews) still locks its dependent.
+        let unstarted = vec![stat("u", "a", 0, 0, 0.0), stat("u", "b", 0, 0, 0.0)];
+        let locks2 = compute_locks(
+            &unstarted,
+            &HashMap::new(),
+            &prereqs,
+            &HashMap::new(),
+            &empty_unlocked,
+            true,
+        );
+        assert!(
+            locks2["subtopic::u::b"].locked,
+            "unstarted prereq still gates"
+        );
     }
 
     #[test]

@@ -69,9 +69,12 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   `deck_tree`, so it never reschedules or fabricates a score. The tiering itself
   is a pure, unit-tested function (`build_study_plan`). This makes the scheduler
   tiers visible as a _daily plan_ rather than an invisible reorder.
-- `GetStudyPace` - coverage pace vs the user's exam date: counts the new
-  (unstudied) syllabus cards, reads the exam deck's new-cards/day limit, and
-  works out the pace needed to introduce them all before the exam
+- `GetStudyPace` - mastery pace vs the user's exam date: counts the syllabus
+  subtopics that have cleared their mastery gate (the same gate the map +
+  Overall-mastery use), measures the study history from the first graded review,
+  and works out whether the observed clear-rate masters the rest before the exam
+  (abstains from a projection below ~a week of history / nothing mastered yet).
+  A *mastery* pace, never a predicted score
   (recommended/day, projected finish, on-track/behind). Pure arithmetic over
   measured counts + the stored exam date (`compute_pace`, unit-tested); it is a
   _coverage_ pace, never the readiness score. Read-only.

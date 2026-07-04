@@ -208,11 +208,27 @@ def apply_prereqs_config(col: Any, topics: dict[str, Any] | None = None) -> None
 # guided through the curriculum order); turning it off is the free-mode bypass.
 GUIDED_MODE_KEY = "speedrunGuidedMode"
 UNLOCKED_SUBTOPICS_KEY = "speedrunUnlockedSubtopics"
+# Mirrors MASTERY_SCHEDULER_KEY in rslib/src/speedrun/mastery.rs: the opt-in
+# three-tier mastery scheduler (the live new-card tier order). Enabled on the
+# seeded Exam P deck; the toggle lets the demo flip Full vs plain Anki.
+MASTERY_SCHEDULER_KEY = "speedrunMasteryScheduler"
 
 
 def guided_mode_enabled(col: Any) -> bool:
     """Whether the hard prerequisite gate is on (default True)."""
     return bool(col.get_config(GUIDED_MODE_KEY, True))
+
+
+def mastery_scheduler_enabled(col: Any) -> bool:
+    """Whether the three-tier mastery scheduler reorders the live queue (default
+    False upstream; enabled on the seeded Exam P deck)."""
+    return bool(col.get_config(MASTERY_SCHEDULER_KEY, False))
+
+
+def set_mastery_scheduler(col: Any, on: bool) -> None:
+    """Turn the three-tier mastery scheduler on/off. Ordering only (read-only
+    reorder in build_queues); never changes FSRS intervals or any score."""
+    col.set_config(MASTERY_SCHEDULER_KEY, bool(on))
 
 
 def set_guided_mode(col: Any, on: bool) -> None:

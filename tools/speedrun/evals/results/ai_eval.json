@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "generated_at_unix": 1783147639,
+  "generated_at_utc": "2026-07-04T06:47:19Z",
+  "git_sha": "f876127df",
+  "ai_ran": true,
+  "is_subsample": false,
+  "ai_provider": "openai",
+  "ai_model": "gpt-4o-mini",
+  "seed": 0,
+  "note": "Baseline/offline cells are reproducible with no key and are always filled. AI cells are populated only when the eval ran with OPENAI_API_KEY; when absent they are null and the verdict is 'pending' — never fabricated. Regenerate with `make ai-report` (add OPENAI_API_KEY to populate AI cells).",
+  "evals": {
+    "classify": {
+      "name": "Feature 1 — subtopic classifier",
+      "make_target": "make classify",
+      "baseline_vs": "keyword overlap",
+      "dataset": {
+        "gold_set": "soa-sample-2026",
+        "is_real_soa": true,
+        "held_out_items": 715,
+        "num_subtopics": 19
+      },
+      "cutoff": {
+        "ai_top1_margin": 0.05
+      },
+      "leakage_over_ai_inputs": {
+        "leaks": 0,
+        "clean": true
+      },
+      "baseline": {
+        "method": "keyword overlap",
+        "top1": 0.1315,
+        "top3": 0.3329,
+        "wrong_rate_top1": 0.8685
+      },
+      "ai": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "is_subsample": false,
+        "sample_size": 715,
+        "seed": 0,
+        "top1": 0.3818,
+        "top3": 0.7077,
+        "wrong_rate_top1": 0.6182,
+        "baseline_on_sample": {
+          "top1": 0.1315,
+          "top3": 0.3329,
+          "wrong_rate_top1": 0.8685
+        },
+        "margin_top1_vs_baseline_on_sample": 0.2503
+      },
+      "ai_ran": true,
+      "verdict": "PASS on full set: AI top-1 38% vs baseline 13% (margin +25%)"
+    },
+    "generate": {
+      "name": "Feature 2 — card generation from a named source",
+      "make_target": "make ai-eval",
+      "baseline_vs": "template/extraction (stub)",
+      "dataset": {
+        "named_sources": 19,
+        "human_gold_cards": 186,
+        "human_gold_structural_ok": 186,
+        "full_sample_size": 50,
+        "held_out_items_for_leakage": 715
+      },
+      "cutoff": {
+        "min_correct_rate": 0.6,
+        "max_bad_teaching": 0.2
+      },
+      "leakage_over_ai_inputs": {
+        "leaks": 0,
+        "clean": true
+      },
+      "baseline": {
+        "method": "template/extraction (stub)",
+        "n": 50,
+        "correct": 15,
+        "wrong": 35,
+        "bad_teaching": 0,
+        "correct_rate": 0.3,
+        "wrong_rate": 0.7,
+        "bad_teaching_rate": 0.0
+      },
+      "ai": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "is_subsample": false,
+        "sample_size": 50,
+        "seed": 0,
+        "correct": 46,
+        "wrong": 4,
+        "bad_teaching": 0,
+        "correct_rate": 0.92,
+        "wrong_rate": 0.08,
+        "bad_teaching_rate": 0.0,
+        "baseline_on_sample": {
+          "n": 50,
+          "correct": 15,
+          "wrong": 35,
+          "bad_teaching": 0,
+          "correct_rate": 0.3,
+          "wrong_rate": 0.7,
+          "bad_teaching_rate": 0.0
+        }
+      },
+      "ai_ran": true,
+      "verdict": "PASS on full set: AI correct 92% vs baseline 30%, bad-teaching 0%"
+    },
+    "problems": {
+      "name": "Feature 2 (Phase 2) — exam-style problem generation",
+      "make_target": "make problems",
+      "baseline_vs": "templated (correct by construction)",
+      "dataset": {
+        "subtopics_evaluated_ai": 19,
+        "num_subtopics_total": 19,
+        "per_subtopic": 2
+      },
+      "cutoff": {
+        "min_verified_rate": 0.7,
+        "leak_threshold_jaccard": 0.6
+      },
+      "baseline": {
+        "method": "templated (correct by construction)",
+        "coverage_subtopics": 9,
+        "verified_rate": 1.0,
+        "wrong_rate": 0.0
+      },
+      "ai": {
+        "provider": "openai:gpt-4o-mini",
+        "model": "gpt-4o-mini",
+        "is_subsample": false,
+        "sample_size_subtopics": 19,
+        "per_subtopic": 2,
+        "seed": 0,
+        "problems": 38,
+        "verified": 32,
+        "verified_rate": 0.8421,
+        "wrong_rate": 0.1579,
+        "coverage_subtopics": 19,
+        "leaks": 0,
+        "baseline_on_sample": {
+          "subtopics": 19,
+          "coverage_subtopics": 9,
+          "verified_rate": 1.0,
+          "wrong_rate": 0.0
+        }
+      },
+      "ai_ran": true,
+      "verdict": "PASS on all 19 subtopics: AI verified 84%, leaks 0, coverage 19 vs baseline 9"
+    }
+  }
+}

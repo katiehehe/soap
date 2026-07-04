@@ -851,6 +851,16 @@ def _check_dynamic_request_permissions():
         "/_anki/getMasteryState",
         "/_anki/getStudyPlan",
         "/_anki/getStudyPace",
+        # The custom Home shell renders in the MAIN webview (not the dedicated
+        # SPEEDRUN kind), so it has no Authorization-header path at all. Its
+        # Stats tab inlines Anki's own review-history graphs, which call these
+        # endpoints; without them the Stats tab always 403s ("Unexpected API
+        # access"). All three act only on the user's own local review history
+        # and graph *display* preferences (the setter writes cosmetic prefs
+        # only), so they expose nothing beyond the user's local study data.
+        "/_anki/graphs",
+        "/_anki/getGraphPreferences",
+        "/_anki/setGraphPreferences",
     ):
         pass
     else:

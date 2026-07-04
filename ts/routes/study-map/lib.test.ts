@@ -3,27 +3,38 @@
 
 import { describe, expect, test } from "vitest";
 
-import type { Circle, SubtopicEvidence } from "./lib";
+import type { Circle, PerfEvidence, SubtopicEvidence } from "./lib";
 import type { PaceView } from "./lib";
 import {
     arrowHead,
     borderPoint,
     computeLayout,
     edgeBetween,
+    fillSegment,
     groupPlanByTier,
     hasEnoughEvidence,
+    hierEdges,
     leafProgress,
     leafStatus,
+    masteryInputs,
+    MIN_PERF_QUESTIONS,
     MIN_PROBLEMS,
+    NODE_TOUCH,
     paceTone,
+    perfProgress,
+    projectedFinishWeeks,
     prereqChain,
     prereqEdges,
+    shrinkCircle,
     statusLabel,
     subRadius,
     subtopicTag,
     TAXONOMY,
     TIER,
     tierMeta,
+    TRACK_OFFSET,
+    twoTrackEdges,
+    UNIT_PREREQS,
     unitRadius,
     unitWeight,
 } from "./lib";
@@ -128,6 +139,321 @@ describe("study-map layout", () => {
         const biggest = leaves.reduce((a, b) => (b.r > a.r ? b : a));
         expect(biggest.weight).toBe(hi);
     });
+
+    test("size tiers: exam node > every unit > every subtopic", () => {
+        // Structural hierarchy reads at a glance: the whole-exam centre is the
+        // biggest node, a unit medium, a subtopic smallest. The radius ranges are
+        // built so they never overlap across tiers.
+        const centre = layout.center.r;
+        const unitRadii = layout.units.map((u) => u.r);
+        const leafRadii = layout.units.flatMap((u) => u.subs.map((s) => s.r));
+        // Central "Exam P" node is strictly the biggest bubble.
+        expect(centre).toBeGreaterThan(Math.max(...unitRadii));
+        // Every unit is bigger than every subtopic (tier ranges don't overlap).
+        expect(Math.min(...unitRadii)).toBeGreaterThan(Math.max(...leafRadii));
+    });
+});
+
+// Distance from a point to a segment (used to prove the two rails never touch).
+function pointToSeg(
+    px: number,
+    py: number,
+    s: { x1: number; y1: number; x2: number; y2: number },
+): number {
+    const vx = s.x2 - s.x1;
+    const vy = s.y2 - s.y1;
+    const wx = px - s.x1;
+    const wy = py - s.y1;
+    const len2 = vx * vx + vy * vy;
+    let t = len2 ? (vx * wx + vy * wy) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (s.x1 + t * vx), py - (s.y1 + t * vy));
+}
+
+// Minimum distance between two segments. They are parallel here, so the four
+// endpoint→opposite-segment distances suffice (parallel segments can't cross).
+function segSeparation(
+    a: { x1: number; y1: number; x2: number; y2: number },
+    b: { x1: number; y1: number; x2: number; y2: number },
+): number {
+    return Math.min(
+        pointToSeg(a.x1, a.y1, b),
+        pointToSeg(a.x2, a.y2, b),
+        pointToSeg(b.x1, b.y1, a),
+        pointToSeg(b.x2, b.y2, a),
+    );
+}
+
+describe("two-track edges (dual-metric connectors)", () => {
+    const onBorder = (x: number, y: number, c: Circle): boolean =>
+        Math.abs(Math.hypot(x - c.x, y - c.y) - c.r) < 1e-6;
+
+    test("both tracks touch both bubbles (endpoints on each border)", () => {
+        const a: Circle = { x: 0, y: 0, r: 20 };
+        const b: Circle = { x: 100, y: 0, r: 25 };
+        const { memory, performance } = twoTrackEdges(a, b);
+        for (const seg of [memory, performance]) {
+            expect(onBorder(seg.x1, seg.y1, a), "start on A border").toBe(true);
+            expect(onBorder(seg.x2, seg.y2, b), "end on B border").toBe(true);
+        }
+    });
+
+    test("the two tracks are offset so they never overlap each other", () => {
+        const a: Circle = { x: 0, y: 0, r: 20 };
+        const b: Circle = { x: 100, y: 0, r: 25 };
+        const { memory, performance } = twoTrackEdges(a, b);
+        // Clearly separated (the rails are 2·offset apart), never coincident.
+        expect(segSeparation(memory, performance)).toBeGreaterThan(TRACK_OFFSET);
+        // They are parallel: equal direction, so they can only run side by side.
+        const dir = (s: { x1: number; y1: number; x2: number; y2: number }) => {
+            const dx = s.x2 - s.x1;
+            const dy = s.y2 - s.y1;
+            const len = Math.hypot(dx, dy);
+            return { ux: dx / len, uy: dy / len };
+        };
+        const dm = dir(memory);
+        const dp = dir(performance);
+        expect(dm.ux).toBeCloseTo(dp.ux);
+        expect(dm.uy).toBeCloseTo(dp.uy);
+    });
+
+    test("holds for every real edge on the map (center→unit, unit→subtopic)", () => {
+        const check = (a: Circle, b: Circle, label: string) => {
+            const { memory, performance } = twoTrackEdges(a, b);
+            for (const [name, seg] of [
+                ["memory", memory],
+                ["performance", performance],
+            ] as const) {
+                expect(onBorder(seg.x1, seg.y1, a), `${label} ${name} on A`).toBe(true);
+                expect(onBorder(seg.x2, seg.y2, b), `${label} ${name} on B`).toBe(true);
+            }
+            // Non-overlapping and both still inside canvas-safe geometry.
+            expect(
+                segSeparation(memory, performance),
+                `${label} rails separated`,
+            ).toBeGreaterThan(0);
+        };
+        for (const u of layout.units) {
+            check(layout.center, u, `center->${u.id}`);
+            for (const s of u.subs) {
+                check(u, s, `${u.id}->${s.id}`);
+            }
+        }
+    });
+
+    test("offset is clamped so tiny bubbles still get real chords", () => {
+        // A large offset on a small bubble must not push the chord off the circle.
+        const a: Circle = { x: 0, y: 0, r: 6 };
+        const b: Circle = { x: 40, y: 0, r: 6 };
+        const { memory, performance } = twoTrackEdges(a, b, 100);
+        for (const seg of [memory, performance]) {
+            expect(Number.isFinite(seg.x1) && Number.isFinite(seg.y1)).toBe(true);
+            expect(onBorder(seg.x1, seg.y1, a)).toBe(true);
+            expect(onBorder(seg.x2, seg.y2, b)).toBe(true);
+        }
+        expect(segSeparation(memory, performance)).toBeGreaterThan(0);
+    });
+});
+
+// The map is a hierarchy (subtopic -> unit -> exam) and the fill must read as
+// flowing UP it: each rail is oriented CHILD -> PARENT so the coloured fill
+// starts at the child end and grows toward the parent. These tests lock that
+// orientation + the fill-from-child-end contract in.
+describe("hierarchical upward fill (child -> parent)", () => {
+    // A lower child feeding an upper parent (as a subtopic feeds its unit, or a
+    // unit feeds the central exam node).
+    const child: Circle = { x: 0, y: 200, r: 20 };
+    const parent: Circle = { x: 0, y: 0, r: 30 };
+    const near = (v: number, t: number): boolean => Math.abs(v - t) < 1e-6;
+
+    test("rails start on the child border and end on the parent border", () => {
+        const { memory, performance } = hierEdges(child, parent);
+        for (const seg of [memory, performance]) {
+            // (x1,y1) sits on the CHILD's border...
+            expect(
+                near(Math.hypot(seg.x1 - child.x, seg.y1 - child.y), child.r),
+            ).toBe(true);
+            // ...and (x2,y2) on the PARENT's border.
+            expect(
+                near(Math.hypot(seg.x2 - parent.x, seg.y2 - parent.y), parent.r),
+            ).toBe(true);
+            // child is below the parent here, so the rail runs upward (y shrinks).
+            expect(seg.y1).toBeGreaterThan(seg.y2);
+        }
+    });
+
+    test("fillSegment grows FROM the child end toward the parent", () => {
+        const { memory } = hierEdges(child, parent);
+        // zero fill collapses to the child endpoint (nothing is drawn)
+        const none = fillSegment(memory, 0);
+        expect(near(none.x2, memory.x1)).toBe(true);
+        expect(near(none.y2, memory.y1)).toBe(true);
+        // partial fill still ORIGINATES at the child end...
+        const half = fillSegment(memory, 0.5);
+        expect(near(half.x1, memory.x1)).toBe(true);
+        expect(near(half.y1, memory.y1)).toBe(true);
+        // ...and its leading tip is halfway along the rail, i.e. it moved UP.
+        expect(half.x2).toBeCloseTo((memory.x1 + memory.x2) / 2);
+        expect(half.y2).toBeCloseTo((memory.y1 + memory.y2) / 2);
+        expect(half.y2).toBeLessThan(memory.y1); // tip is above the child end
+        // full fill spans the whole rail up to the parent border
+        const full = fillSegment(memory, 1);
+        expect(near(full.x2, memory.x2)).toBe(true);
+        expect(near(full.y2, memory.y2)).toBe(true);
+    });
+
+    test("fill progress is clamped to [0,1] so it never overshoots the parent", () => {
+        const { performance } = hierEdges(child, parent);
+        const over = fillSegment(performance, 5);
+        expect(near(over.x2, performance.x2)).toBe(true);
+        expect(near(over.y2, performance.y2)).toBe(true);
+        const under = fillSegment(performance, -3);
+        expect(near(under.x2, performance.x1)).toBe(true);
+        expect(near(under.y2, performance.y1)).toBe(true);
+    });
+
+    test("memory + performance stay on opposite, non-overlapping sides for any orientation", () => {
+        for (const angle of [0, 30, 60, 90, 135, 180, 225, 270, 315]) {
+            const rad = (angle * Math.PI) / 180;
+            const c: Circle = { x: 0, y: 0, r: 18 };
+            const p: Circle = {
+                x: 120 * Math.cos(rad),
+                y: 120 * Math.sin(rad),
+                r: 24,
+            };
+            const { memory, performance } = hierEdges(c, p);
+            expect(
+                segSeparation(memory, performance),
+                `angle ${angle}`,
+            ).toBeGreaterThan(TRACK_OFFSET);
+        }
+    });
+
+    test("every real map edge is drawn child->parent (subtopic->unit, unit->exam)", () => {
+        // Mirrors +page.svelte: units feed the centre, subtopics feed their unit,
+        // each rail pulled onto the visible (drawn) bubble border.
+        const onDrawnBorder = (x: number, y: number, c: Circle): boolean =>
+            near(Math.hypot(x - c.x, y - c.y), c.r);
+        const centre = shrinkCircle(layout.center, NODE_TOUCH);
+        for (const u of layout.units) {
+            const uc = shrinkCircle(u, NODE_TOUCH);
+            const unitToExam = hierEdges(uc, centre);
+            for (const seg of [unitToExam.memory, unitToExam.performance]) {
+                expect(
+                    onDrawnBorder(seg.x1, seg.y1, uc),
+                    `${u.id} rail starts on the unit`,
+                ).toBe(true);
+                expect(
+                    onDrawnBorder(seg.x2, seg.y2, centre),
+                    `${u.id} rail ends on the exam node`,
+                ).toBe(true);
+            }
+            for (const s of u.subs) {
+                const sc = shrinkCircle(s, NODE_TOUCH);
+                const subToUnit = hierEdges(sc, uc);
+                for (const seg of [subToUnit.memory, subToUnit.performance]) {
+                    expect(
+                        onDrawnBorder(seg.x1, seg.y1, sc),
+                        `${s.id} rail starts on the subtopic`,
+                    ).toBe(true);
+                    expect(
+                        onDrawnBorder(seg.x2, seg.y2, uc),
+                        `${s.id} rail ends on the unit`,
+                    ).toBe(true);
+                }
+            }
+        }
+    });
+});
+
+// The bubbles are DRAWN smaller than their collision radius (a CSS scale inset),
+// so their visible border sits at NODE_TOUCH·r. Every connector endpoint AND the
+// SVG bubble-mask must aim at NODE_TOUCH·r, or the line stops in the empty ring
+// between the drawn bubble and the collision circle and reads as a floating gap.
+// These tests lock the corrected endpoints onto the VISIBLE border.
+describe("edges touch the visible (drawn) bubble border — no floating gap", () => {
+    const dist = (p: { x: number; y: number }, c: Circle): number =>
+        Math.hypot(p.x - c.x, p.y - c.y);
+    const onVisible = (p: { x: number; y: number }, c: Circle): boolean =>
+        Math.abs(dist(p, c) - c.r * NODE_TOUCH) < 1e-6;
+
+    test("NODE_TOUCH is a real inset of the collision radius, strictly in (0,1)", () => {
+        // < 1 so the endpoint sits INSIDE the collision circle (covered by the
+        // drawn bubble); > 0 so the edge still reaches out from the centre.
+        expect(NODE_TOUCH).toBeGreaterThan(0);
+        expect(NODE_TOUCH).toBeLessThan(1);
+    });
+
+    test("shrinkCircle scales the radius and keeps the centre", () => {
+        const c: Circle = { x: 12, y: -7, r: 50 };
+        const s = shrinkCircle(c, NODE_TOUCH);
+        expect(s.x).toBe(12);
+        expect(s.y).toBe(-7);
+        expect(s.r).toBeCloseTo(50 * NODE_TOUCH);
+        // Identity at k=1 (the default the arrows fall back to).
+        expect(shrinkCircle(c, 1)).toEqual(c);
+    });
+
+    test("both rails start/end on the VISIBLE border of every real edge", () => {
+        // Mirrors what +page.svelte draws: rails between shrinkCircle(node, NODE_TOUCH).
+        const check = (a: Circle, b: Circle, label: string) => {
+            const { memory, performance } = twoTrackEdges(
+                shrinkCircle(a, NODE_TOUCH),
+                shrinkCircle(b, NODE_TOUCH),
+            );
+            for (const [name, seg] of [
+                ["memory", memory],
+                ["performance", performance],
+            ] as const) {
+                expect(
+                    onVisible({ x: seg.x1, y: seg.y1 }, a),
+                    `${label} ${name} start on A visible border`,
+                ).toBe(true);
+                expect(
+                    onVisible({ x: seg.x2, y: seg.y2 }, b),
+                    `${label} ${name} end on B visible border`,
+                ).toBe(true);
+            }
+        };
+        for (const u of layout.units) {
+            check(layout.center, u, `center->${u.id}`);
+            for (const s of u.subs) {
+                check(u, s, `${u.id}->${s.id}`);
+            }
+        }
+    });
+
+    test("prereq arrows land on the VISIBLE border, not the collision circle", () => {
+        const leafByTag = new Map<string, Circle>(
+            layout.units.flatMap((u) => u.subs.map((s) => [s.tag, s] as const)),
+        );
+        const unitByTag = new Map<string, Circle>(
+            layout.units.map((u) => [`unit::${u.id}`, u] as const),
+        );
+        const nodeFor = (tag: string): Circle =>
+            (leafByTag.get(tag) ?? unitByTag.get(tag))!;
+
+        const scaled = prereqEdges(layout, NODE_TOUCH);
+        // Same set of arrows as the default, just pulled onto the visible border.
+        expect(scaled.length).toBe(prereqEdges(layout).length);
+        expect(scaled.length).toBeGreaterThan(0);
+
+        for (const e of scaled) {
+            const from = nodeFor(e.from);
+            const to = nodeFor(e.to);
+            expect(
+                onVisible({ x: e.geom.x1, y: e.geom.y1 }, from),
+                `${e.from} tail on visible border`,
+            ).toBe(true);
+            expect(
+                onVisible({ x: e.geom.x2, y: e.geom.y2 }, to),
+                `${e.to} head on visible border`,
+            ).toBe(true);
+            // Strictly inside the collision circle → the drawn bubble covers the
+            // tucked end and nothing pokes out past the bubble.
+            expect(dist({ x: e.geom.x2, y: e.geom.y2 }, to)).toBeLessThan(to.r);
+        }
+    });
 });
 
 function evi(
@@ -182,6 +508,59 @@ describe("honest mastery display", () => {
         const mastered = leafProgress(evi(12, 0.95, 0.95, true));
         expect(gathering).toBeLessThan(inProgress);
         expect(inProgress).toBeLessThan(mastered);
+    });
+});
+
+function perf(
+    perfQuestions: number,
+    perfCorrect: number,
+    performanceMastered = false,
+): PerfEvidence {
+    return {
+        perfQuestions,
+        perfCorrect,
+        perfAccuracy: perfQuestions > 0 ? perfCorrect / perfQuestions : 0,
+        performanceMastered,
+    };
+}
+
+describe("honest performance progress (perfProgress)", () => {
+    test("no practice -> zero fill", () => {
+        expect(perfProgress(null)).toBe(0);
+        expect(perfProgress(perf(0, 0))).toBe(0);
+    });
+
+    test("thin practice is never dressed up as mastery (capped at 0.4)", () => {
+        // Below the graded-question floor: even a perfect run stays "gathering".
+        const thin = perf(MIN_PERF_QUESTIONS - 1, MIN_PERF_QUESTIONS - 1);
+        expect(perfProgress(thin)).toBeLessThanOrEqual(0.4);
+        expect(perfProgress(thin)).toBeGreaterThan(0);
+        // A single question can never look close to mastered.
+        expect(perfProgress(perf(1, 1))).toBeLessThanOrEqual(0.4);
+    });
+
+    test("enough questions but not mastered -> partial, never full", () => {
+        const p = perf(10, 7); // 70% over enough questions, gate not passed
+        expect(perfProgress(p)).toBeGreaterThan(0.4);
+        expect(perfProgress(p)).toBeLessThan(1); // only mastery reaches full
+    });
+
+    test("mastered -> full fill", () => {
+        expect(perfProgress(perf(10, 9, true))).toBe(1);
+    });
+
+    test("uncapped by time: fill reflects accumulated practice only", () => {
+        // Two topics with identical practice evidence get identical fills,
+        // regardless of any (absent) schedule — performance is the practice track.
+        expect(perfProgress(perf(12, 10, true))).toBe(perfProgress(perf(12, 10, true)));
+    });
+
+    test("progress is monotonic: more/better practice never lowers the fill", () => {
+        const thin = perfProgress(perf(MIN_PERF_QUESTIONS - 1, MIN_PERF_QUESTIONS - 1));
+        const practicing = perfProgress(perf(10, 6));
+        const strong = perfProgress(perf(10, 9, true));
+        expect(thin).toBeLessThan(practicing);
+        expect(practicing).toBeLessThan(strong);
     });
 });
 
@@ -277,15 +656,44 @@ describe("prerequisite DAG", () => {
     });
 });
 
-describe("exam-coverage pace", () => {
+describe("shared engine request (masteryInputs)", () => {
+    test("mirrors the full taxonomy so the home probe matches the map", () => {
+        const inp = masteryInputs();
+        // One entry per subtopic / unit, matching the drawn map.
+        expect(inp.expectedSubtopics).toHaveLength(19);
+        expect(inp.subtopicWeights).toHaveLength(19);
+        expect(inp.units).toHaveLength(3);
+        // Tags are the canonical subtopic::unit::id form the engine gates on.
+        expect(inp.expectedSubtopics).toContain(subtopicTag("general", "bayes"));
+        // Unit weights are the sum of their subtopic weights.
+        const general = inp.units.find((u) => u.unitId === "general")!;
+        expect(general.weight).toBeCloseTo(unitWeight(TAXONOMY[0]));
+    });
+
+    test("carries the guided prerequisite DAG (cross-unit order included)", () => {
+        const inp = masteryInputs();
+        const multivariate = inp.unitPrereqs.find((u) => u.unitId === "multivariate")!;
+        expect(multivariate.prereqs).toEqual(UNIT_PREREQS.multivariate);
+        // A downstream subtopic keeps its within-unit prereq, as full tags.
+        const bayes = inp.subtopicPrereqs.find(
+            (s) => s.tag === subtopicTag("general", "bayes"),
+        )!;
+        expect(bayes.prereqs).toContain(subtopicTag("general", "conditional"));
+    });
+});
+
+describe("mastery pace", () => {
     function pace(partial: Partial<PaceView>): PaceView {
         return {
             hasExamDate: true,
             daysLeft: 30,
-            remainingNew: 100,
-            currentNewPerDay: 20,
-            recommendedNewPerDay: 4,
-            projectedDaysToFinish: 5,
+            remainingSubtopics: 10,
+            masteredSubtopics: 5,
+            totalSubtopics: 19,
+            daysStudied: 14,
+            currentPerWeek: 2.5,
+            recommendedPerWeek: 2.3,
+            projectedDaysToFinish: 28,
             onTrack: true,
             ...partial,
         };
@@ -299,8 +707,34 @@ describe("exam-coverage pace", () => {
         expect(paceTone(pace({ daysLeft: -3 }))).toBe("past");
     });
 
+    test("whole syllabus mastered -> 'ok' even with nothing to project", () => {
+        expect(
+            paceTone(pace({ remainingSubtopics: 0, projectedDaysToFinish: 0 })),
+        ).toBe("ok");
+    });
+
+    test("not enough history to project -> 'gathering' (abstain, don't guess)", () => {
+        expect(paceTone(pace({ projectedDaysToFinish: 0 }))).toBe("gathering");
+    });
+
     test("on track vs behind reflects the engine's flag", () => {
         expect(paceTone(pace({ onTrack: true }))).toBe("ok");
         expect(paceTone(pace({ onTrack: false }))).toBe("behind");
+    });
+
+    test("projectedFinishWeeks rounds days to whole weeks, never below 1", () => {
+        // Rounds to the nearest whole week...
+        expect(projectedFinishWeeks(7)).toBe(1);
+        expect(projectedFinishWeeks(10)).toBe(1); // 1.43 -> 1
+        expect(projectedFinishWeeks(11)).toBe(2); // 1.57 -> 2
+        expect(projectedFinishWeeks(14)).toBe(2);
+        expect(projectedFinishWeeks(21)).toBe(3);
+        // ...and never reads as "0 weeks" for a very near (or nonsensical) finish.
+        expect(projectedFinishWeeks(0)).toBe(1);
+        expect(projectedFinishWeeks(3)).toBe(1);
+        expect(projectedFinishWeeks(-5)).toBe(1);
+        // The 1-vs-≥2 boundary the copy pluralises on.
+        expect(projectedFinishWeeks(10)).toBe(1); // "week"
+        expect(projectedFinishWeeks(11)).toBeGreaterThan(1); // "weeks"
     });
 });

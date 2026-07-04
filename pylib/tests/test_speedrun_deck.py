@@ -17,6 +17,8 @@ from anki.speedrun.seed import (
     SEEDED_KEY,
     SHORT_ANSWER_NOTETYPE,
     build_deck,
+    convert_seeded_short_answer_to_basic,
+    ensure_short_answer_notetype,
     seed_if_missing,
 )
 from tests.shared import getEmptyCol
@@ -74,29 +76,91 @@ def test_starter_deck_covers_full_syllabus():
     assert len(covered) / len(expected) == 1.0
 
 
-def test_numeric_cards_are_typed_short_answer_and_recall_are_flashcards():
-    # Numerical questions become typed short-answer cards ({{type:Answer}});
-    # memorization stays a Basic flashcard. Both are tagged by format.
+def test_all_seeded_cards_are_basic_flashcards_with_worked_solutions():
+    # Every seeded card is now a stock Basic flip card the student self-grades;
+    # numeric ones show the concise answer + the worked solution on the Back. No
+    # typed {{type:Answer}} short-answer notes are created for the seeded deck.
     col = getEmptyCol()
     build_deck(col)
 
-    nt = col.models.by_name(SHORT_ANSWER_NOTETYPE)
-    assert nt is not None
-    assert "{{type:Answer}}" in nt["tmpls"][0]["qfmt"]
-    assert {f["name"] for f in nt["flds"]} == {"Front", "Answer", "Explanation"}
-
-    numeric = [c for c in SEED_CARDS if c.kind == KIND_NUMERIC]
-    assert numeric, "expected some numeric (typed short-answer) cards"
-    short_answer_notes = col.find_notes("tag:format::short_answer")
-    assert len(short_answer_notes) == len(numeric)
-    for nid in short_answer_notes:
-        note = col.get_note(nid)
-        assert note.note_type()["name"] == SHORT_ANSWER_NOTETYPE
-        assert note["Answer"].strip() != ""  # a concise typed target exists
-
+    assert col.find_notes("tag:format::short_answer") == []
     flashcards = col.find_notes("tag:format::flashcard")
-    assert len(flashcards) == len(SEED_CARDS) - len(numeric)
-    assert col.get_note(flashcards[0]).note_type()["name"] == "Basic"
+    assert len(flashcards) == len(SEED_CARDS)
+    for nid in flashcards:
+        assert col.get_note(nid).note_type()["name"] == "Basic"
+
+    # A computational card renders the answer AND the worked solution (MathJax
+    # preserved) on the Basic back.
+    numeric = [c for c in SEED_CARDS if c.kind == KIND_NUMERIC]
+    assert numeric, "expected some computational cards"
+    target = next(c for c in numeric if c.answer == "120")
+
+    def note_by_front(front: str):
+        for nid in col.find_notes("tag:difficulty::*"):
+            note = col.get_note(nid)
+            if note["Front"] == front:
+                return note
+        return None
+
+    note = note_by_front(target.front)
+    assert note is not None
+    assert note.note_type()["name"] == "Basic"
+    assert "120" in note["Back"]  # the concise answer
+    assert "\\binom" in note["Back"]  # the worked solution + MathJax, preserved
+
+
+def test_convert_seeded_short_answer_to_basic_migrates_only_curriculum_cards():
+    # A collection seeded BEFORE this change still holds typed "SOA Short Answer"
+    # curriculum cards. The one-off migration rewrites them as Basic flip cards in
+    # place (preserving each card's scheduling row) and leaves AI quarantine cards
+    # (same notetype, no difficulty tag) untouched. It is idempotent.
+    col = getEmptyCol()
+    short_answer = ensure_short_answer_notetype(col)
+
+    # Old-style seeded curriculum card (typed short-answer).
+    deck_id = col.decks.id("SOA Exam P::General Probability::Combinatorics")
+    note = col.new_note(short_answer)
+    note["Front"] = "Choose 3 of 10 when order doesn't matter?"
+    note["Answer"] = "120"
+    note["Explanation"] = r"\[ \binom{10}{3} = 120 \]"
+    note.add_tag("unit::general")
+    note.add_tag("subtopic::general::combinatorics")
+    note.add_tag("difficulty::easy")
+    note.add_tag("format::short_answer")
+    col.add_note(note, deck_id)
+    original_card_id = note.cards()[0].id
+
+    # AI quarantine card: SAME notetype, but no difficulty tag -> left as-is.
+    ai_deck = col.decks.id("SOA Exam P::AI (unreviewed)")
+    ai_note = col.new_note(short_answer)
+    ai_note["Front"] = "AI generated?"
+    ai_note["Answer"] = "maybe"
+    ai_note.add_tag("ai::unreviewed")
+    ai_note.add_tag("subtopic_candidate::general::bayes")
+    ai_note.add_tag("format::short_answer")
+    col.add_note(ai_note, ai_deck)
+
+    converted = convert_seeded_short_answer_to_basic(col)
+    assert converted == 1
+
+    # The curriculum card is now Basic, its card (FSRS scheduling row) preserved,
+    # and the Back carries the answer + the worked solution (MathJax intact).
+    note.load()
+    assert note.note_type()["name"] == "Basic"
+    assert len(note.cards()) == 1
+    assert note.cards()[0].id == original_card_id
+    assert "120" in note["Back"]
+    assert "\\binom" in note["Back"]
+    assert "format::flashcard" in note.tags
+    assert "format::short_answer" not in note.tags
+
+    # The AI quarantine card is untouched (still typed short-answer).
+    ai_note.load()
+    assert ai_note.note_type()["name"] == SHORT_ANSWER_NOTETYPE
+    assert "format::short_answer" in ai_note.tags
+
+    # Idempotent: a second run finds nothing to convert.
+    assert convert_seeded_short_answer_to_basic(col) == 0
 
 
 def test_seed_if_missing_builds_once_then_is_a_noop():

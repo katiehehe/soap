@@ -6,7 +6,9 @@
 
 Loads a large tagged Exam P deck and reports p50 / p95 / worst for the actions
 that must stay fast on a big collection: building the review queue (next card),
-the mastery query, mastery-ordered new cards, and the readiness computation.
+answering a card (the backend work a button press triggers), the mastery query,
+mastery-ordered new cards, and the readiness computation. It also reports peak
+process memory (RSS) on the full deck, for the §10 memory target.
 
 Usage:
     out/pyenv/bin/python tools/speedrun/bench.py [--cards 50000] [--reps 200]
@@ -21,12 +23,18 @@ import os
 import sys
 import time
 
+try:
+    import resource  # Unix only; used for the peak-RSS memory report.
+except ImportError:  # pragma: no cover - Windows has no resource module
+    resource = None  # type: ignore[assignment]
+
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 for _p in (os.path.join(_REPO, "pylib"), os.path.join(_REPO, "out", "pylib")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
 from anki.collection import Collection  # noqa: E402
+from anki.decks import DeckId  # noqa: E402
 from anki.speedrun import (  # noqa: E402
     difficulty_tag,
     expected_subtopic_tags,
@@ -38,7 +46,7 @@ from anki.speedrun import (  # noqa: E402
 )
 
 
-def generate_deck(col: Collection, n_cards: int) -> None:
+def generate_deck(col: Collection, n_cards: int) -> int:
     topics = load_topics()
     subs = [(u["id"], s["id"]) for u in topics["units"] for s in u["subtopics"]]
     notetype = col.models.by_name("Basic")
@@ -56,6 +64,18 @@ def generate_deck(col: Collection, n_cards: int) -> None:
         note.add_tag(subtopic_tag(unit_id, sub_id))
         note.add_tag(difficulty_tag(difficulties[i % 3]))
         col.add_note(note, deck_id)
+    return deck_id
+
+
+def peak_rss_mb() -> float | None:
+    """Peak resident set size of this process, in MB, or None on platforms
+    without the ``resource`` module. ``ru_maxrss`` is a high-water mark over the
+    whole run, so reading it at the end captures the peak during generation +
+    timing. macOS reports bytes; Linux reports kilobytes."""
+    if resource is None:
+        return None
+    ru = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return ru / (1024 * 1024) if sys.platform == "darwin" else ru / 1024
 
 
 def report(name: str, samples_ms: list[float]) -> None:
@@ -95,7 +115,7 @@ def main() -> None:
 
     print(f"Generating {args.cards} cards ...", flush=True)
     t0 = time.perf_counter()
-    generate_deck(col, args.cards)
+    deck_id = generate_deck(col, args.cards)
     print(f"  generated in {time.perf_counter() - t0:.1f}s\n")
 
     expected = expected_subtopic_tags()
@@ -148,6 +168,30 @@ def main() -> None:
             args.reps,
         ),
     )
+
+    # Answer-card latency: the backend work a grade button press triggers (the
+    # §10 "button press acknowledged" backend proxy; the UI render sits on top).
+    # Run LAST because, unlike the queries above, it mutates scheduling state.
+    # Raise today's new-card limit so the queue does not run dry over the loop.
+    conf = col.decks.config_dict_for_deck_id(DeckId(deck_id))
+    conf["new"]["perDay"] = args.reps + 100
+    col.decks.update_config(conf)
+    answer_samples: list[float] = []
+    for _ in range(args.reps):
+        card = col.sched.getCard()
+        if card is None:
+            break
+        card.start_timer()  # answerCard() reads the review timer
+        start = time.perf_counter()
+        col.sched.answerCard(card, 3)  # grade "Good"
+        answer_samples.append((time.perf_counter() - start) * 1000.0)
+    if answer_samples:
+        report("answer card (grade)", answer_samples)
+
+    rss = peak_rss_mb()
+    if rss is not None:
+        print(f"\npeak memory (RSS): {rss:.0f} MB on {args.cards} cards")
+
     col.close()
 
 

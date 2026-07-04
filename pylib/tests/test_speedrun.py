@@ -54,3 +54,9 @@ def test_compute_readiness_gives_up_below_threshold():
     assert result.no_score.reviews_needed == 200
     assert result.no_score.coverage_pct == 0.0
     assert result.no_score.next_best_action
+    # The Memory signal is computed independently of the readiness give-up rule,
+    # and on an empty collection it must ABSTAIN (has_data false), never a number.
+    assert result.HasField("memory_recall")
+    assert result.memory_recall.has_data is False
+    assert result.memory_recall.reviewed_cards == 0
+    assert result.memory_recall.point == 0.0

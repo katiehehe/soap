@@ -775,11 +775,23 @@ class AnkiQt(QMainWindow):
         self.state = state
         gui_hooks.state_will_change(state, oldState)
         getattr(self, f"_{state}State", lambda *_: None)(oldState, *args)
-        if state != "resetRequired":
+        # Speedrun (SOA Exam P fork): don't re-expand the bottom bar when the
+        # state we just entered deliberately hid it (the full-bleed home shell and
+        # the congrats screen). Anki's stock unconditional call here would undo
+        # that hide and surface the stale reviewer/overview chrome under a custom
+        # Svelte screen. States that DO want the bar (reviewer, deck browser,
+        # normal overview) redraw it via their own adjustHeightToFit, so this only
+        # skips a now-redundant re-expand.
+        if state != "resetRequired" and not self.bottomWeb.hidden:
             self.bottomWeb.adjustHeightToFit()
         gui_hooks.state_did_change(state, oldState)
 
     def _deckBrowserState(self, oldState: MainWindowState) -> None:
+        # Speedrun (SOA Exam P fork): keep Anki's top toolbar hidden here too, so
+        # the deck browser never surfaces the stock "Home · Study next · Sync"
+        # bar. The custom home shell (speedrunHome) is the only navigation
+        # surface — the app should never read as stock Anki.
+        self.toolbarWeb.hide()
         self.deckBrowser.show()
 
     def _speedrunHomeState(self, oldState: MainWindowState) -> None:
@@ -793,7 +805,12 @@ class AnkiQt(QMainWindow):
         aqt.speedrun.show_home(self)
 
     def _speedrunHomeCleanup(self, newState: MainWindowState) -> None:
-        # Restore Anki's chrome when leaving the home shell (review/browse/etc).
+        # Keep Anki's top toolbar HIDDEN during flashcard review — the reviewer
+        # gets a custom "← Exam P" bar instead (aqt/speedrun.py), so study never
+        # reads as stock Anki. Other states restore Anki's chrome.
+        if newState == "review":
+            self.toolbarWeb.hide()
+            return
         self.toolbarWeb.elevate()
         self.toolbarWeb.show()
         self.bottomWeb.show()
@@ -808,6 +825,11 @@ class AnkiQt(QMainWindow):
     def _overviewState(self, oldState: MainWindowState) -> None:
         if not self._selectedDeck():
             return self.moveToState("deckBrowser")
+        # Speedrun (SOA Exam P fork): hide Anki's top toolbar on the deck overview
+        # too — study is launched from the custom home shell and the reviewer has
+        # its own "← Exam P" bar, so the stock "Home · Study next · Sync" bar
+        # never needs to appear.
+        self.toolbarWeb.hide()
         self.overview.show()
 
     def _reviewState(self, oldState: MainWindowState) -> None:
@@ -1498,6 +1520,10 @@ title="{}" {}>{}</button>""".format(
         # auto-seed the (non-optional) SOA Exam P deck on first collection load.
         import aqt.speedrun
 
+        # Load the repo .env so an OPENAI_API_KEY there reaches the app (Anki reads
+        # os.environ, not .env); anything already exported wins. AI still defaults
+        # OFF — this only makes the key available once the user turns AI on.
+        aqt.speedrun.load_dotenv_if_present()
         aqt.speedrun.register_reviewer_banner()
         aqt.speedrun.register_collection_hooks()
         aqt.speedrun.register_theme()

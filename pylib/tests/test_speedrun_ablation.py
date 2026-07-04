@@ -11,8 +11,8 @@ from anki.speedrun.ablation import (
     rep_counts,
     within_unit_interleaving,
 )
-from anki.speedrun.soa_sample import load_sample_items
 from anki.speedrun.persona import synthetic_cohort
+from anki.speedrun.soa_sample import load_sample_items
 
 
 def test_equal_study_time_across_builds():

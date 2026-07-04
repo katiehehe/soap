@@ -42,7 +42,12 @@ if pgrep -f "qemu-system.*$AVD" >/dev/null; then
     echo "emulator '$AVD' already running"
 else
     echo "starting emulator '$AVD' ..."
-    nohup "$EMU" -avd "$AVD" -no-boot-anim >"/tmp/emulator-$AVD.log" 2>&1 &
+    # -no-snapshot-load: always cold-boot. A hard kill (e.g. OOM) can leave a
+    # corrupt saved snapshot that hangs the next boot at "Vulkan emulation
+    # initialized"; ignoring the snapshot avoids that at the cost of a slower
+    # (~1-2 min) but reliable boot.
+    nohup "$EMU" -avd "$AVD" -no-snapshot-load -no-boot-anim \
+        >"/tmp/emulator-$AVD.log" 2>&1 &
     disown || true
 fi
 

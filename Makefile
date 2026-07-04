@@ -11,7 +11,7 @@ ARGS ?=
 -include .env
 export
 
-.PHONY: bench crash-test calibration performance seed-persona practice-test classify ai-eval ai-report sync-test paraphrase ablation demo leakage-scan leakage-scan-sources problems phone phone-install phone-rebuild phone-rebuild-dry
+.PHONY: bench crash-test calibration performance seed-persona practice-test classify ai-eval ai-report sync-test paraphrase ablation demo leakage-scan leakage-scan-sources problems phone phone-install phone-rebuild phone-rebuild-dry sync-server sync-seed sync-desktop sync-phone-config
 
 # Boot the phone emulator (Medium_Phone) and open AnkiDroid — our shared-engine
 # fork. `make phone` just boots + opens; `make phone-install` also reinstalls the
@@ -39,6 +39,20 @@ phone-rebuild-dry:
 # http://10.0.2.2:27701/. Runs in the foreground; leave it running while syncing.
 sync-server:
 	tools/speedrun/sync_server.sh
+
+# Seed the local server with the Exam P deck (needs `make sync-server` running).
+sync-seed:
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/sync_setup.py $(ARGS)
+
+# Point the DESKTOP profile at the local server and pull the shared collection
+# (run with the desktop app closed; backs the collection up first).
+sync-desktop:
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/desktop_sync_setup.py $(ARGS)
+
+# (Re)configure AnkiDroid on the booted emulator to sync with the local server,
+# no UI login (writes syncBaseUrl/hkey into its prefs). Idempotent.
+sync-phone-config:
+	tools/speedrun/phone_sync_config.sh
 
 # 7h: load a large deck and report p50/p95/worst per action.
 bench:

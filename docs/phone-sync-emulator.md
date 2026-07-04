@@ -23,7 +23,10 @@ macOS:
 After the guards, the desktop syncs (auto-sync on startup **and** the Sync
 button) without crashing.
 
-## Start the stack (three terminals)
+## Start the stack — run each in its OWN terminal
+
+Use separate terminals so the long-running processes persist (the server,
+emulator, and desktop each stay in the foreground of their terminal).
 
 ```bash
 # 1. the local sync server (leave running) — binds 0.0.0.0:27701
@@ -32,28 +35,30 @@ make sync-server
 #    from the phone : http://10.0.2.2:27701/   (Android emulator host alias)
 #    login          : user / pass   (local account, NOT AnkiWeb)
 
-# 2. the emulator + AnkiDroid
+# 2. the emulator + AnkiDroid  (cold-boots reliably; ~1-2 min)
 make phone
 
 # 3. the desktop app
 ./run
 ```
 
-## One-time config (already applied; here for reproducibility)
+## One-time config (already applied; commands to reproduce)
 
 Both clients are pointed at the local server and pre-authenticated, so no login
-UI is needed.
+UI is needed. All of this survives restarts (it's on disk); only re-run a step if
+something was wiped.
 
-- **Server seeded** with the Exam P deck and an hkey minted:
-  `PYTHONPATH=pylib:out/pylib out/pyenv/bin/python tools/speedrun/sync_setup.py`
-  → prints `HKEY=...`.
-- **Phone** (AnkiDroid SharedPreferences, set via `adb ... run-as`): keys
+```bash
+make sync-seed            # seed the server with the Exam P deck + mint an hkey
+make sync-phone-config    # write syncBaseUrl/hkey into AnkiDroid (emulator booted)
+make sync-desktop         # point the desktop profile at the server + pull (app CLOSED)
+```
+
+- **Phone** prefs written (AnkiDroid SharedPreferences via `adb run-as`):
   `syncBaseUrl=http://10.0.2.2:27701/`, `syncBaseUrl_switch=true`,
   `username=user`, `hkey=<hkey>`.
-- **Desktop** (profile, set with the app closed):
-  `PYTHONPATH=pylib:out/pylib out/pyenv/bin/python tools/speedrun/desktop_sync_setup.py`
-  sets `customSyncUrl`/`syncUser`/`syncKey` and full-downloads the shared deck.
-  (The desktop collection is backed up first to `out/sync-backup/`.)
+- **Desktop** profile: `customSyncUrl`/`syncUser`/`syncKey`; collection backed up
+  to `out/sync-backup/` before the shared deck is pulled.
 
 ## Demo it (review on phone → appears on desktop)
 
@@ -90,7 +95,19 @@ ls out/sync-backup/            # collection-<stamp>.anki2, prefs21-<stamp>.db
 ## Tools
 
 - `tools/speedrun/sync_server.sh` — start the local server (`make sync-server`).
-- `tools/speedrun/sync_setup.py` — seed the server + print the hkey.
-- `tools/speedrun/desktop_sync_setup.py` — point the desktop at the server + pull.
+- `tools/speedrun/sync_setup.py` — seed the server + print the hkey (`make sync-seed`).
+- `tools/speedrun/sync_hkey.py` — print an hkey for the server (login only).
+- `tools/speedrun/phone_sync_config.sh` — write the sync prefs into AnkiDroid
+  (`make sync-phone-config`).
+- `tools/speedrun/desktop_sync_setup.py` — point the desktop at the server + pull
+  (`make sync-desktop`).
 - `tools/speedrun/sync_probe.py` — download to a throwaway client and print
   note/card/revlog counts (used to prove the phone's reviews reached the server).
+
+## Note on running the emulator here vs. in your terminal
+
+When the emulator is launched as a background job by the assistant's tooling it
+gets killed after ~2 minutes (an environment limit, not a sync problem — the
+sync server process is unaffected and stays up). Launched from your own terminal
+with `make phone` it persists normally. The sync itself was verified during a
+window when the emulator was up (see "What was verified").

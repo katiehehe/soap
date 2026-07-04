@@ -11,7 +11,7 @@ ARGS ?=
 -include .env
 export
 
-.PHONY: bench crash-test calibration performance seed-persona practice-test classify ai-eval ai-report sync-test paraphrase ablation demo leakage-scan leakage-scan-sources problems phone phone-install phone-rebuild phone-rebuild-dry sync-server sync-seed sync-desktop sync-phone-config
+.PHONY: bench crash-test calibration performance seed-persona practice-test classify ai-eval ai-report sync-test paraphrase ablation demo leakage-scan leakage-scan-sources problems phone phone-install phone-rebuild phone-rebuild-dry sync-server sync-seed sync-desktop sync-phone-config sync-twoway
 
 # Boot the phone emulator (Medium_Phone) and open AnkiDroid — our shared-engine
 # fork. `make phone` just boots + opens; `make phone-install` also reinstalls the
@@ -53,6 +53,11 @@ sync-desktop:
 # no UI login (writes syncBaseUrl/hkey into its prefs). Idempotent.
 sync-phone-config:
 	tools/speedrun/phone_sync_config.sh
+
+# Two-way check against the LIVE server: two clients each review different cards
+# offline, sync, and must both end up with every review (none lost/doubled).
+sync-twoway:
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/sync_twoway_check.py $(ARGS)
 
 # 7h: load a large deck and report p50/p95/worst per action.
 bench:

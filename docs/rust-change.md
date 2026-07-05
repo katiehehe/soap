@@ -68,7 +68,14 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   own structure (no display-name duplication). Read-only: it only reads
   `deck_tree`, so it never reschedules or fabricates a score. The tiering itself
   is a pure, unit-tested function (`build_study_plan`). This makes the scheduler
-  tiers visible as a _daily plan_ rather than an invisible reorder.
+  tiers visible as a _daily plan_ rather than an invisible reorder. A parent-tier
+  row (within-/cross-unit) **sums only its in-pool subtopics'** own (leaf) deck
+  counts — via `sum_subtopic_counts` gated by the SAME `pool_eligible_for_tier`
+  predicate the live strict queue uses — so the plan number **equals exactly what
+  strict-study serves** (a unit of 6 within-unit + 6 blocked shows 6, not the
+  unit deck's rolled-up 12). Only the Speedrun plan's own count fields are
+  derived this way; Anki's core `deck_tree` and the stock Decks-page counts are
+  intentionally left untouched (that broader change is riskier and out of scope).
 - `GetStudyPace` - mastery pace vs the user's exam date: counts the syllabus
   subtopics that have cleared their mastery gate (the same gate the map +
   Overall-mastery use), measures the study history from the first graded review,
@@ -79,7 +86,7 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   measured counts + the stored exam date (`compute_pace`, unit-tested); it is a
   _coverage_ pace, never the readiness score. Read-only.
 
-All seven RPCs are called from Python and covered by tests (~53 Rust unit tests
+All seven RPCs are called from Python and covered by tests (77 Rust unit tests
 across `service.rs` + `mastery.rs`, plus a Python-calling test for every RPC).
 
 The tier order and the points-at-stake order are now wired into the **live**
@@ -94,6 +101,35 @@ within a tier. All reorders are read-only (presentation only), so FSRS intervals
 stay valid and undo/integrity are untouched; with the flags off the queue is
 built exactly as upstream. The orders are also exposed as RPCs so the
 dashboard/study map can use them.
+
+**Strict tiers (the tiers no longer leak).** The three tiers map to decks at
+different levels — Blocked -> the subtopic (leaf) deck, Within-unit -> the UNIT
+deck, Cross-unit -> the ROOT deck. But Anki studies a parent deck's ENTIRE
+subtree, so opening the unit/root deck used to gather every descendant card,
+including subtopics still in the Blocked tier; the tier reorder only *reordered*
+them, it did not *exclude* them, so studying cross-unit pulled in still-blocked
+cards. Fix: a per-tier **scoped study** implemented in the engine
+(`speedrun_scope_queues_to_tier` in `rslib/src/speedrun/mastery.rs`, wired into
+`build_queues`). When the user opens a within-unit/cross-unit tier deck, Python
+records a transient `speedrunActiveTierScope` config (`{deck_id, tier}`, keyed to
+that deck), and the queue builder — after gathering — retains in the new + review
+queues ONLY the cards whose subtopic is actually in that tier's mastery pool
+(`compute_pools` decides eligibility: within-unit study serves only WithinUnit
+subtopics; cross-unit study serves only CrossUnit subtopics). A still-Blocked
+subtopic is eligible for neither, so it can never be served from a parent deck.
+The scope is keyed to the deck it was set for (a stale value never affects a
+different deck), a no-op when absent, and DROPS out-of-tier gathered cards only
+(cards with no syllabus subtopic are untouched) — read-only, so FSRS intervals,
+undo, and integrity are all untouched, and plain Anki / the scheduler-off build
+are unaffected. "Study more today" and unlimited practice deliberately clear the
+scope (they are not tier-restricted). This keeps the mastery DECISION in Rust
+(the graded change) while Python only names the tier deck the user chose, mirror-
+ing the practice-deck scoping in `qt/aqt/speedrun.py`. Covered by Rust unit tests
+(`strict_within_unit_serves_only_within_unit_pool`,
+`strict_cross_unit_serves_only_cross_unit_pool`,
+`scope_queues_excludes_blocked_and_is_deck_keyed`, +
+`scope_queues_is_read_only`) and a Python live-queue test
+(`test_tier_scope_keeps_blocked_out_of_cross_unit_live_queue`).
 
 ## How the scheduler is built
 

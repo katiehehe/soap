@@ -3,15 +3,21 @@
 
 import { expect, test } from "./fixtures";
 
-test("centre Exam P bubble opens the practice test", async ({ page }) => {
+test("centre Exam P bubble opens its mastery detail, which launches the practice test", async ({
+    page,
+}) => {
     await page.goto("/home");
     await expect(page.getByRole("heading", { name: "Study map" })).toBeVisible({
         timeout: 15000,
     });
 
-    // The centre "Exam P" bubble launches the FULL EXAM SIMULATION (whole-exam
-    // scope). Clicking it swaps in the test view.
+    // The centre "Exam P" bubble now opens the overall-mastery detail; its
+    // "Practice test (whole exam)" button launches the FULL EXAM SIMULATION.
     await page.locator("button.bubble.center").click();
+    await expect(page.getByRole("heading", { name: "SOA Exam P" })).toBeVisible();
+    await page
+        .getByRole("button", { name: "Practice test (whole exam)" })
+        .click();
 
     // The intro renders without any desktop bridge (assembly happens on Start).
     await expect(

@@ -47,10 +47,10 @@ cd ~/dev/soap && ./run
 
 # 2. Start the phone emulator (leave it booting while you prep desktop).
 export ANDROID_HOME="$HOME/Library/Android/sdk"
-"$ANDROID_HOME/emulator/emulator" -avd Medium_Phone &
+"$ANDROID_HOME/emulator/emulator" -avd Speedrun_P &
 "$ANDROID_HOME/platform-tools/adb" wait-for-device
 "$ANDROID_HOME/platform-tools/adb" install -r \
-  ~/dev/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
+  ~/dev/projects/speedrun/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
 ```
 
 Pre-flight checklist:
@@ -189,19 +189,19 @@ still scores with AI off.)
 
 ## Run it on the phone emulator (exact commands)
 
-An AVD named **`Medium_Phone`** (arm64) already exists.
+An AVD named **`Speedrun_P`** (arm64) already exists.
 
 ```bash
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 
 # Boot the emulator (drop -no-window if you want it headless for CI).
-"$ANDROID_HOME/emulator/emulator" -avd Medium_Phone &
+"$ANDROID_HOME/emulator/emulator" -avd Speedrun_P &
 "$ANDROID_HOME/platform-tools/adb" wait-for-device
 "$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed   # wait until this prints 1
 
 # Install our APK (built from our fork's engine).
 "$ANDROID_HOME/platform-tools/adb" install -r \
-  ~/dev/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
+  ~/dev/projects/speedrun/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
 ```
 
 Then open AnkiDroid on the emulator; load the Exam P deck (export a `.colpkg` from
@@ -218,7 +218,7 @@ Strongest → simplest. Any one of these is convincing; do the first on camera.
 
 ```bash
 export LC_ALL=C
-APK=~/dev/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
+APK=~/dev/projects/speedrun/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
 unzip -p "$APK" lib/arm64-v8a/librsdroid.so | strings | grep -iE "speedrun|ComputeReadiness|Mastery" | head
 # → anki/rslib/src/speedrun/service.rs
 #   anki/rslib/src/speedrun/mastery.rs

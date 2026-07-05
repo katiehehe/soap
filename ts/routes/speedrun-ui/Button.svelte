@@ -3,13 +3,13 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <!--
-  Maximalist button. Four variants (primary / secondary / outline / ghost) and
-  three sizes. `accent` (a CSS colour, e.g. accentVarAt(i)) drives the
-  secondary/outline/ghost variants; primary uses the fixed 3-accent gradient.
+  Shared Speedrun button. Four variants (primary / secondary / outline / ghost)
+  and three sizes. `accent` (a CSS colour) drives the secondary/outline/ghost
+  variants; primary uses the fixed --sr-accent-strong fill.
 
-  Legibility: the primary label carries a dark text-halo so white stays readable
-  even over the light (cyan) end of the gradient. secondary/outline/ghost keep
-  text on --fg or the accent for guaranteed contrast.
+  Legibility: primary pairs a deep periwinkle fill (--sr-accent-strong) with
+  --sr-on-accent (paper) for ≥ 4.5:1 label contrast in both themes;
+  secondary/outline/ghost keep text on --fg or the accent, which stay AA-legible.
 -->
 <script lang="ts">
     export let variant: "primary" | "secondary" | "outline" | "ghost" = "primary";
@@ -87,16 +87,33 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 1.05rem;
     }
 
-    /* Primary — solid indigo, ivory text, gentle elevation. */
+    /* Primary — solid periwinkle, paper text, gentle elevation. Uses the
+       deeper --sr-accent-strong so the label clears WCAG-AA 4.5:1. */
     .primary {
-        color: #fbfaf6;
+        color: var(--sr-on-accent);
         border-color: transparent;
-        background: var(--sr-accent);
-        box-shadow: var(--sr-shadow-sm);
+        background:
+            linear-gradient(
+                180deg,
+                rgba(255, 255, 255, 0.22),
+                rgba(255, 255, 255, 0) 46%
+            ),
+            var(--sr-accent-strong);
+        box-shadow:
+            var(--sr-shadow-sm),
+            inset 0 1px 0 rgba(255, 255, 255, 0.28);
     }
     .primary:hover:not(:disabled) {
-        background: var(--sr-accent-2);
-        box-shadow: var(--sr-shadow);
+        background:
+            linear-gradient(
+                180deg,
+                rgba(255, 255, 255, 0.26),
+                rgba(255, 255, 255, 0) 48%
+            ),
+            var(--sr-accent-strong-2);
+        box-shadow:
+            var(--sr-shadow),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
     }
 
     /* Secondary — quiet accent outline that tints on hover. */

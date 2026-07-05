@@ -8,9 +8,9 @@
 // mastered) and must never be swapped for decoration.
 
 export const SIGNAL = {
-    pending: "#8f897a", // not started (warm grey)
-    progress: "#d3a95f", // in progress (honey)
-    mastered: "#6fa892", // mastered / good (sage)
+    pending: "#8a9598", // not started (cool grey)
+    progress: "#d3a95f", // in progress (suds gold)
+    mastered: "#5bb39a", // mastered / good (fresh mint)
     weak: "#c9705c", // performance: struggling (clay red)
-    memory: "#7e88c9", // memory / spaced-repetition track (periwinkle)
+    memory: "#5b8fd6", // memory / spaced-repetition track (sky blue)
 } as const;

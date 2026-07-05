@@ -6,12 +6,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import "./base.scss";
 
     // Self-hosted fonts for the Speedrun UI (Fontsource → bundled by Vite, so
-    // they work offline in the desktop webview). Academic pairing: Fraunces (a
-    // scholarly old-style serif) for headings against DM Sans for body/UI. Only
+    // they work offline in the desktop webview). Soap pairing: Fredoka (a rounded
+    // display face) for headings/brand against Nunito for body/UI. Only
     // *referenced* by the speedrun screens via --sr-font-* tokens; stock Anki
     // screens keep their own font stack.
-    import "@fontsource-variable/fraunces/index.css";
-    import "@fontsource-variable/dm-sans/index.css";
+    import "@fontsource-variable/fredoka/index.css";
+    import "@fontsource-variable/nunito/index.css";
 
     import { setContext } from "svelte";
 

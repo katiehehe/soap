@@ -601,17 +601,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@fontsource-variable/dm-sans@npm:^5.2.8":
-  version: 5.2.8
-  resolution: "@fontsource-variable/dm-sans@npm:5.2.8"
-  checksum: 10c0/99971f181c343a81f72ab6d8d1354ca38bc138054e352e922a12c2be52083598446436a584b67e6e505a3e2ffdc65933c3faa290fbdb425b4768a5f4e90e12db
+"@fontsource-variable/fredoka@npm:^5.2.10":
+  version: 5.2.10
+  resolution: "@fontsource-variable/fredoka@npm:5.2.10"
+  checksum: 10c0/0308ccbb470984aaeea232ba94adff06d6ad81f08e62d5657f369eaa1256c08d192dd5431dc069fc2eec1c9933ec352ee65592df083ed5dc6a152daae72b18f0
   languageName: node
   linkType: hard
 
-"@fontsource-variable/fraunces@npm:^5.2.9":
-  version: 5.2.9
-  resolution: "@fontsource-variable/fraunces@npm:5.2.9"
-  checksum: 10c0/c78ee94ceb7e65f40246a64b90419ed30ad09c34c248cb407e75e99877dfd6b75424091b39d3327948f972f28c07e180dfe887c98a680b1a16638726a79e12c6
+"@fontsource-variable/nunito@npm:^5.2.7":
+  version: 5.2.7
+  resolution: "@fontsource-variable/nunito@npm:5.2.7"
+  checksum: 10c0/3eea68c432b9450dbaf9265431a6bb5bc770430d5e7833dea48889feb474f5cda263c7e43ac584e3a51f6ed8463532c3e630ebf40384b125b492459ab73ab544
   languageName: node
   linkType: hard
 
@@ -2094,8 +2094,8 @@ __metadata:
     "@bufbuild/protoc-gen-es": "npm:^1.8.0"
     "@floating-ui/dom": "npm:^1.7.6"
     "@fluent/bundle": "npm:^0.19.1"
-    "@fontsource-variable/dm-sans": "npm:^5.2.8"
-    "@fontsource-variable/fraunces": "npm:^5.2.9"
+    "@fontsource-variable/fredoka": "npm:^5.2.10"
+    "@fontsource-variable/nunito": "npm:^5.2.7"
     "@mdi/svg": "npm:^7.0.96"
     "@playwright/test": "npm:^1.60.0"
     "@poppanator/sveltekit-svg": "npm:^5.0.0"

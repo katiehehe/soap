@@ -7,7 +7,7 @@ test("home shell tabs; Anki stats is a tab, not a pop-out window", async ({ page
     await page.goto("/home");
 
     // Custom top bar (so the app does not read as stock Anki).
-    await expect(page.getByText("Speedrun")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("SOAP")).toBeVisible({ timeout: 15000 });
 
     // The task tabs, including a Stats tab (which embeds Anki's review graphs).
     for (const name of ["Map", "Readiness", "Stats"]) {

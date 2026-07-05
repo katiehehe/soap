@@ -10,12 +10,25 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     import Col from "$lib/components/Col.svelte";
     import Container from "$lib/components/Container.svelte";
+    import BrandMark from "../speedrun-ui/BrandMark.svelte";
 
     import { buildNextLearnMsg } from "./lib";
     import { onMount } from "svelte";
 
     export let info: CongratsInfoResponse;
     export let refreshPeriodically = true;
+
+    // Decorative rising soap bubbles for the celebration (honours reduced-motion
+    // via the global guardrail in base.scss). Purely cosmetic.
+    const bubbleSeeds = [
+        { left: 8, size: 14, delay: 0, dur: 7 },
+        { left: 22, size: 9, delay: 1.4, dur: 6 },
+        { left: 39, size: 18, delay: 0.6, dur: 8.2 },
+        { left: 55, size: 11, delay: 2.1, dur: 6.6 },
+        { left: 69, size: 8, delay: 1.0, dur: 5.6 },
+        { left: 84, size: 15, delay: 0.35, dur: 7.6 },
+        { left: 93, size: 10, delay: 2.6, dur: 6.1 },
+    ];
 
     const congrats = tr.schedulingCongratulationsFinished();
     let nextLearnMsg: string;
@@ -56,10 +69,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <Container --gutter-block="1rem" --gutter-inline="2px" breakpoint="sm">
     <Col --col-justify="center">
         <div class="congrats">
-            <div class="brand">
-                <span class="brand-mark">P</span>
-                <span class="brand-sub">Exam&nbsp;P · Speedrun</span>
+            <div class="bubbles" aria-hidden="true">
+                {#each bubbleSeeds as b}
+                    <span
+                        style="left:{b.left}%; width:{b.size}px; height:{b.size}px; animation-delay:{b.delay}s; animation-duration:{b.dur}s;"
+                    ></span>
+                {/each}
             </div>
+
+            <div class="brand">
+                <span class="brand-mark"><BrandMark size={22} /></span>
+                <span class="brand-sub">SOAP · SOA&nbsp;Exam&nbsp;P</span>
+            </div>
+
+            <p class="squeaky">Squeaky clean!</p>
 
             <h1>{congrats}</h1>
 
@@ -118,14 +141,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-family: var(--sr-font-body, sans-serif);
         color: var(--fg);
         text-align: center;
+        position: relative;
+        overflow: hidden;
 
-        /* A warm, quiet "you finished" card — a green top accent marks the win. */
+        /* A fresh "you finished" card — a mint top accent marks the win
+           (inset shadow so it tucks into the rounded corners). */
         background-color: var(--canvas-elevated);
         border: 1px solid var(--border);
-        border-top: 3px solid var(--sr-mastered);
         border-radius: var(--sr-radius);
         padding: 2.25rem 2rem 2.5rem;
-        box-shadow: var(--sr-shadow);
+        box-shadow:
+            inset 0 3px 0 0 var(--sr-mastered),
+            var(--sr-shadow);
 
         :global(a) {
             color: var(--sr-accent);
@@ -135,6 +162,63 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         :global(a:hover) {
             text-decoration: underline;
         }
+    }
+
+    /* Lift the real content above the decorative bubble layer. */
+    .brand,
+    .squeaky,
+    h1,
+    .congrats > p,
+    .sr-actions,
+    .description {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Rising soap bubbles (decorative; reduced-motion halts them globally). */
+    .bubbles {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        overflow: hidden;
+    }
+    .bubbles span {
+        position: absolute;
+        bottom: -28px;
+        border-radius: 50%;
+        background: radial-gradient(
+            circle at 34% 30%,
+            rgba(255, 255, 255, 0.9),
+            var(--sr-accent) 72%
+        );
+        opacity: 0;
+        animation-name: sr-rise;
+        animation-timing-function: ease-in;
+        animation-iteration-count: infinite;
+    }
+    @keyframes sr-rise {
+        0% {
+            transform: translateY(0) scale(0.7);
+            opacity: 0;
+        }
+        14% {
+            opacity: 0.42;
+        }
+        100% {
+            transform: translateY(-360px) scale(1.05);
+            opacity: 0;
+        }
+    }
+
+    .squeaky {
+        font-family: var(--sr-font-heading);
+        font-weight: 700;
+        font-size: 0.82rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--sr-mastered);
+        margin: 0 0 0.4rem;
     }
 
     .brand {
@@ -149,9 +233,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         place-items: center;
         width: 36px;
         height: 36px;
-        border-radius: 10px;
+        border-radius: var(--sr-radius-sm);
         background: linear-gradient(135deg, var(--sr-accent), var(--sr-accent-2));
-        color: #fbfaf6;
+        color: var(--sr-on-accent);
         font-family: var(--sr-font-heading, serif);
         font-weight: 700;
         font-size: 1rem;
@@ -216,13 +300,27 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         transform: translateY(1px);
     }
     .sr-btn-primary {
-        background: linear-gradient(135deg, var(--sr-accent), var(--sr-accent-2));
+        background:
+            linear-gradient(
+                180deg,
+                rgba(255, 255, 255, 0.22),
+                rgba(255, 255, 255, 0) 46%
+            ),
+            var(--sr-accent-strong);
         border-color: transparent;
-        color: #fbfaf6;
-        box-shadow: var(--sr-shadow-sm);
+        color: var(--sr-on-accent);
+        box-shadow:
+            var(--sr-shadow-sm),
+            inset 0 1px 0 rgba(255, 255, 255, 0.28);
     }
     .sr-btn-primary:hover {
-        color: #fbfaf6;
-        filter: brightness(1.05);
+        background:
+            linear-gradient(
+                180deg,
+                rgba(255, 255, 255, 0.26),
+                rgba(255, 255, 255, 0) 48%
+            ),
+            var(--sr-accent-strong-2);
+        color: var(--sr-on-accent);
     }
 </style>

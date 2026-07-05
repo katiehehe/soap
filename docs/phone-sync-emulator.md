@@ -23,6 +23,72 @@ macOS:
 After the guards, the desktop syncs (auto-sync on startup **and** the Sync
 button) without crashing.
 
+## The phone home-shell Sync-button bounce (fixed)
+
+Tapping **Sync** in the branded **home shell** (the Svelte `home` action row,
+`speedrun-nav:sync`) kicked the app straight to the Android launcher instead of
+syncing — no crash (crash buffer empty, no `FATAL`/`AndroidRuntime`), the task
+just closed. The **DeckPicker toolbar sync icon still worked**; only the
+home-shell button was broken, which is why it looked like a headless-login issue
+but wasn't.
+
+Root cause (full logcat, `Anki-Android/.../pages/SpeedrunPageFragment.kt`): the
+home button routed sync through the stock **`com.ichi2.anki.DO_SYNC`** intent →
+`IntentHandler.handleSyncIntent` → `startActivity(DeckPicker, CLEAR_TOP)` (which
+first *destroys* the home shell) → `DoSync.handleAsyncMessage` → `deckPicker.sync()`
+**immediately followed by an unconditional `deckPicker.finish()`**. That
+`finish()` is fine for a fire-and-forget widget/shortcut, but from the in-app
+button it tears down the only remaining activity before the first-sync
+**`FullSyncRequired { download_ok: true }`** download / dialog can run → the task
+empties → launcher. The engine was reached and authenticated fine (`hkey` OK,
+`server_usn` seen), so it was never an auth/config problem.
+
+Fix (one call site, least-invasive, no engine change): route the home Sync button
+through AnkiDroid's own **post-login** sync entry instead —
+`DeckPicker.getIntent(ctx, autoSync = true)` (sets `INTENT_SYNC_FROM_LOGIN` →
+`syncOnResume` → `sync()`), with `CLEAR_TOP | SINGLE_TOP` to reuse the DeckPicker
+already under the shell. That path **never finishes the activity**, so the
+full-sync download and progress complete normally. Rebuilt
+(`./gradlew :AnkiDroid:assemblePlayDebug -x lint`), reinstalled, re-ran
+`make sync-phone-config`.
+
+Verified end-to-end: home Sync → `sync result: FULL_DOWNLOAD` →
+`Full Download Completed`, foreground **stays** on DeckPicker (no bounce), deck
+lands with **186 cards / 186 notes** (`pragma integrity_check = ok` via desktop
+Anki). A later tap resolved a genuine two-sided `FULL_SYNC` conflict (server had
+persona review history) by keeping the **AnkiWeb/server** copy; after that,
+schema is aligned and syncs are clean incremental (`NormalSyncRequired` →
+`NO_CHANGES`). Screenshot: `out/phone-sync-fixed-20260705-103811.png`,
+`out/phone-final-synced-deck.png`.
+
+## Phone device numbers (item 6) — real measurements on the `Speedrun_P` emulator
+
+Measured via `adb -s emulator-5554` on the lean AVD (AOSP 34, **2 GB** guest, 4
+cores, host GPU) on an **8 GB M1 Air**, **debug build with LeakCanary**. These
+are honest device numbers, not fabricated; the emulator/host is the bottleneck,
+not the app.
+
+- **Cold start → full Svelte home shell** (`am start -W` of `IntentHandler`;
+  system `Displayed …SingleFragmentActivity`): quiesced true-cold runs
+  **6.23 / 6.12 / 6.72 s** (median ~6.2 s); a warm-cache run hit **3.75 s**. This
+  is **above the <4 s target on this throttled emulator** — dominated by the
+  2 GB memory-pressured guest (host swaps), the debug+LeakCanary build, and that
+  it times the whole WebView home shell + 4 engine RPCs, not a native list. A
+  release build on real phone hardware would be materially faster (not measured
+  here, so not claimed as a pass).
+- **Memory ceiling** (`dumpsys meminfo`, home shell settled): **TOTAL PSS
+  ≈ 217 MB** (RSS 361 MB, SWAP 0; Code 34.5 MB reflects the unstripped debug
+  build). Comfortably within a mid-range phone's headroom — a 4 GB phone leaves
+  apps hundreds of MB before the low-memory killer engages; 217 MB is ~4–5 % of
+  RAM.
+- **Crash test** (mirror of desktop `make crash-test`, 20/20 zero-corruption):
+  **~18 `am force-stop` kills interleaved with relaunch**, then pulled the
+  collection (app stopped) and opened it with the real Anki engine →
+  **`PRAGMA integrity_check = [['ok']]`, cards 186, notes 186, 24 decks intact**.
+  **PASS — zero corruption.** (Bare `sqlite3` can't run the check: Anki's custom
+  `unicase` collation is only registered by the engine, so the check is run via
+  `out/pyenv` Anki, not host `sqlite3`.)
+
 ## Start the stack — run each in its OWN terminal
 
 Use separate terminals so the long-running processes persist (the server,

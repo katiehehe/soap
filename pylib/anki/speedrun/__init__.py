@@ -112,6 +112,63 @@ def unit_deck_name(
         return None
 
 
+# --- strict tier study scope ----------------------------------------------
+# Mirrors ACTIVE_TIER_SCOPE_KEY + TierScope in rslib/src/speedrun/mastery.rs.
+# When the user opens a within-unit (unit) or cross-unit (root) TIER deck, we
+# record which tier + which deck here so the Rust queue builder serves ONLY the
+# subtopics actually in that mastery pool — a still-blocked subtopic never leaks
+# into a parent deck's study session. Keyed to the deck id, so a stale value can
+# never affect a different deck; absent -> no scoping (the deck studies its whole
+# subtree, exactly as upstream). Selection only: it drops out-of-tier cards from
+# the gathered queue, never touching FSRS intervals, undo, or any score. "Study
+# more today" / unlimited practice deliberately CLEAR it (no tier restriction).
+ACTIVE_TIER_SCOPE_KEY = "speedrunActiveTierScope"
+TIER_WITHIN_UNIT = "within_unit"
+TIER_CROSS_UNIT = "cross_unit"
+
+
+def tier_for_deck_name(name: str, root: str = "SOA Exam P") -> str | None:
+    """The mastery tier a deck represents, from its position under the exam root:
+
+    - the ROOT deck (``SOA Exam P``) -> cross-unit tier;
+    - a UNIT deck (a direct child, ``SOA Exam P::<unit>``) -> within-unit tier;
+    - a subtopic (leaf) deck or any non-exam deck -> ``None`` (no scope needed —
+      a subtopic deck already holds a single subtopic, so it is already strict).
+    """
+    if not name:
+        return None
+    if name == root:
+        return TIER_CROSS_UNIT
+    if name.startswith(root + "::") and name.count("::") == 1:
+        return TIER_WITHIN_UNIT
+    return None
+
+
+def set_tier_scope(col: Any, deck_id: int, tier: str) -> None:
+    """Record the active tier study scope (deck id + tier) so the Rust queue
+    builder serves only that tier's mastery pool. Selection only — it never
+    touches FSRS intervals, undo, or any score."""
+    col.set_config(ACTIVE_TIER_SCOPE_KEY, {"deck_id": int(deck_id), "tier": tier})
+
+
+def clear_tier_scope(col: Any) -> None:
+    """Remove any active tier scope, so decks study their whole subtree again
+    (blocked practice, "study more today", and unlimited practice use this)."""
+    col.remove_config(ACTIVE_TIER_SCOPE_KEY)
+
+
+def apply_tier_scope_for_deck(col: Any, deck_id: int, name: str) -> None:
+    """Set (or clear) the tier scope for the deck about to be studied: a
+    unit/root TIER deck gets its within-/cross-unit scope; a subtopic or non-exam
+    deck clears the scope (already strict). Keyed to ``deck_id`` so it only ever
+    applies to this deck."""
+    tier = tier_for_deck_name(name)
+    if tier is None:
+        clear_tier_scope(col)
+    else:
+        set_tier_scope(col, deck_id, tier)
+
+
 def exam_timestamp_for_iso(iso: str) -> int | None:
     """Unix seconds at local noon of an ISO ``YYYY-MM-DD`` exam date, or None if
     it can't be parsed. Noon (not midnight) so the whole-days-left count the
@@ -285,3 +342,35 @@ def subtopic_name(
                 if subtopic["id"] == subtopic_id:
                     return subtopic["name"]
     raise KeyError(f"unknown subtopic: {unit_id}::{subtopic_id}")
+
+
+# MasteryPool enum values (mirrors proto/anki/speedrun.proto).
+POOL_BLOCKED = 0
+POOL_WITHIN_UNIT = 1
+POOL_CROSS_UNIT = 2
+
+
+def tier_scope_name(pool: int, tag: str, topics: dict[str, Any] | None = None) -> str:
+    """The scope label to show for a card's mastery tier — the descriptor after
+    the tier name in the reviewer banner (and it mirrors the study map's plan).
+
+    The scope is the tier's, not just the current card's subtopic:
+
+    - **Blocked** drills ONE subtopic in isolation -> the SUBTOPIC name.
+    - **Within-unit interleaving** mixes a whole UNIT's confusable sub-types ->
+      the UNIT name. Labeling this tier with a single subtopic (e.g. "Common
+      continuous distributions") wrongly reads as if that subtopic were a unit,
+      which was the reported bug.
+    - **Cross-unit** spacing spans everything -> "All units".
+
+    Falls back to the raw tag if it can't be parsed, so the banner never breaks.
+    """
+    parts = tag.split("::")
+    try:
+        if pool == POOL_WITHIN_UNIT:
+            return unit_name(parts[1], topics)
+        if pool == POOL_CROSS_UNIT:
+            return "All units"
+        return subtopic_name(parts[1], parts[2], topics)
+    except (IndexError, KeyError):
+        return tag

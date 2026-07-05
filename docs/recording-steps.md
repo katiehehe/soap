@@ -13,16 +13,26 @@ Proves reviews flow phone→desktop with none lost/doubled. The code path is
 already verified green by `make sync-test` (20/20, conflict rule); this records
 it on-device.
 
-Prep (once):
+Prep (once) — all reproducible via the Makefile:
 
 ```bash
-export ANDROID_HOME="$HOME/Library/Android/sdk"
-"$ANDROID_HOME/emulator/emulator" -avd Medium_Phone &
-"$ANDROID_HOME/platform-tools/adb" wait-for-device
-"$ANDROID_HOME/platform-tools/adb" install -r \
-  ~/dev/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
-# Start a local sync server (or use AnkiWeb). Point BOTH desktop and phone at it.
+make sync-server         # local sync server (Anki's own), binds 0.0.0.0:27701
+make sync-seed           # seed the server with the Exam P deck + mint an hkey
+#   ...or seed the FULLY-SCORED persona so the phone shows all three scores:
+make seed-persona && PYTHONPATH=pylib:out/pylib out/pyenv/bin/python \
+    tools/speedrun/sync_setup.py --from-collection out/demo-persona.anki2
+make phone               # boot the Speedrun_P emulator + open AnkiDroid
+make phone-install       # (re)install the freshest APK first, if rebuilt
+make sync-phone-config   # point AnkiDroid at the local server (no UI login)
+make sync-desktop        # point the desktop profile at the same server (app CLOSED)
 ```
+
+On-device sync verified this session (server→phone): tapping **Sync** in the home
+shell → **Select collection to keep → AnkiWeb → Replace** ran a real full download
++ media sync from the local server (logcat: `anki::sync::media::syncer: media sync
+complete`, `SyncMediaWorker: success`). The phone runs the exact `librsdroid.so`
+engine, so the two-way + conflict + offline path is the same one `make sync-test`
+(20/20) and `make sync-twoway` (live server) assert green.
 
 Record (one take):
 
@@ -63,19 +73,24 @@ Apple Silicon only (arm64 binary).
 
 ```bash
 # Same-machine emulator:
-adb install -r ~/dev/Anki-Android/.../AnkiDroid-play-arm64-v8a-debug.apk
+adb install -r ~/dev/projects/speedrun/Anki-Android/.../AnkiDroid-play-arm64-v8a-debug.apk
 # Real phone: transfer the APK, enable "install unknown apps", sideload, open it.
 ```
 
-Record: install → open AnkiDroid → load the Exam P deck (import a `.colpkg` from
-desktop or sync) → run a short review session on **our** engine → open the
-navigation drawer → tap **"Exam readiness"** to show the three signals
-(Memory/Performance/Readiness) with ranges + the give-up rule, computed on-device
-by the shared engine (`ReadinessScoresActivity` → `computeReadiness`; see
-`docs/phone-scores.md`). Prove the engine is ours on camera (any one is enough):
+Record: install → open AnkiDroid (it launches straight into the Svelte **home
+shell**) → load the Exam P deck (import a `.colpkg` from desktop or sync) → run a
+short review session on **our** engine → tap the **Readiness** tab in the home
+shell to show the three signals (Memory / Performance / Readiness) with ranges +
+the give-up rule, computed on-device by the shared engine (the Svelte
+`readiness-dashboard` route → `computeReadiness` over AnkiDroid's post-bridge;
+the old native `ReadinessScoresActivity` was removed so scores stay
+engine-sourced — see `docs/phone-scores.md`). A captured example of this
+populated three-score screen (synthetic-persona data) is in
+`out/phone-3scores-memory.png` / `-performance.png` / `-readiness.png`. Prove the
+engine is ours on camera (any one is enough):
 
 ```bash
-APK=~/dev/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
+APK=~/dev/projects/speedrun/Anki-Android/AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk
 unzip -p "$APK" lib/arm64-v8a/librsdroid.so | strings | grep -iE "speedrun|ComputeReadiness|Mastery" | head
 # -> anki/rslib/src/speedrun/service.rs, .../out/anki.speedrun.rs, ComputeReadinessRequest ...
 ```

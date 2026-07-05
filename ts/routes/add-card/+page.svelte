@@ -283,25 +283,25 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-color: var(--sr-accent);
     }
     .sug-chip.active {
-        border-color: var(--sr-accent);
-        background: var(--sr-accent);
-        color: #fbfaf6;
+        border-color: var(--sr-accent-strong);
+        background: var(--sr-accent-strong);
+        color: var(--sr-on-accent);
     }
     .msg {
         font-size: 0.9rem;
-        border-radius: 10px;
+        border-radius: var(--sr-radius-sm);
         padding: 0.6rem 0.8rem;
         margin: 0 0 1rem;
     }
     .msg.error {
-        color: #c0392b;
-        background: color-mix(in srgb, #c0392b 10%, transparent);
-        border: 1px solid color-mix(in srgb, #c0392b 40%, var(--border));
+        color: var(--sr-wrong);
+        background: color-mix(in srgb, var(--sr-wrong) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sr-wrong) 40%, var(--border));
     }
     .msg.ok {
-        color: #2f855a;
-        background: color-mix(in srgb, #2f855a 10%, transparent);
-        border: 1px solid color-mix(in srgb, #2f855a 40%, var(--border));
+        color: var(--sr-correct);
+        background: color-mix(in srgb, var(--sr-correct) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sr-correct) 40%, var(--border));
     }
     .actions {
         display: flex;
@@ -318,8 +318,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         cursor: pointer;
     }
     .btn.primary {
-        background: var(--sr-accent);
-        color: #fbfaf6;
+        background: var(--sr-accent-strong);
+        color: var(--sr-on-accent);
         box-shadow: var(--sr-shadow-sm);
     }
     .btn.primary:disabled {

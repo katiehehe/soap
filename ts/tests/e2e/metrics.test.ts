@@ -3,12 +3,23 @@
 
 import { expect, test } from "./fixtures";
 
-test("metrics page documents the three signals + the give-up rule", async ({ page }) => {
-    await page.goto("/metrics");
+test("the readiness explainer documents the three signals + the give-up rule", async ({
+    page,
+}) => {
+    // The standalone /metrics route was folded into a collapsible "How is this
+    // calculated?" explainer on the Readiness page (one honesty surface, not a
+    // separate tab), so the same method text is opened inline here.
+    await page.goto("/readiness-dashboard");
+
+    const explainerToggle = page.getByRole("button", {
+        name: "How is this calculated?",
+    });
+    await expect(explainerToggle).toBeVisible({ timeout: 15000 });
+    await explainerToggle.click();
 
     await expect(
         page.getByRole("heading", { name: "Three signals, never blended" }),
-    ).toBeVisible({ timeout: 15000 });
+    ).toBeVisible();
     await expect(page.getByText("How the metrics work").first()).toBeVisible();
 
     // One section per signal, each stated as its plain question (never blended).
@@ -46,17 +57,18 @@ test("metrics page documents the three signals + the give-up rule", async ({ pag
     await page.screenshot({ path: "out/metrics.png", fullPage: true });
 });
 
-test("a readiness card opens the metrics tab anchored to that signal", async ({
+test("a readiness card opens the how-it-works explainer inline (no separate tab)", async ({
     page,
 }) => {
     await page.goto("/home");
 
-    await expect(page.getByText("Speedrun")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("SOAP")).toBeVisible({ timeout: 15000 });
 
-    // The new transparency tab exists in the Home shell.
+    // "How it works" is no longer a separate tab — it's folded into a collapsible
+    // explainer on the Readiness page, so the tab must be gone.
     await expect(
         page.getByRole("button", { name: "How it works", exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
 
     // Open the Readiness tab, then click the Memory signal card (a real button,
     // keyboard-focusable). Its accessible name starts with "Memory:".
@@ -65,7 +77,8 @@ test("a readiness card opens the metrics tab anchored to that signal", async ({
     await expect(memoryCard).toBeVisible();
     await memoryCard.click();
 
-    // The shell switches to the transparency page, revealing the Memory section.
+    // The explainer opens in place on the readiness page (no navigation away),
+    // revealing the Memory section of the method.
     await expect(
         page.getByRole("heading", { name: "Can you recall this fact right now?" }),
     ).toBeVisible();

@@ -437,9 +437,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .subtopic {
         background: var(--sr-card-bg);
         border: 1px solid var(--border);
-        border-top: var(--sr-border-heavy) solid var(--card-accent);
         border-radius: var(--sr-radius-lg);
-        box-shadow: var(--sr-shadow-sm);
+        box-shadow:
+            inset 0 3px 0 0 var(--card-accent),
+            var(--sr-shadow-sm);
         padding: 1.3rem 1.4rem;
     }
     .sub-title {

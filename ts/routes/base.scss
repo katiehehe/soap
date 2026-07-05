@@ -36,65 +36,89 @@ html {
 }
 
 // ============================================================================
-// Speedrun (SOA Exam P) — ACADEMIC design system (the DNA)
+// SOAP (SOA Exam P) — the "clean / fresh" design system (the DNA)
 // ============================================================================
-// One place to tune the whole custom UI. Scholarly and calm: muted accents that
-// let the neutrals lead, a serif/sans pairing, soft paper-like elevation, quiet
-// motion. All accent + effect tokens are speedrun-only (new names) so they NEVER
-// touch stock Anki screens. The neutral surface/text tokens (--canvas*, --fg*,
-// --border*) are Anki core tokens, RE-MAPPED only inside the speedrun roots
-// below — stock Anki keeps its own.
+// One place to tune the whole custom UI. The pun is the brand: SOA Exam P →
+// SOAP. The register is clean water + soap suds: aqua/teal leads, rounded bubbly
+// shapes, a friendly rounded type pairing (Fredoka display / Nunito body), soft
+// foam-like elevation, quiet motion. All accent + effect tokens are
+// speedrun-only (new names) so they NEVER touch stock Anki screens. The neutral
+// surface/text tokens (--canvas*, --fg*, --border*) are Anki core tokens,
+// RE-MAPPED only inside the speedrun roots below — stock Anki keeps its own.
 //
 // HONESTY GUARDRAIL (this app's auto-fail rule): decoration is chrome. The three
 // signal colours (--sr-pending / --sr-progress / --sr-mastered) stay SEMANTIC
 // and fixed — never rotated through the accent palette — because they carry
 // measured meaning (not-started / in-progress / mastered). Readiness numbers
-// stay high-contrast; accents are decorative only.
+// stay high-contrast and are NEVER set in the bubbly display font; suds, gloss,
+// and bubbles are decorative only and never touch a measured number.
 :root {
-    // Five soft, jewel-toned scholarly accents (used sparingly; rotate by i%5).
-    --sr-accent: #8189d6; // 1 · periwinkle (primary emphasis)
-    --sr-secondary: #6fa892; // 2 · sage
-    --sr-tertiary: #d3a95f; // 3 · honey  (also the in-progress signal hue)
-    --sr-quaternary: #cc8172; // 4 · dusty rose
-    --sr-quinary: #a888c0; // 5 · mauve
+    // Five soap-bright accents (used sparingly; rotate by i%5). Vivid defaults
+    // here (the dark "bath-water" hero); the light block deepens them for AA.
+    --sr-accent: #46c7d1; // 1 · aqua (primary emphasis)
+    --sr-secondary: #58cf9f; // 2 · mint
+    --sr-tertiary: #e6c25a; // 3 · lemon suds (also the in-progress signal family)
+    --sr-quaternary: #f08ac0; // 4 · bubblegum
+    --sr-quinary: #7fb0f0; // 5 · sky
 
-    // Aliases kept for existing markup (brand gradient etc.).
-    --sr-accent-2: #6a72c4; // deeper periwinkle
-    --sr-accent-weak: rgba(129, 137, 214, 0.15);
-    --sr-accent-glow: rgba(129, 137, 214, 0.34);
+    // Aqua companions: a deeper hover/press tone + a faint wash used for
+    // hover/selected fills and hairline focus rings (never as a glow).
+    --sr-accent-2: #2aa6b3; // deeper aqua
+    --sr-accent-weak: rgba(20, 160, 175, 0.16);
+
+    // Primary-action fill. The bright aqua is too light to carry foam/white label
+    // text, so the solid CTA uses a deep teal that clears WCAG-AA 4.5:1 with
+    // --sr-on-accent in BOTH themes. The brand aqua stays --sr-accent for
+    // text/borders/nodes.
+    --sr-accent-strong: #0c6c78; // solid button fill (foam text ≥ 4.5:1)
+    --sr-accent-strong-2: #095662; // its hover / pressed (deeper, higher contrast)
+    --sr-on-accent: #f1fbfb; // foam — label/icon colour on teal fills
+    // Text on a *warm/light* accent fill (lemon, mint): a fixed near-black ink
+    // that stays legible in both themes (the warm fills are light in both).
+    --sr-on-warm: #14201f;
 
     // Semantic signal colours — ONE shared language for the map + readiness.
     // FIXED + meaningful (never rotated):
-    //   not-started (warm grey) · in-progress (honey) · mastered (sage).
-    --sr-pending: #8f897a; // warm grey
-    --sr-progress: #d3a95f; // honey · partial / in progress
-    --sr-mastered: #6fa892; // sage · done / good
+    //   not-started (cool grey) · in-progress (suds gold) · mastered (fresh mint).
+    --sr-pending: #8a9598; // cool grey
+    --sr-progress: #d3a95f; // suds gold · partial / in progress
+    --sr-mastered: #5bb39a; // fresh mint · done / good
     --sr-ok: var(--sr-mastered); // legacy alias
 
-    // Shape + radius (restrained; cards top out ~14px).
-    --sr-radius-sm: 8px;
-    --sr-radius: 12px; // containers
-    --sr-radius-lg: 14px; // cards
+    // Assessment result colours (the graded practice test): correct / wrong.
+    // Semantic and separate from the study signals. The text/border tones are
+    // theme-aware for AA legibility (default = dark hero); the -fill tones stay
+    // deep enough to carry foam label text in either theme.
+    --sr-correct: #78c8a0; // green (text/border on ink)
+    --sr-wrong: #e08a7c; // coral (text/border on ink)
+    --sr-correct-fill: #256b45; // solid green chip (foam text ≥ 4.5:1)
+    --sr-wrong-fill: #a83f2b; // solid red chip (foam text ≥ 4.5:1)
+
+    // Shape + radius — bubbly and rounded (soap bar / bubble). Cards get a soft
+    // generous radius; the pill stays fully round.
+    --sr-radius-sm: 12px;
+    --sr-radius: 16px; // containers
+    --sr-radius-lg: 22px; // cards
     --sr-radius-pill: 9999px;
     --sr-border: 2px; // standard border
     --sr-border-heavy: 3px;
 
-    // Soft, diffuse elevation (paper-like) — no clashing multi-colour stacks.
-    --sr-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
-    --sr-shadow: 0 2px 10px rgba(0, 0, 0, 0.32);
-    --sr-shadow-lg: 0 14px 40px rgba(0, 0, 0, 0.46);
-    // Kept for API compatibility; now gentle single-tone elevation, not neon.
-    --sr-shadow-hard: 0 3px 12px rgba(0, 0, 0, 0.32);
-    --sr-shadow-hard-lg: 0 8px 26px rgba(0, 0, 0, 0.4);
-    // "Glow" is now just a faint hairline, so anything that asked for it calms.
-    --sr-glow: 0 0 0 1px var(--sr-accent-weak);
-    --sr-glow-lg: 0 0 0 1px var(--sr-accent-weak);
+    // Soft, diffuse elevation (foam-like) — a quiet teal-tinted depth, no
+    // clashing multi-colour stacks. Vocabulary is sm / md (default) / lg.
+    --sr-shadow-sm: 0 1px 3px rgba(6, 40, 45, 0.22);
+    --sr-shadow: 0 6px 18px rgba(6, 40, 45, 0.24);
+    --sr-shadow-lg: 0 18px 46px rgba(6, 40, 45, 0.38);
 
-    // Typography — Fraunces (scholarly serif) for headings, DM Sans for body/UI.
-    --sr-font-heading: "Fraunces Variable", "Fraunces", Georgia, "Times New Roman",
-        serif;
-    --sr-font-body: "DM Sans Variable", "DM Sans", system-ui, sans-serif;
+    // Typography — Fredoka (rounded display) for headings/brand, Nunito (rounded
+    // sans) for body/UI. Monospace is reserved for verbatim code / engine
+    // references on the transparency + honesty surfaces. Measured numbers stay in
+    // the clean body font, high-contrast — never the bubbly display font.
+    --sr-font-heading: "Fredoka Variable", "Fredoka", "Baloo 2", system-ui,
+        sans-serif;
+    --sr-font-body: "Nunito Variable", "Nunito", system-ui, sans-serif;
     --sr-font-display: var(--sr-font-heading);
+    --sr-font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", "Roboto Mono",
+        Menlo, Consolas, monospace;
 }
 
 // Surface / text palette, scoped to the custom screens only. Re-mapping the core
@@ -109,17 +133,30 @@ html {
 .study-map,
 .congrats,
 .metrics,
-.formula-sheet {
-    --canvas: #f6f3ec; // warm paper
-    --canvas-elevated: #fdfbf6; // sheets float on the paper
-    --canvas-inset: #efe9dc; // tracks / insets / rails
-    --sr-muted: #f0ebe0; // container tint base
-    --sr-card-bg: #fdfbf6; // opaque cards (no glass)
-    --fg: #262230; // warm ink (critical text) — AAA on paper
-    --fg-subtle: #5f5a54; // muted secondary text
-    --border: rgba(38, 34, 48, 0.13); // subtle structural hairline
-    --border-subtle: rgba(38, 34, 48, 0.07);
-    --sr-focus: #6a72c4; // periwinkle focus ring on light
+.formula-sheet,
+.ptest {
+    --canvas: #eaf5f7; // pale aqua porcelain
+    --canvas-elevated: #ffffff; // clean tile — sheets float on the porcelain
+    --canvas-inset: #d7eaee; // tracks / insets / rails
+    --sr-muted: #e4f1f3; // container tint base
+    --sr-card-bg: #ffffff; // opaque cards (no glass)
+    --fg: #123338; // deep teal ink (critical text) — AAA on porcelain
+    --fg-subtle: #4f6b70; // muted teal-grey secondary text
+    --border: rgba(18, 51, 56, 0.14); // subtle structural hairline
+    --border-subtle: rgba(18, 51, 56, 0.07);
+    --sr-focus: #0f766e; // teal focus ring on light
+
+    // The five soap accents are bright on the dark hero, but only reach ~2–3:1 on
+    // porcelain. In the light variant they deepen to AA-legible tones (≥ 4.5:1 as
+    // text on porcelain) WITHOUT touching the fixed signal colours
+    // (--sr-pending/progress/mastered), which stay semantic.
+    --sr-accent: #0f766e; // aqua/teal (deepened for paper)
+    --sr-secondary: #067a5e; // mint
+    --sr-tertiary: #8a6d1f; // suds gold (deep amber)
+    --sr-quaternary: #b13a72; // bubblegum
+    --sr-quinary: #2f6bcc; // sky
+    --sr-correct: #2c7049; // green result text on paper
+    --sr-wrong: #a83f2b; // red result text on paper
 
     color: var(--fg);
     font-family: var(--sr-font-body);
@@ -133,194 +170,38 @@ html {
     .study-map,
     .congrats,
     .metrics,
-    .formula-sheet {
-        --canvas: #191720; // deep warm ink (plum-charcoal)
-        --canvas-elevated: #221f2b; // elevated surface
-        --canvas-inset: #2a2734; // tracks / insets / rails
-        --sr-muted: #262330; // container base
-        --sr-card-bg: #221f2b; // opaque cards (no glass)
-        --fg: #ece6da; // warm ivory · scholarly paper on ink (AAA)
-        --fg-subtle: #a9a291; // warm taupe-grey
-        --border: rgba(236, 230, 218, 0.12); // subtle structural hairline
-        --border-subtle: rgba(236, 230, 218, 0.07);
-        --sr-focus: #d3a95f; // honey focus ring on dark
+    .formula-sheet,
+    .ptest {
+        --canvas: #0e2a30; // deep bath-water teal
+        --canvas-elevated: #143b42; // elevated surface
+        --canvas-inset: #1b4a52; // tracks / insets / rails
+        --sr-muted: #16383f; // container base
+        --sr-card-bg: #143b42; // opaque cards (no glass)
+        --fg: #e7f5f4; // foam white on deep water (AAA)
+        --fg-subtle: #9db8b8; // muted foam-grey
+        --border: rgba(231, 245, 244, 0.13); // subtle structural hairline
+        --border-subtle: rgba(231, 245, 244, 0.07);
+        --sr-focus: #5ecfd8; // aqua focus ring on dark
+
+        // Dark hero keeps the vivid soap accents (all ≥ 4.6:1 as text on water).
+        --sr-accent: #46c7d1; // aqua
+        --sr-secondary: #58cf9f; // mint
+        --sr-tertiary: #e6c25a; // lemon suds
+        --sr-quaternary: #f08ac0; // bubblegum
+        --sr-quinary: #7fb0f0; // sky
+        --sr-correct: #78c8a0; // green result text on water
+        --sr-wrong: #e08a7c; // coral result text on water
     }
 }
 
 // ---------------------------------------------------------------------------
-// Reusable effect utilities (global, `sr-`-prefixed → only reach custom markup)
-// Centralised here so screens compose the "look" without duplicating CSS.
+// Motion
 // ---------------------------------------------------------------------------
-
-// Pattern layers — pure CSS gradients (offline-safe). Drop onto an absolutely
-// positioned `.sr-layer` (or any element) to add texture. Keep opacity low and
-// LAYER 2–3 for the maximalist pile-up.
-.sr-layer {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-}
-.sr-pattern-dots {
-    background-image: radial-gradient(
-        circle,
-        var(--sr-dot-color, rgba(129, 137, 214, 0.12)) 1px,
-        transparent 1.2px
-    );
-    background-size: var(--sr-dot-size, 24px) var(--sr-dot-size, 24px);
-}
-.sr-pattern-stripes {
-    background-image: repeating-linear-gradient(
-        45deg,
-        transparent,
-        transparent 12px,
-        var(--sr-stripe-color, rgba(198, 160, 82, 0.05)) 12px,
-        var(--sr-stripe-color, rgba(198, 160, 82, 0.05)) 24px
-    );
-}
-.sr-pattern-checker {
-    background-image: conic-gradient(
-        from 90deg at 1px 1px,
-        transparent 90deg,
-        var(--sr-checker-color, rgba(76, 154, 147, 0.04)) 0
-    );
-    background-size: 44px 44px;
-}
-.sr-pattern-mesh {
-    background-image:
-        radial-gradient(
-            ellipse at 18% 20%,
-            rgba(129, 137, 214, 0.1) 0%,
-            transparent 55%
-        ),
-        radial-gradient(
-            ellipse at 85% 75%,
-            rgba(111, 168, 146, 0.08) 0%,
-            transparent 55%
-        );
-}
-
-// Depth utilities.
-.sr-glow {
-    box-shadow: var(--sr-glow);
-}
-.sr-glow-lg {
-    box-shadow: var(--sr-glow-lg);
-}
-.sr-shadow-hard {
-    box-shadow: var(--sr-shadow-hard);
-}
-.sr-shadow-hard-lg {
-    box-shadow: var(--sr-shadow-hard-lg);
-}
-
-// Text effects. Reserve for large display headings (WCAG large-text ≥ 3:1);
-// never body copy or critical numbers.
-.sr-text-shadow {
-    text-shadow: 2px 2px 0 var(--sr-quinary), 4px 4px 0 var(--sr-accent);
-}
-.sr-text-shadow-lg {
-    text-shadow: 3px 3px 0 var(--sr-quinary), 6px 6px 0 var(--sr-accent),
-        9px 9px 0 var(--sr-secondary);
-}
-// Academic pass: gradient text reads as decoration, so this is now a solid ink
-// heading. Kept as a class so any remaining usage stays consistent.
-.sr-text-gradient {
-    color: var(--fg);
-}
-
-// Motion utilities. `will-change` kept on transform/opacity (GPU) only.
-.sr-animate-float,
-.sr-animate-float-rev,
-.sr-animate-pulse-glow,
-.sr-animate-spin-slow,
-.sr-animate-wiggle,
-.sr-animate-bounce {
-    will-change: transform;
-}
-.sr-animate-float {
-    animation: sr-float 6s ease-in-out infinite;
-}
-.sr-animate-float-rev {
-    animation: sr-float-reverse 5s ease-in-out infinite;
-}
-.sr-animate-pulse-glow {
-    animation: sr-pulse-glow 2s ease-in-out infinite;
-}
-.sr-animate-spin-slow {
-    animation: sr-spin-slow 20s linear infinite;
-}
-.sr-animate-wiggle {
-    animation: sr-wiggle 1.2s ease-in-out infinite;
-}
-.sr-animate-bounce {
-    animation: sr-bounce-subtle 2s ease-in-out infinite;
-}
-
-@keyframes sr-float {
-    0%,
-    100% {
-        transform: translateY(0) rotate(0deg);
-    }
-    50% {
-        transform: translateY(-10px) rotate(2deg);
-    }
-}
-@keyframes sr-float-reverse {
-    0%,
-    100% {
-        transform: translateY(0) rotate(0deg);
-    }
-    50% {
-        transform: translateY(10px) rotate(-2deg);
-    }
-}
-@keyframes sr-pulse-glow {
-    0%,
-    100% {
-        box-shadow: 0 0 0 1px var(--sr-accent-weak);
-    }
-    50% {
-        box-shadow: 0 0 0 3px var(--sr-accent-weak);
-    }
-}
-@keyframes sr-gradient-shift {
-    0% {
-        background-position: 0% 50%;
-    }
-    50% {
-        background-position: 100% 50%;
-    }
-    100% {
-        background-position: 0% 50%;
-    }
-}
-@keyframes sr-spin-slow {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-@keyframes sr-wiggle {
-    0%,
-    100% {
-        transform: rotate(-3deg);
-    }
-    50% {
-        transform: rotate(3deg);
-    }
-}
-@keyframes sr-bounce-subtle {
-    0%,
-    100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-10px);
-    }
-}
+// The academic system carries no ambient/decorative motion (the earlier
+// "hyperpop" float/pulse/glow/spin utilities were removed with that register).
+// Motion here only ever conveys state — hover, focus, reveal — and lives in the
+// component that owns the transition. What remains global is the honest promise
+// below: honour the user's reduced-motion preference everywhere.
 
 // Motion sensitivity — keep every visual style, drop the continuous motion.
 @media (prefers-reduced-motion: reduce) {
@@ -329,7 +210,8 @@ html {
     .study-map,
     .congrats,
     .metrics,
-    .formula-sheet {
+    .formula-sheet,
+    .ptest {
         &,
         *,
         *::before,

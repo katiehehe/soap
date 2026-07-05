@@ -5,14 +5,23 @@ from datetime import date, timedelta
 
 from anki import speedrun_pb2
 from anki.speedrun import (
+    POOL_BLOCKED,
+    POOL_CROSS_UNIT,
+    POOL_WITHIN_UNIT,
+    TIER_CROSS_UNIT,
+    TIER_WITHIN_UNIT,
     clear_exam_date,
+    clear_tier_scope,
     exam_date_iso,
     exam_timestamp_for_iso,
     expected_subtopic_tags,
     set_exam_date,
+    set_tier_scope,
     subtopic_prereqs,
     subtopic_tag,
     subtopic_weights,
+    tier_for_deck_name,
+    tier_scope_name,
     unit_prereqs,
     unit_weights,
 )
@@ -21,6 +30,22 @@ from tests.shared import getEmptyCol
 
 # MasteryPool enum values (from proto): BLOCKED=0, WITHIN_UNIT=1, CROSS_UNIT=2
 BLOCKED = 0
+
+
+def test_tier_scope_name_labels_by_tier_scope():
+    # The reviewer banner's scope after the tier name follows the TIER's scope,
+    # not just the card's subtopic. "Common continuous distributions" is a
+    # SUBTOPIC of the Univariate unit, so:
+    tag = subtopic_tag("univariate", "continuous_dists")
+    # Blocked practice drills the single subtopic -> the subtopic name.
+    assert tier_scope_name(POOL_BLOCKED, tag) == "Common continuous distributions"
+    # Within-unit interleaving is scoped to the whole UNIT -> the unit name,
+    # NOT the subtopic (the reported bug: a subtopic shown as if it were a unit).
+    assert tier_scope_name(POOL_WITHIN_UNIT, tag) == "Univariate Random Variables"
+    # Cross-unit spacing spans everything.
+    assert tier_scope_name(POOL_CROSS_UNIT, tag) == "All units"
+    # A malformed tag degrades gracefully to the raw tag (the banner never breaks).
+    assert tier_scope_name(POOL_WITHIN_UNIT, "subtopic::nope") == "subtopic::nope"
 
 
 def test_get_mastery_state_reads_reviews_and_gates():
@@ -429,3 +454,72 @@ def test_ablation_build_configs_build_a_valid_queue():
     col.set_config("speedrunAblateWithinUnit", True)  # Build 2: Ablated
     col.reset()
     assert col.sched.getCard() is not None
+
+
+def test_tier_for_deck_name_classifies_by_level():
+    # Deck -> tier mapping (mirrors the Rust TierScope): the root deck is the
+    # cross-unit tier, a unit deck is the within-unit tier, and a subtopic (leaf)
+    # or any non-exam deck needs no scope (it is already a single subtopic).
+    assert tier_for_deck_name(ROOT_DECK) == TIER_CROSS_UNIT
+    assert tier_for_deck_name("SOA Exam P::General Probability") == TIER_WITHIN_UNIT
+    assert (
+        tier_for_deck_name("SOA Exam P::General Probability::Bayes' theorem") is None
+    )
+    assert tier_for_deck_name("Some Other Deck") is None
+    assert tier_for_deck_name("") is None
+
+
+def _rebuild_for(col, deck_id, other_id):
+    # Force the v3 scheduler to rebuild its (cached) queue for `deck_id` after a
+    # plain config change: a bare set_config does NOT invalidate the queue cache,
+    # but re-selecting the deck (via a different deck) does.
+    col.decks.select(other_id)
+    col.decks.select(deck_id)
+
+
+def test_tier_scope_keeps_blocked_out_of_cross_unit_live_queue():
+    # Strict tiers, end to end through the LIVE Rust queue: on a freshly built
+    # deck (mastery scheduler ON) every subtopic is still Blocked, so scoping the
+    # root deck to the cross-unit tier must serve NOTHING — a still-blocked
+    # subtopic must never leak into cross-unit study. Clearing the scope restores
+    # normal study. This is the strict-tier fix exercised from Python.
+    col = getEmptyCol()
+    build_deck(col)
+    root_id = col.decks.id(ROOT_DECK)
+    default_id = col.decks.id("Default")
+
+    # Baseline: with no tier scope the root deck serves its (blocked) cards.
+    col.decks.select(root_id)
+    assert col.sched.getCard() is not None
+
+    # Scope the root to the cross-unit tier: nothing is cross-unit yet -> empty.
+    set_tier_scope(col, root_id, TIER_CROSS_UNIT)
+    _rebuild_for(col, root_id, default_id)
+    assert col.sched.getCard() is None, "cross-unit must not serve blocked subtopics"
+
+    # Remove the scope -> the root deck studies its whole subtree again.
+    clear_tier_scope(col)
+    _rebuild_for(col, root_id, default_id)
+    assert col.sched.getCard() is not None
+
+
+def test_tier_scope_is_deck_keyed_and_read_only():
+    # The scope is keyed to the deck it was set for, so a root cross-unit scope
+    # must NOT affect a different (subtopic) deck; studying that subtopic still
+    # works. And scoping is read-only: no revlog rows are written by building the
+    # scoped queue (undo/integrity are untouched).
+    col = getEmptyCol()
+    build_deck(col)
+    root_id = col.decks.id(ROOT_DECK)
+    set_tier_scope(col, root_id, TIER_CROSS_UNIT)
+
+    sub_deck = "SOA Exam P::General Probability::Sets, sample spaces, and axioms"
+    # Selecting the subtopic deck (a different deck) rebuilds its queue; the root-
+    # keyed scope must not apply here.
+    col.decks.select(col.decks.id(sub_deck))
+    revlog_before = col.db.scalar("select count() from revlog")
+    assert (
+        col.sched.getCard() is not None
+    ), "a root-keyed scope must not affect a subtopic deck"
+    # Building the (scoped) queue never writes to the revlog.
+    assert col.db.scalar("select count() from revlog") == revlog_before

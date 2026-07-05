@@ -133,11 +133,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // bubble map (variant "map"), Today's plan + Mastery pace ("plan"), the memory
     // (spaced-repetition) view ("memory"), or the coverage statistics ("stats").
     // The standalone /study-map route shows everything ("full").
-    export let variant: "map" | "plan" | "memory" | "stats" | "full" = "full";
+    export let variant:
+        | "map"
+        | "plan"
+        | "memory"
+        | "cram"
+        | "stats"
+        | "full" = "full";
     $: showMap = variant === "map" || variant === "full";
     $: showPlan = variant === "plan" || variant === "full";
     $: showMemory = variant === "memory" || variant === "full";
     $: showStats = variant === "stats" || variant === "full";
+    // The Cram tab shows ONLY the unlimited-practice controls (no memory score or
+    // due summary) so it reads as "solely a cram tab"; the full/memory views keep
+    // cram beneath the memory signal.
+    $: showCram = variant === "cram" || variant === "memory" || variant === "full";
 
     let result: MasteryState | null = null;
     let readiness: ReadinessResult | null = null;
@@ -146,6 +156,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let loadError = "";
     let selectedLeaf: LeafNode | null = null;
     let selectedUnit: UnitNode | null = null;
+    // The centre "Exam P" node opens an overall-mastery detail — mastery lives
+    // here now (clicked from the map), not in the Stats tab (which is Anki-only).
+    let selectedRoot = false;
 
     // Scale the fixed-size diagram to fit the available width (never upscaling).
     // A uniform scale preserves the (verified) non-overlapping geometry. The
@@ -483,14 +496,22 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     function selectLeaf(node: LeafNode): void {
         selectedLeaf = node;
         selectedUnit = null;
+        selectedRoot = false;
     }
     function selectUnit(node: UnitNode): void {
         selectedUnit = node;
         selectedLeaf = null;
+        selectedRoot = false;
+    }
+    function selectRoot(): void {
+        selectedRoot = true;
+        selectedLeaf = null;
+        selectedUnit = null;
     }
     function closeDetail(): void {
         selectedLeaf = null;
         selectedUnit = null;
+        selectedRoot = false;
     }
     // Review (MEMORY, the support track): open due cards for scheduled review.
     function studySubtopic(tag: string): void {
@@ -675,9 +696,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <section class="focus-strip" aria-label="What to do next">
             <div class="focus-strip-head">
                 <span class="focus-badge">What to do next</span>
-                <span class="focus-hint">
-                    two separate systems — suggestions, never a required list
-                </span>
+                <span class="focus-hint">suggestions, not a required list</span>
             </div>
 
             <div class="rec-stack">
@@ -935,9 +954,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <section class="memory" aria-label="Memory (spaced repetition)">
             <div class="memory-head">
                 <h2>Memory</h2>
-                <span class="memory-sub">
-                    can you recall it right now? (spaced repetition)
-                </span>
+                <span class="memory-sub">can you recall it right now?</span>
             </div>
 
             {#if memoryRecall?.hasData}
@@ -985,6 +1002,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     No reviews due — caught up
                 </button>
             {/if}
+        </section>
+    {/if}
+
+    {#if showCram}
+        <section class="memory" aria-label="Cram (unlimited practice)">
+            <div class="memory-head">
+                <h2>Cram</h2>
+                <span class="memory-sub">
+                    unlimited practice — never touches your schedule or daily limits
+                </span>
+            </div>
+
             <button
                 class="study-btn secondary"
                 on:click={cramAll}
@@ -1007,9 +1036,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </div>
 
             <p class="memory-note">
-                Cram is unlimited practice that <b>never</b>
-                changes your spaced-repetition schedule or daily limits. Memory is a
-                support signal; Performance (practice tests) is the spine.
+                Cram is unlimited practice — it <b>never</b>
+                changes your spaced-repetition schedule or daily limits.
             </p>
         </section>
     {/if}
@@ -1087,9 +1115,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <p class="overall-note">
                 This is <b>demonstrated mastery</b>
                 — only subtopics you've proven with real reviews (≥ {MIN_PROBLEMS} problems,
-                ≥ 80% accurate, ≥ 90% retained) count, and "{pct(
-                    overall.weightedMasteryPct,
-                )} by exam weight" weights them by section importance. It is
+                ≥ 80% accurate, ≥ 90% retained) count. It is
                 <b>not</b>
                 a predicted exam score.
                 {#if noScore}
@@ -1307,16 +1333,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                             </g>
                         </svg>
 
-                        <!-- centre: opens an exam-shaped practice test -->
+                        <!-- centre: opens the overall-mastery detail (with a
+                             whole-exam practice-test button inside it) -->
                         <button
                             type="button"
                             class="bubble center"
+                            class:selected={selectedRoot}
                             style="left:{center.x - center.r}px; top:{center.y -
                                 center.r}px;
                        width:{center.r * 2}px; height:{center.r * 2}px;
                        border-color:{ACCENT}; --tint:{ACCENT}1f;"
-                            title="Take a practice test — exam-shaped questions across the whole exam that build your Performance & Readiness signals"
-                            on:click={practiceAllTest}
+                            title="See your overall mastery across the whole exam — and take a practice test"
+                            on:click={selectRoot}
                         >
                             <span class="node-title">Exam P</span>
                             {#if overall}
@@ -1324,7 +1352,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                     {overall.subtopicsMastered}/{overall.subtopicsTotal}
                                 </span>
                             {/if}
-                            <span class="center-cta">Practice test</span>
+                            <span class="center-cta">Mastery</span>
                         </button>
 
                         <!-- units -->
@@ -1385,7 +1413,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     </div>
                 </div>
             </div>
-            {#if selectedUnit || selectedLeaf}
+            {#if selectedRoot || selectedUnit || selectedLeaf}
                 <section class="detail">
                     <button
                         class="detail-close"
@@ -1394,7 +1422,109 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     >
                         ×
                     </button>
-                    {#if selectedUnit}
+                    {#if selectedRoot}
+                        <div class="detail-head">
+                            <div>
+                                <h2>SOA Exam P</h2>
+                                <p class="detail-unit">
+                                    Overall mastery across the whole exam
+                                </p>
+                            </div>
+                            {#if overall}
+                                <span
+                                    class="pill"
+                                    style="background:{ACCENT}22; color:{ACCENT};"
+                                >
+                                    {overall.subtopicsMastered}/{overall.subtopicsTotal}
+                                    mastered
+                                </span>
+                            {/if}
+                        </div>
+                        {#if overall}
+                            <div
+                                class="stack"
+                                role="img"
+                                aria-label="{overall.subtopicsMastered} mastered, {overall.subtopicsInProgress} in progress, {overall.subtopicsNotStarted} not started"
+                            >
+                                {#if overall.subtopicsMastered > 0}
+                                    <span
+                                        class="seg"
+                                        style="width:{segWidth(
+                                            overall.subtopicsMastered,
+                                        )}; background:{GREEN};"
+                                    ></span>
+                                {/if}
+                                {#if overall.subtopicsInProgress > 0}
+                                    <span
+                                        class="seg"
+                                        style="width:{segWidth(
+                                            overall.subtopicsInProgress,
+                                        )}; background:{AMBER};"
+                                    ></span>
+                                {/if}
+                                {#if overall.subtopicsNotStarted > 0}
+                                    <span
+                                        class="seg"
+                                        style="width:{segWidth(
+                                            overall.subtopicsNotStarted,
+                                        )}; background:{GREY};"
+                                    ></span>
+                                {/if}
+                            </div>
+                            <dl class="stats">
+                                <div>
+                                    <dt>Subtopics mastered</dt>
+                                    <dd>
+                                        {overall.subtopicsMastered} / {overall.subtopicsTotal}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>Units mastered</dt>
+                                    <dd>{overall.unitsMastered} / {overall.unitsTotal}</dd>
+                                </div>
+                                <div>
+                                    <dt>Mastery by weight</dt>
+                                    <dd>{pct(overall.weightedMasteryPct)}</dd>
+                                </div>
+                                <div>
+                                    <dt>In progress</dt>
+                                    <dd>{overall.subtopicsInProgress}</dd>
+                                </div>
+                            </dl>
+                            {#if priorities.length > 0}
+                                <p class="hint">
+                                    Weakest:
+                                    <b>
+                                        {NAME_BY_TAG.get(priorities[0].tag) ??
+                                            priorities[0].subtopicId}
+                                    </b>
+                                    — {priorities[0].reason}
+                                </p>
+                            {/if}
+                            <p class="hint">
+                                Demonstrated mastery — only subtopics you've proven with
+                                real reviews count. Never a predicted score.
+                            </p>
+                        {:else}
+                            <p class="hint">
+                                No mastery data yet — review some cards first.
+                            </p>
+                        {/if}
+                        <button
+                            class="study-btn"
+                            on:click={practiceAllTest}
+                            title="Take a practice test — exam-shaped questions across the whole exam that build your Performance & Readiness signals"
+                        >
+                            Practice test (whole exam)
+                        </button>
+                        <button
+                            class="study-btn secondary"
+                            on:click={cramAll}
+                            title="Unlimited flashcard cram of the whole exam — never touches your spaced-repetition schedule or daily limits."
+                        >
+                            Review everything (cram)
+                        </button>
+                    {:else if selectedUnit}
                         {@const um = unitMap.get(selectedUnit.id)}
                         {@const uc = unitColors.get(selectedUnit.id) ?? GREY}
                         {@const unitId = selectedUnit.id}
@@ -1649,9 +1779,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     header .subtitle {
         margin: 0.7rem 0 0;
-        /* Span the full content column (which is wider here than the other
-           screens, to fit the map) instead of a narrow measure — otherwise the
-           description stops ~60% across and the header reads as "half width". */
+        /* Cap the measure for readability (the design system asks for ~65–75ch);
+           a wide map underneath doesn't need a full-bleed description. */
+        max-width: 72ch;
         color: var(--fg-subtle);
         font-size: 0.95rem;
         line-height: 1.6;
@@ -1665,7 +1795,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         z-index: 1;
         border: var(--sr-border) solid var(--sr-quaternary);
         border-radius: var(--sr-radius);
-        background: rgba(255, 107, 53, 0.12);
+        background: color-mix(in srgb, var(--sr-quaternary) 14%, transparent);
         padding: 0.85rem 1.1rem;
         margin-bottom: 1.25rem;
         font-weight: 600;
@@ -1683,10 +1813,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         z-index: 1;
         margin: 0 0 1.25rem;
         border: 1px solid var(--border);
-        border-top: 3px solid var(--panel-accent, var(--sr-accent));
         border-radius: var(--sr-radius);
         background-color: var(--canvas-elevated);
-        box-shadow: var(--sr-shadow);
+        /* 3px top-accent stripe as an inset shadow, so the section colour tucks
+           neatly into the rounded top corners (a top-only accent, per the system). */
+        box-shadow:
+            inset 0 3px 0 0 var(--panel-accent, var(--sr-accent)),
+            var(--sr-shadow);
     }
 
     /* Map legend — a persistent KEY for the two recommendation systems. Each is
@@ -1805,7 +1938,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         white-space: nowrap;
     }
 
-    /* PRIMARY — performance / practice (the loud one). */
+    /* PRIMARY — performance / practice (the loud one). Emphasis comes from the
+       warm tint + a TOP accent stripe (never a side stripe, per the system). */
     .rec-perf {
         background:
             linear-gradient(
@@ -1814,7 +1948,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             ),
             var(--canvas-elevated);
         border: 1px solid rgba(211, 169, 95, 0.55);
-        border-left: 4px solid var(--perf-line);
+        box-shadow: inset 0 3px 0 0 var(--perf-line);
     }
     .rec-perf .rec-mark {
         font-size: 1.4rem;
@@ -1824,7 +1958,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--perf-ink);
     }
     .rec-kicker.perf .rec-axis {
-        color: #35270a;
+        color: var(--sr-on-warm);
         background: var(--perf-line);
     }
     .rec-cta {
@@ -1838,7 +1972,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border: 1px solid transparent;
         border-radius: var(--sr-radius-sm);
         background: var(--perf-line);
-        color: #2a2205;
+        color: var(--sr-on-warm);
         cursor: pointer;
         text-align: left;
         box-shadow: var(--sr-shadow-sm);
@@ -1897,10 +2031,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: var(--border);
     }
 
-    /* SECONDARY — memory / review (the quiet, subordinate one). */
+    /* SECONDARY — memory / review (the quiet, subordinate one). The dashed
+       outline alone marks it as optional; no side stripe (top-only accents). */
     .rec-mem {
         border: 1px dashed var(--mem-line);
-        border-left: 3px solid var(--mem-line);
         background: transparent;
     }
     .rec-mem .rec-mark {
@@ -1912,7 +2046,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .rec-kicker.mem .rec-axis {
         color: var(--mem-ink);
-        background: rgba(126, 136, 201, 0.16);
+        background: color-mix(in srgb, var(--mem-line) 18%, transparent);
     }
     .rec-chips {
         display: flex;
@@ -1935,7 +2069,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             color 0.18s ease;
     }
     .rec-chip:hover {
-        background: rgba(126, 136, 201, 0.16);
+        background: color-mix(in srgb, var(--mem-line) 18%, transparent);
     }
     .rec-chip:focus-visible {
         outline: 2px solid var(--sr-focus);
@@ -2005,8 +2139,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: #23262e;
-        background: var(--sr-tertiary);
+        color: var(--sr-tertiary);
+        background: transparent;
+        border: 1px solid var(--sr-tertiary);
         border-radius: var(--sr-radius-pill);
         padding: 0.15rem 0.6rem;
     }
@@ -2208,9 +2343,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             border-color 0.2s ease;
     }
     .plan-study:hover {
-        background: var(--sr-accent-2);
-        border-color: var(--sr-accent-2);
-        color: #fbfaf6;
+        background: var(--sr-accent-strong);
+        border-color: var(--sr-accent-strong);
+        color: var(--sr-on-accent);
     }
     .plan-study:focus-visible {
         outline: 2px solid var(--sr-focus);
@@ -2238,8 +2373,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             color 0.2s ease;
     }
     .plan-more:hover {
-        background: var(--sr-secondary);
-        color: #16181d;
+        background: color-mix(in srgb, var(--sr-secondary) 16%, transparent);
+        color: var(--fg);
     }
     .plan-more:focus-visible {
         outline: 2px solid var(--sr-focus);
@@ -2459,9 +2594,35 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         box-shadow: var(--sr-shadow-sm);
         transform: scale(0.88);
     }
-    /* Node TITLES (centre / unit / subtopic) all use the heading font (Fraunces),
+    /* Soap-bubble sheen: a soft top-left highlight clipped to the rounded shape,
+       so each node reads as a glossy bubble. Decorative only. */
+    .bubble::before,
+    .leaf::before {
+        content: "";
+        position: absolute;
+        top: 7%;
+        left: 11%;
+        width: 44%;
+        height: 28%;
+        border-radius: 50%;
+        background: radial-gradient(
+            circle at 32% 32%,
+            rgba(255, 255, 255, 0.5),
+            rgba(255, 255, 255, 0) 72%
+        );
+        opacity: 0.7;
+        pointer-events: none;
+        z-index: 1;
+    }
+    /* Keep the labels above the sheen. */
+    .bubble > span,
+    .leaf > span {
+        position: relative;
+        z-index: 2;
+    }
+    /* Node TITLES (centre / unit / subtopic) all use the heading font (Fredoka),
        so every bubble label reads as one type family. Small meta text (counts,
-       "% of exam", legend, detail body) stays in the body font (DM Sans) — a
+       "% of exam", legend, detail body) stays in the body font (Nunito) — a
        coherent two-font scheme, no stray third font. */
     .node-title {
         font-family: var(--sr-font-heading);
@@ -2644,11 +2805,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         max-height: calc(100vh - 110px);
         overflow-y: auto;
         border: 1px solid var(--border);
-        border-top: 3px solid var(--sr-accent);
         border-radius: var(--sr-radius);
         padding: 1.35rem 1.45rem;
         background-color: var(--canvas-elevated);
-        box-shadow: var(--sr-shadow);
+        box-shadow:
+            inset 0 3px 0 0 var(--sr-accent),
+            var(--sr-shadow);
         animation: popIn 0.16s ease;
     }
     @media (max-width: 900px) {
@@ -2659,6 +2821,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             flex-basis: 100%;
             position: static;
             max-height: none;
+        }
+        /* Once the two recommendation legend entries stack, the vertical hairline
+           between them would float on its own line — drop it (they're already on
+           separate rows). */
+        .legend-sep {
+            display: none;
         }
     }
     @keyframes popIn {
@@ -2802,7 +2970,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 0.8rem;
     }
 
-    /* Primary study CTA — the loud, gradient, pill button. */
+    /* Primary study CTA — solid periwinkle, paper label (AA-legible). */
     .study-btn {
         margin-top: 1.1rem;
         width: 100%;
@@ -2810,8 +2978,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         padding: 0.7rem 1rem;
         border: 1px solid transparent;
         border-radius: var(--sr-radius);
-        background: var(--sr-accent);
-        color: #fbfaf6;
+        background: var(--sr-accent-strong);
+        color: var(--sr-on-accent);
         font-family: var(--sr-font-body);
         font-weight: 700;
         font-size: 0.9rem;
@@ -2822,7 +2990,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             box-shadow 0.2s ease;
     }
     .study-btn:hover:not(:disabled) {
-        background: var(--sr-accent-2);
+        background: var(--sr-accent-strong-2);
         box-shadow: var(--sr-shadow);
     }
     .study-btn:active:not(:disabled) {

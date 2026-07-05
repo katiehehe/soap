@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use crate::collection::Collection;
 use crate::error::Result;
 use crate::prelude::CardId;
+use crate::prelude::DeckId;
 use crate::prelude::NoteId;
 use crate::scheduler::queue::DueCard;
 use crate::scheduler::queue::NewCard;
@@ -41,6 +42,18 @@ pub(crate) const SUBTOPIC_WEIGHTS_KEY: &str = "speedrunSubtopicWeights";
 /// full three-tier scheduler (build 1) into the ablated build (build 2); build
 /// 3 is plain Anki (mastery scheduler off).
 pub(crate) const ABLATE_WITHIN_UNIT_KEY: &str = "speedrunAblateWithinUnit";
+
+/// Config key for the transient "active tier scope": when the user opens a
+/// within-unit or cross-unit TIER deck from the study map/plan, Python writes
+/// `{deck_id, tier}` here so the queue builder serves ONLY the subtopics that
+/// are actually in that tier's mastery pool. Without it a parent (unit/root)
+/// deck studies its whole subtree — so a still-Blocked subtopic would leak into
+/// within-/cross-unit study. The scope is keyed to the deck it was set for, so a
+/// stale value never affects a different deck; absent -> no scoping (the deck is
+/// studied exactly as upstream builds it). Mirrors the practice-deck scoping in
+/// `qt/aqt/speedrun.py`, but at the queue level so FSRS still schedules normally
+/// (no filtered deck). See `speedrun_scope_queues_to_tier`.
+pub(crate) const ACTIVE_TIER_SCOPE_KEY: &str = "speedrunActiveTierScope";
 
 /// Config key holding the target exam date as a unix timestamp (local noon of
 /// the exam day; noon so day-counting is robust to timezones / Anki's day
@@ -84,6 +97,17 @@ pub(crate) const MIN_RETRIEVABILITY: f64 = 0.90;
 pub(crate) const MIN_PERF_QUESTIONS: u32 = 5;
 pub(crate) const MIN_PERF_ACCURACY: f64 = 0.80;
 
+/// A unit's within-unit interleaving tier only activates once at least this
+/// many of its subtopics have cleared their gate: with fewer, there is nothing
+/// to interleave *against*, so a single cleared subtopic keeps practicing in
+/// isolation (the blocked tier) rather than being mislabeled as "within-unit
+/// interleaving". This is the ONE source of truth for when within-unit begins —
+/// `compute_pools` (the card banner + queue order), `recommend_study`, and
+/// `build_study_plan` all read it, so they can never drift apart again (a lone
+/// cleared subtopic showing up as within-unit on one surface and blocked on
+/// another was exactly the reported bug).
+pub(crate) const MIN_CLEARED_TO_INTERLEAVE: u32 = 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Pool {
     /// Not yet mastered — practice this subtopic in isolation.
@@ -92,6 +116,42 @@ pub(crate) enum Pool {
     WithinUnit,
     /// Its unit is mastered — interleave across units (spacing).
     CrossUnit,
+}
+
+/// Which mastery TIER a study session is scoped to (the strict-tier study). A
+/// unit deck opens the within-unit tier; the root deck opens the cross-unit
+/// tier. Blocked practice needs no scope (a subtopic/leaf deck already holds one
+/// subtopic), so it is intentionally absent here. Parsed from the transient
+/// `speedrunActiveTierScope` config.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TierScope {
+    WithinUnit,
+    CrossUnit,
+}
+
+impl TierScope {
+    /// The config `tier` string Python writes (kept in one place so both sides
+    /// agree). Unknown strings parse to `None`, so a malformed scope is ignored
+    /// rather than mis-filtering the queue.
+    fn from_config_str(s: &str) -> Option<Self> {
+        match s {
+            "within_unit" => Some(TierScope::WithinUnit),
+            "cross_unit" => Some(TierScope::CrossUnit),
+            _ => None,
+        }
+    }
+}
+
+/// Whether a subtopic in `pool` is eligible to be SERVED when studying `tier`.
+/// This is the strict-tier rule: within-unit study serves only WithinUnit-pool
+/// subtopics; cross-unit study serves only CrossUnit-pool subtopics. A
+/// still-Blocked subtopic is eligible for NEITHER, so it can never leak into a
+/// parent-deck (unit/root) study session. Pure, so it is directly unit-testable.
+pub(crate) fn pool_eligible_for_tier(pool: Pool, tier: TierScope) -> bool {
+    match tier {
+        TierScope::WithinUnit => matches!(pool, Pool::WithinUnit),
+        TierScope::CrossUnit => matches!(pool, Pool::CrossUnit),
+    }
 }
 
 /// Per-subtopic review stats, accumulated from the collection.
@@ -273,8 +333,18 @@ pub(crate) fn parse_subtopic_tag(tag: &str) -> Option<(String, String)> {
     }
 }
 
-/// Multi-level gating: a subtopic's pool depends on its own gate AND whether
-/// its whole unit has been mastered (every subtopic in the unit cleared).
+/// Multi-level gating: a subtopic's pool depends on its own gate, how many of
+/// its unit's sub-types have cleared (you can only *interleave within a unit*
+/// once there are >= MIN_CLEARED_TO_INTERLEAVE cleared sub-types to mix), and
+/// whether its whole unit has been mastered (every subtopic cleared).
+///
+/// A cleared subtopic whose unit has fewer than MIN_CLEARED_TO_INTERLEAVE
+/// cleared sub-types stays in the **Blocked** tier: with nothing to interleave
+/// against, "within-unit interleaving" would just be blocked practice of one
+/// subtopic wearing the wrong label. It promotes to WithinUnit the moment a
+/// sibling clears. This keeps the pool (which drives the review banner and the
+/// live queue order) consistent with `recommend_study` and `build_study_plan`,
+/// which already require >= MIN_CLEARED_TO_INTERLEAVE cleared for the tier.
 pub(crate) fn compute_pools(stats: &[SubtopicStats]) -> HashMap<String, Pool> {
     // A unit is mastered only if it has >= 1 subtopic and all are cleared.
     let mut unit_total: HashMap<&str, u32> = HashMap::new();
@@ -293,12 +363,22 @@ pub(crate) fn compute_pools(stats: &[SubtopicStats]) -> HashMap<String, Pool> {
     stats
         .iter()
         .map(|s| {
+            let cleared_in_unit = unit_cleared.get(s.unit_id.as_str()).copied().unwrap_or(0);
             let pool = if !s.gate_cleared() {
+                // Not yet mastered: drill this subtopic in isolation.
                 Pool::Blocked
             } else if unit_mastered(&s.unit_id) {
+                // Whole unit cleared: interleave across units (spacing).
                 Pool::CrossUnit
-            } else {
+            } else if cleared_in_unit >= MIN_CLEARED_TO_INTERLEAVE {
+                // Unit not fully mastered but has >= 2 cleared sub-types to
+                // interleave against -> genuine within-unit interleaving.
                 Pool::WithinUnit
+            } else {
+                // Cleared, but the ONLY cleared sub-type in its unit: nothing to
+                // interleave yet, so keep practicing it in isolation until a
+                // sibling clears (honest blocked tier, not a mislabeled mix).
+                Pool::Blocked
             };
             (s.tag(), pool)
         })
@@ -685,7 +765,7 @@ pub(crate) fn recommend_study(stats: &[SubtopicStats]) -> StudyRec {
     for u in &order {
         let c = cleared.get(u).copied().unwrap_or(0);
         let t = total.get(u).copied().unwrap_or(0);
-        if c >= 2 && c < t && best.map_or(true, |(_, bc)| c > bc) {
+        if c >= MIN_CLEARED_TO_INTERLEAVE && c < t && best.map_or(true, |(_, bc)| c > bc) {
             best = Some((u.as_str(), c));
         }
     }
@@ -729,15 +809,47 @@ fn is_actionable(c: Counts) -> bool {
     c.0 + c.1 + c.2 > 0
 }
 
+/// Sum today's `(new, review, learn, total)` across a set of subtopics, reading
+/// each subtopic's OWN (leaf) deck counts. A parent-tier row (within-/cross-unit)
+/// uses this so it reflects exactly the cards STRICT-study serves for that tier —
+/// only the in-pool subtopics — instead of the parent deck's rolled-up total,
+/// which would also count the tier's out-of-pool (e.g. still-blocked) subtopics.
+fn sum_subtopic_counts<'a>(
+    tags: impl IntoIterator<Item = &'a str>,
+    tag_deck: &HashMap<String, i64>,
+    counts: &HashMap<i64, Counts>,
+) -> Counts {
+    let mut acc: Counts = (0, 0, 0, 0);
+    for tag in tags {
+        if let Some(&did) = tag_deck.get(tag) {
+            if let Some(&c) = counts.get(&did) {
+                acc.0 += c.0;
+                acc.1 += c.1;
+                acc.2 += c.2;
+                acc.3 += c.3;
+            }
+        }
+    }
+    acc
+}
+
 /// Build today's tiered study plan from measured gate state + real deck counts.
 ///
 /// - BLOCKED: every uncleared subtopic (highest exam-importance first),
 ///   pointing at its own subtopic deck — drill it in isolation.
-/// - WITHIN_UNIT: units that aren't fully mastered but have >= 2 cleared
-///   sub-types to interleave, pointing at the unit deck (the parent of its
-///   subtopic decks).
-/// - CROSS_UNIT: once any unit is mastered, the whole-exam deck (the
-///   grandparent of a subtopic deck) for cross-unit spacing.
+/// - WITHIN_UNIT: units with WithinUnit-pool sub-types to interleave, pointing
+///   at the unit deck (the parent of its subtopic decks). Its counts sum ONLY
+///   those in-pool subtopics — matching what strict-study serves — not the unit
+///   deck's rolled-up total (which would also count the unit's still-blocked
+///   subtopics: the reported 6-not-12 bug).
+/// - CROSS_UNIT: the CrossUnit-pool subtopics (units that are fully mastered),
+///   pointing at the whole-exam deck (the grandparent of a subtopic deck) for
+///   cross-unit spacing. Its counts sum ONLY those subtopics, not the root
+///   deck's rolled-up total.
+///
+/// Tier membership is read from `pools` (via `pool_eligible_for_tier`), the SAME
+/// predicate the live strict queue (`scope_cards_to_tier`) uses, so the plan
+/// counts and what the queue serves can never drift apart.
 ///
 /// Only decks with something due today are returned (`is_actionable`). Pure: it
 /// reorders/labels measured state and never fabricates a score.
@@ -776,30 +888,39 @@ pub(crate) fn build_study_plan(
         }
     }
 
-    // Per-unit rollup, first-seen order.
+    // Per-unit, first-seen order, plus a sample subtopic deck per unit (to
+    // resolve the unit / root deck ids from the deck tree). Tier membership
+    // itself is read from `pools`, so the plan and the live strict queue share
+    // one source of truth.
     let mut unit_order: Vec<String> = Vec::new();
-    let mut total: HashMap<String, u32> = HashMap::new();
-    let mut cleared: HashMap<String, u32> = HashMap::new();
+    let mut seen_unit: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut sample_deck: HashMap<String, i64> = HashMap::new();
     for s in stats {
-        if !total.contains_key(&s.unit_id) {
+        if seen_unit.insert(s.unit_id.clone()) {
             unit_order.push(s.unit_id.clone());
-        }
-        *total.entry(s.unit_id.clone()).or_default() += 1;
-        if s.gate_cleared() {
-            *cleared.entry(s.unit_id.clone()).or_default() += 1;
         }
         if let Some(&did) = tag_deck.get(&s.tag()) {
             sample_deck.entry(s.unit_id.clone()).or_insert(did);
         }
     }
 
-    // WITHIN_UNIT tier: not fully mastered, >= 2 cleared sub-types to interleave.
+    // WITHIN_UNIT tier: a unit that has WithinUnit-pool sub-types. The row still
+    // OPENS the unit deck (strict-study scopes it), but its counts sum ONLY the
+    // in-pool subtopics — so a unit of 6 within-unit + 6 blocked shows 6, not the
+    // unit deck's rolled-up 12.
     for unit in &unit_order {
-        let t = total.get(unit).copied().unwrap_or(0);
-        let c = cleared.get(unit).copied().unwrap_or(0);
-        let mastered = t > 0 && c == t;
-        if mastered || c < 2 {
+        let in_pool: Vec<String> = stats
+            .iter()
+            .filter(|s| &s.unit_id == unit)
+            .filter(|s| {
+                pools
+                    .get(&s.tag())
+                    .map(|p| pool_eligible_for_tier(*p, TierScope::WithinUnit))
+                    .unwrap_or(false)
+            })
+            .map(|s| s.tag())
+            .collect();
+        if in_pool.is_empty() {
             continue;
         }
         let Some(&sub_did) = sample_deck.get(unit) else {
@@ -809,7 +930,8 @@ pub(crate) fn build_study_plan(
         if unit_did == 0 {
             continue;
         }
-        if let Some(&cc) = counts.get(&unit_did).filter(|c| is_actionable(**c)) {
+        let cc = sum_subtopic_counts(in_pool.iter().map(String::as_str), tag_deck, counts);
+        if is_actionable(cc) {
             items.push(PlanItem {
                 tier: StudyMode::WithinUnit,
                 deck_id: unit_did,
@@ -823,19 +945,29 @@ pub(crate) fn build_study_plan(
         }
     }
 
-    // CROSS_UNIT tier: once a unit is mastered, interleave across units via the
-    // whole-exam deck (grandparent of a subtopic deck).
-    let any_cross = stats
+    // CROSS_UNIT tier: the CrossUnit-pool subtopics (their units are fully
+    // mastered). The row OPENS the whole-exam deck (grandparent of a subtopic
+    // deck), but its counts sum ONLY those CrossUnit subtopics, not the root
+    // deck's rolled-up total.
+    let cross_tags: Vec<String> = stats
         .iter()
-        .any(|s| pools.get(&s.tag()).copied() == Some(Pool::CrossUnit));
-    if any_cross {
+        .filter(|s| {
+            pools
+                .get(&s.tag())
+                .map(|p| pool_eligible_for_tier(*p, TierScope::CrossUnit))
+                .unwrap_or(false)
+        })
+        .map(|s| s.tag())
+        .collect();
+    if !cross_tags.is_empty() {
         // All subtopics share one root, so any subtopic deck resolves it.
         let root = sample_deck.values().next().map(|&sub_did| {
             let unit_did = parent.get(&sub_did).copied().unwrap_or(0);
             parent.get(&unit_did).copied().unwrap_or(0)
         });
         if let Some(root_did) = root.filter(|&d| d != 0) {
-            if let Some(&cc) = counts.get(&root_did).filter(|c| is_actionable(**c)) {
+            let cc = sum_subtopic_counts(cross_tags.iter().map(String::as_str), tag_deck, counts);
+            if is_actionable(cc) {
                 items.push(PlanItem {
                     tier: StudyMode::CrossUnit,
                     deck_id: root_did,
@@ -932,9 +1064,9 @@ pub(crate) fn compute_mastery_pace(
 }
 
 /// Order new cards by tier: blocked subtopics first (grouped so each is
-/// practiced in isolation), then within-unit interleaving, then cross-unit
-/// interleaving. Cards whose subtopic is unknown sort last, preserving their
-/// input order.
+/// practiced in isolation), then within-unit interleaving (a unit's cleared
+/// sub-types alternated together), then cross-unit interleaving. Cards whose
+/// subtopic is unknown sort last, preserving their input order.
 pub(crate) fn order_new_cards(
     cards: &[(CardId, String)],
     pools: &HashMap<String, Pool>,
@@ -957,28 +1089,47 @@ pub(crate) fn order_new_cards(
             None => 3,
         }
     };
-    // Grouping key within a tier: Blocked practices one subtopic at a time (group
-    // by subtopic); the Full within-unit tier groups by UNIT so a unit's
-    // confusable cleared subtopics stay together (this IS the within-unit
-    // interleaving the ablation removes); the ablated mixed pool and the
-    // cross-unit spacing tier use no grouping, so cleared cards interleave
-    // globally in input order.
-    let group = |r: u8, pool: Option<Pool>, tag: &str| -> String {
+    // Round-robin position of each card within its OWN subtopic, in input order
+    // (0 for the first card of that subtopic, 1 for the second, ...). The Full
+    // within-unit tier sorts by this first, so a unit's cleared sub-types are
+    // genuinely alternated (x1, y1, x2, y2, ...) instead of being concatenated
+    // by whatever order they were gathered in — this is the actual within-unit
+    // *interleaving*, robust to gather order.
+    let mut seen_per_tag: HashMap<&str, usize> = HashMap::new();
+    let rr_index: Vec<usize> = cards
+        .iter()
+        .map(|(_, tag)| {
+            let n = seen_per_tag.entry(tag.as_str()).or_insert(0);
+            let idx = *n;
+            *n += 1;
+            idx
+        })
+        .collect();
+    // Sort key within a tier `(group, round_robin, subtopic)`:
+    // - Blocked: group by subtopic (round-robin/subtopic unused) -> each
+    //   subtopic drilled together in isolation.
+    // - Full within-unit: group by UNIT, then round-robin across the unit's
+    //   cleared sub-types (this IS the within-unit interleaving the ablation
+    //   removes — confusable siblings mixed *with each other*).
+    // - Ablated mixed pool + cross-unit spacing: no grouping, so cleared cards
+    //   interleave globally in input order.
+    let key = |r: u8, pool: Option<Pool>, tag: &str, rr: usize| -> (String, usize, String) {
         if r == 0 {
-            tag.to_string()
+            (tag.to_string(), 0, String::new())
         } else if !ablate_within_unit && matches!(pool, Some(Pool::WithinUnit)) {
-            parse_subtopic_tag(tag).map(|(u, _)| u).unwrap_or_default()
+            let unit = parse_subtopic_tag(tag).map(|(u, _)| u).unwrap_or_default();
+            (unit, rr, tag.to_string())
         } else {
-            String::new()
+            (String::new(), 0, String::new())
         }
     };
-    let mut keyed: Vec<(u8, String, usize, CardId)> = cards
+    let mut keyed: Vec<(u8, (String, usize, String), usize, CardId)> = cards
         .iter()
         .enumerate()
         .map(|(i, (cid, tag))| {
             let pool = pools.get(tag).copied();
             let r = rank(pool);
-            (r, group(r, pool, tag), i, *cid)
+            (r, key(r, pool, tag, rr_index[i]), i, *cid)
         })
         .collect();
     keyed.sort_by(|a, b| {
@@ -987,6 +1138,33 @@ pub(crate) fn order_new_cards(
             .then_with(|| a.2.cmp(&b.2))
     });
     keyed.into_iter().map(|(_, _, _, cid)| cid).collect()
+}
+
+/// The card ids to KEEP when a study session is scoped to `tier` — the strict
+/// tier rule applied to a gathered queue. A card is kept when its subtopic is in
+/// an eligible pool for the tier (`pool_eligible_for_tier`); a card carrying NO
+/// syllabus subtopic (`tag == None`) is always kept, so only the tiered syllabus
+/// is scoped and any non-speedrun card sharing the deck is never dropped. A
+/// syllabus card whose subtopic isn't in `pools` (shouldn't happen — pools are
+/// computed over every present subtopic) is dropped, matching "serve ONLY the
+/// subtopics in this tier". Pure and order-preserving, so the strict-tier
+/// behaviour is unit-testable without a live collection.
+pub(crate) fn scope_cards_to_tier(
+    cards: &[(CardId, Option<String>)],
+    pools: &HashMap<String, Pool>,
+    tier: TierScope,
+) -> Vec<CardId> {
+    cards
+        .iter()
+        .filter(|(_, tag)| match tag {
+            Some(t) => pools
+                .get(t)
+                .map(|p| pool_eligible_for_tier(*p, tier))
+                .unwrap_or(false),
+            None => true,
+        })
+        .map(|(cid, _)| *cid)
+        .collect()
 }
 
 /// Measured weakness of a subtopic in [0, 1]: `1 - mean FSRS retrievability`.
@@ -1570,6 +1748,90 @@ impl Collection {
         }
         Ok(())
     }
+
+    /// The active tier scope for `deck_id`, if the transient
+    /// `speedrunActiveTierScope` config is set AND keyed to this exact deck.
+    /// Returns `None` when unset, malformed, targeting a different deck, or
+    /// carrying an unknown tier — so a stale scope can never affect the wrong
+    /// deck, and a missing/invalid value is simply a no-op (upstream/plain decks
+    /// untouched). Read-only.
+    pub(crate) fn speedrun_active_tier_scope(&self, deck_id: DeckId) -> Option<TierScope> {
+        #[derive(serde::Deserialize)]
+        struct ScopeConfig {
+            #[serde(default)]
+            deck_id: i64,
+            #[serde(default)]
+            tier: String,
+        }
+        let cfg: ScopeConfig = self.get_config_optional(ACTIVE_TIER_SCOPE_KEY)?;
+        if cfg.deck_id != deck_id.0 {
+            return None;
+        }
+        TierScope::from_config_str(&cfg.tier)
+    }
+
+    /// Strict tier study: when `deck_id` is the deck the active tier scope was
+    /// set for, retain in the gathered `new` and `review` queues ONLY the cards
+    /// whose subtopic is actually in that tier's mastery pool (within-unit study
+    /// serves only WithinUnit-pool subtopics; cross-unit study serves only
+    /// CrossUnit-pool subtopics). This stops a parent (unit/root) deck from
+    /// serving its still-Blocked descendants — the tiers no longer leak. Pools
+    /// depend on whole-unit mastery, so stats are computed over every syllabus
+    /// subtopic present, not just the gathered cards' (mirrors the reorders).
+    ///
+    /// A no-op when no scope targets this deck, or when no gathered card is a
+    /// syllabus card. Read-only: it only drops gathered cards from the in-memory
+    /// queue (like the guided new-card gate / a per-deck limit), so it writes
+    /// nothing — undo, FSRS intervals, and collection integrity are untouched —
+    /// and cards without a syllabus subtopic are never dropped.
+    pub(crate) fn speedrun_scope_queues_to_tier(
+        &mut self,
+        deck_id: DeckId,
+        new: &mut Vec<NewCard>,
+        review: &mut Vec<DueCard>,
+    ) -> Result<()> {
+        let Some(tier) = self.speedrun_active_tier_scope(deck_id) else {
+            return Ok(());
+        };
+        let note_subtopics = self.speedrun_note_subtopic_map()?;
+        // Nothing tiered gathered -> leave the queue exactly as built.
+        let touches_syllabus = new.iter().any(|c| note_subtopics.contains_key(&c.note_id))
+            || review.iter().any(|c| note_subtopics.contains_key(&c.note_id));
+        if !touches_syllabus {
+            return Ok(());
+        }
+        // Pools depend on whole-unit mastery, so compute over every syllabus
+        // subtopic present (not just the ones gathered right now).
+        let mut seen = std::collections::HashSet::new();
+        let all_subtopics: Vec<String> = note_subtopics
+            .values()
+            .filter(|t| seen.insert((*t).clone()))
+            .cloned()
+            .collect();
+        let stats = self.speedrun_subtopic_stats(&all_subtopics)?;
+        let pools = compute_pools(&stats);
+
+        let new_tagged: Vec<(CardId, Option<String>)> = new
+            .iter()
+            .map(|c| (c.id, note_subtopics.get(&c.note_id).cloned()))
+            .collect();
+        let keep_new: std::collections::HashSet<CardId> =
+            scope_cards_to_tier(&new_tagged, &pools, tier)
+                .into_iter()
+                .collect();
+        new.retain(|c| keep_new.contains(&c.id));
+
+        let review_tagged: Vec<(CardId, Option<String>)> = review
+            .iter()
+            .map(|c| (c.id, note_subtopics.get(&c.note_id).cloned()))
+            .collect();
+        let keep_review: std::collections::HashSet<CardId> =
+            scope_cards_to_tier(&review_tagged, &pools, tier)
+                .into_iter()
+                .collect();
+        review.retain(|c| keep_review.contains(&c.id));
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -1675,44 +1937,99 @@ mod tests {
 
     #[test]
     fn tier_transition_blocked_then_within_then_cross() {
-        // Unit "gp" has two subtopics; "uv" has one.
-        // gp::a cleared, gp::b not -> gp not mastered.
+        // Unit "gp" has three subtopics; "uv" has one (its only subtopic).
+
+        // Phase 1: only gp::a cleared. A LONE cleared sub-type can't interleave
+        // (nothing to mix against), so it stays Blocked — not mislabeled as
+        // within-unit. uv is fully mastered (its one subtopic) -> CrossUnit.
         let stats = vec![
-            stat("gp", "a", 12, 12, 0.95),
-            stat("gp", "b", 3, 1, 0.50),
-            stat("uv", "x", 15, 15, 0.99),
+            stat("gp", "a", 12, 12, 0.95), // cleared, but the only one in gp
+            stat("gp", "b", 3, 1, 0.50),   // not cleared
+            stat("gp", "c", 0, 0, 0.0),    // not started
+            stat("uv", "x", 15, 15, 0.99), // uv's only subtopic -> unit mastered
         ];
         let pools = compute_pools(&stats);
-        // gp::a cleared but unit not mastered -> WithinUnit.
-        assert_eq!(pools["subtopic::gp::a"], Pool::WithinUnit);
-        // gp::b not cleared -> Blocked.
+        assert_eq!(
+            pools["subtopic::gp::a"],
+            Pool::Blocked,
+            "a lone cleared sub-type has nothing to interleave -> stays Blocked"
+        );
         assert_eq!(pools["subtopic::gp::b"], Pool::Blocked);
-        // uv fully mastered (its only subtopic cleared) -> CrossUnit.
+        assert_eq!(pools["subtopic::gp::c"], Pool::Blocked);
         assert_eq!(pools["subtopic::uv::x"], Pool::CrossUnit);
 
-        // Now clear gp::b: gp becomes mastered, so gp::a promotes to CrossUnit.
+        // Phase 2: gp::b clears too -> gp now has 2 cleared sub-types, so both
+        // promote to WithinUnit (genuine interleaving); gp::c stays Blocked.
         let stats2 = vec![
             stat("gp", "a", 12, 12, 0.95),
             stat("gp", "b", 12, 11, 0.95),
+            stat("gp", "c", 0, 0, 0.0),
             stat("uv", "x", 15, 15, 0.99),
         ];
         let pools2 = compute_pools(&stats2);
-        assert_eq!(pools2["subtopic::gp::a"], Pool::CrossUnit);
-        assert_eq!(pools2["subtopic::gp::b"], Pool::CrossUnit);
+        assert_eq!(pools2["subtopic::gp::a"], Pool::WithinUnit);
+        assert_eq!(pools2["subtopic::gp::b"], Pool::WithinUnit);
+        assert_eq!(pools2["subtopic::gp::c"], Pool::Blocked);
+
+        // Phase 3: gp::c clears -> gp fully mastered, so every gp sub-type
+        // promotes to CrossUnit (spacing across units).
+        let stats3 = vec![
+            stat("gp", "a", 12, 12, 0.95),
+            stat("gp", "b", 12, 11, 0.95),
+            stat("gp", "c", 12, 12, 0.95),
+            stat("uv", "x", 15, 15, 0.99),
+        ];
+        let pools3 = compute_pools(&stats3);
+        assert_eq!(pools3["subtopic::gp::a"], Pool::CrossUnit);
+        assert_eq!(pools3["subtopic::gp::b"], Pool::CrossUnit);
+        assert_eq!(pools3["subtopic::gp::c"], Pool::CrossUnit);
+    }
+
+    #[test]
+    fn lone_cleared_subtopic_stays_blocked_until_a_sibling_clears() {
+        // Regression: a single cleared sub-type in a not-yet-mastered unit must
+        // NOT be reported as within-unit interleaving (there is nothing to
+        // interleave). It stays Blocked, and only becomes WithinUnit once a
+        // second sub-type in the same unit clears. This keeps the review banner
+        // consistent with the study plan / recommendation (both need >= 2).
+        let one = vec![
+            stat("uv", "continuous_dists", 12, 12, 0.95), // cleared, alone
+            stat("uv", "discrete_dists", 4, 2, 0.60),     // not cleared
+            stat("uv", "insurance_apps", 0, 0, 0.0),      // not started
+        ];
+        let pools_one = compute_pools(&one);
+        assert_eq!(pools_one["subtopic::uv::continuous_dists"], Pool::Blocked);
+
+        let two = vec![
+            stat("uv", "continuous_dists", 12, 12, 0.95), // cleared
+            stat("uv", "discrete_dists", 12, 12, 0.95),   // now cleared too
+            stat("uv", "insurance_apps", 0, 0, 0.0),      // still not started
+        ];
+        let pools_two = compute_pools(&two);
+        assert_eq!(
+            pools_two["subtopic::uv::continuous_dists"],
+            Pool::WithinUnit
+        );
+        assert_eq!(pools_two["subtopic::uv::discrete_dists"], Pool::WithinUnit);
+        assert_eq!(pools_two["subtopic::uv::insurance_apps"], Pool::Blocked);
     }
 
     #[test]
     fn pool_ordering_blocked_first_then_within_then_cross() {
+        // gp has 2 cleared (a, b -> WithinUnit) + 1 blocking (c); uv's only
+        // subtopic is cleared -> uv mastered -> CrossUnit.
         let stats = vec![
-            stat("gp", "a", 12, 12, 0.95), // WithinUnit (gp::b blocks the unit)
-            stat("gp", "b", 0, 0, 0.0),    // Blocked
+            stat("gp", "a", 12, 12, 0.95), // WithinUnit (2 cleared in gp)
+            stat("gp", "b", 12, 12, 0.95), // WithinUnit
+            stat("gp", "c", 0, 0, 0.0),    // Blocked (blocks the unit)
             stat("uv", "x", 15, 15, 0.99), // CrossUnit
         ];
         let pools = compute_pools(&stats);
+        assert_eq!(pools["subtopic::gp::a"], Pool::WithinUnit);
         let cards = vec![
-            (CardId(1), "subtopic::uv::x".to_string()), // CrossUnit
-            (CardId(2), "subtopic::gp::a".to_string()), // WithinUnit
-            (CardId(3), "subtopic::gp::b".to_string()), // Blocked
+            (CardId(1), "subtopic::uv::x".to_string()), // CrossUnit (rank 2)
+            (CardId(2), "subtopic::gp::a".to_string()), // WithinUnit (rank 1)
+            (CardId(3), "subtopic::gp::c".to_string()), // Blocked (rank 0)
             (CardId(4), "subtopic::unknown::z".to_string()), // unknown -> last
         ];
         let ordered = order_new_cards(&cards, &pools, false);
@@ -1721,46 +2038,111 @@ mod tests {
 
     #[test]
     fn full_scheduler_groups_within_unit_cleared_cards_by_unit() {
-        // Two units, each with a cleared (WithinUnit) subtopic + a blocking one,
-        // with cards input-interleaved across units. The FULL build groups each
-        // unit's within-unit cleared cards together (within-unit interleaving);
-        // the ABLATED build interleaves all cleared cards globally by input order.
+        // Two units, each with 2 cleared (WithinUnit) subtypes + a blocking one.
+        // The FULL build keeps each unit's within-unit cards together AND
+        // alternates that unit's sub-types (genuine interleaving); the ABLATED
+        // build drops the tier so all cleared cards mix globally by input order.
         let stats = vec![
-            stat("gp", "a", 12, 12, 0.95), // cleared -> WithinUnit (gp::b blocks)
-            stat("gp", "b", 0, 0, 0.0),    // blocked
-            stat("uv", "x", 12, 12, 0.95), // cleared -> WithinUnit (uv::y blocks)
-            stat("uv", "y", 0, 0, 0.0),    // blocked
+            stat("gp", "a", 12, 12, 0.95), // cleared -> WithinUnit
+            stat("gp", "b", 12, 12, 0.95), // cleared -> WithinUnit
+            stat("gp", "c", 0, 0, 0.0),    // blocked (keeps gp unmastered)
+            stat("uv", "x", 12, 12, 0.95), // cleared -> WithinUnit
+            stat("uv", "y", 12, 12, 0.95), // cleared -> WithinUnit
+            stat("uv", "z", 0, 0, 0.0),    // blocked (keeps uv unmastered)
         ];
         let pools = compute_pools(&stats);
+        // Cards gathered with the two units INTERLEAVED in the input, so "keep a
+        // unit's cards together" (Full) is visibly different from "global input
+        // order" (Ablated).
         let cards = vec![
             (CardId(1), "subtopic::gp::a".to_string()),
             (CardId(2), "subtopic::uv::x".to_string()),
-            (CardId(3), "subtopic::gp::a".to_string()),
-            (CardId(4), "subtopic::uv::x".to_string()),
+            (CardId(3), "subtopic::gp::b".to_string()),
+            (CardId(4), "subtopic::uv::y".to_string()),
+            (CardId(5), "subtopic::gp::a".to_string()),
+            (CardId(6), "subtopic::uv::x".to_string()),
+            (CardId(7), "subtopic::gp::b".to_string()),
+            (CardId(8), "subtopic::uv::y".to_string()),
         ];
-        // Full: grouped by unit -> both gp cards, then both uv cards.
+        // Full: gp's cards first (a1, b1, a2, b2 — its sub-types alternated),
+        // then uv's cards (x1, y1, x2, y2). Each unit is contiguous AND its
+        // sub-types are interleaved.
         assert_eq!(
             order_new_cards(&cards, &pools, false),
-            vec![CardId(1), CardId(3), CardId(2), CardId(4)]
+            vec![
+                CardId(1),
+                CardId(3),
+                CardId(5),
+                CardId(7),
+                CardId(2),
+                CardId(4),
+                CardId(6),
+                CardId(8)
+            ]
         );
-        // Ablated: within-unit tier removed -> global interleave in input order.
+        // Ablated: within-unit tier removed -> one global mixed pool, so the
+        // input order (units mixed) is preserved.
         assert_eq!(
             order_new_cards(&cards, &pools, true),
-            vec![CardId(1), CardId(2), CardId(3), CardId(4)]
+            vec![
+                CardId(1),
+                CardId(2),
+                CardId(3),
+                CardId(4),
+                CardId(5),
+                CardId(6),
+                CardId(7),
+                CardId(8)
+            ]
         );
     }
 
     #[test]
-    fn ablated_collapses_within_and_cross_into_one_mixed_pool() {
-        // gp::a is WithinUnit (gp::b blocks its unit); uv::x is CrossUnit (uv is
-        // fully mastered). Full serves the within-unit card before the cross-unit
-        // card; ablated treats both as one mixed pool, so input order decides.
+    fn within_unit_tier_actually_interleaves_subtopics() {
+        // The heart of the fix: even when a unit's cards are gathered
+        // subtopic-BLOCKED (all of x, then all of y), the within-unit tier must
+        // ALTERNATE the sub-types (x1, y1, x2, y2), so the tier genuinely draws
+        // from ACROSS the unit's subtopics instead of being blocked practice
+        // wearing an "interleaving" label.
         let stats = vec![
-            stat("gp", "a", 12, 12, 0.95),
-            stat("gp", "b", 0, 0, 0.0),
+            stat("uv", "x", 12, 12, 0.95), // cleared -> WithinUnit
+            stat("uv", "y", 12, 12, 0.95), // cleared -> WithinUnit
+            stat("uv", "z", 0, 0, 0.0),    // blocked (keeps uv unmastered)
+        ];
+        let pools = compute_pools(&stats);
+        // Worst case for interleaving: input is fully blocked by subtopic.
+        let cards = vec![
+            (CardId(1), "subtopic::uv::x".to_string()),
+            (CardId(2), "subtopic::uv::x".to_string()),
+            (CardId(3), "subtopic::uv::y".to_string()),
+            (CardId(4), "subtopic::uv::y".to_string()),
+        ];
+        // Full round-robin: x1, y1, x2, y2 — adjacent cards are different
+        // sub-types of the same unit.
+        let full = order_new_cards(&cards, &pools, false);
+        assert_eq!(full, vec![CardId(1), CardId(3), CardId(2), CardId(4)]);
+        // Every adjacent pair is a genuine sub-type switch within the unit.
+        let sub = |cid: CardId| cards.iter().find(|(c, _)| *c == cid).unwrap().1.clone();
+        for pair in full.windows(2) {
+            assert_ne!(sub(pair[0]), sub(pair[1]), "adjacent cards must alternate");
+        }
+    }
+
+    #[test]
+    fn ablated_collapses_within_and_cross_into_one_mixed_pool() {
+        // gp::a is WithinUnit (gp has 2 cleared, a+c, but b blocks the unit);
+        // uv::x is CrossUnit (uv fully mastered). Full serves the within-unit
+        // card before the cross-unit card; ablated treats both cleared cards as
+        // one mixed pool, so input order decides.
+        let stats = vec![
+            stat("gp", "a", 12, 12, 0.95), // cleared -> WithinUnit
+            stat("gp", "c", 12, 12, 0.95), // cleared -> WithinUnit (2nd in gp)
+            stat("gp", "b", 0, 0, 0.0),    // blocked (keeps gp unmastered)
             stat("uv", "x", 12, 12, 0.95), // uv's only subtopic -> CrossUnit
         ];
         let pools = compute_pools(&stats);
+        assert_eq!(pools["subtopic::gp::a"], Pool::WithinUnit);
+        assert_eq!(pools["subtopic::uv::x"], Pool::CrossUnit);
         let cards = vec![
             (CardId(1), "subtopic::uv::x".to_string()), // CrossUnit
             (CardId(2), "subtopic::gp::a".to_string()), // WithinUnit
@@ -1988,16 +2370,17 @@ mod tests {
             (20, 1),
             (1, 0),
         ]);
-        // Only the blocked deck (103), the gp unit deck (10) and root (1) have
-        // something due today; the rest are present but empty (must be filtered).
+        // Per-subtopic (leaf) due counts. The unit/root rolled-up counts are set
+        // to a sentinel (99) that the plan MUST ignore: a tier row now sums only
+        // its in-pool subtopics, never the parent deck's rolled-up total.
         let counts = HashMap::from([
-            (103i64, (2u32, 0u32, 0u32, 2u32)),
-            (10, (2, 1, 0, 6)),
-            (1, (3, 4, 0, 8)),
-            (101, (0, 0, 0, 2)),
-            (102, (0, 0, 0, 2)),
-            (201, (0, 0, 0, 2)),
-            (20, (0, 0, 0, 2)),
+            (101i64, (1u32, 0u32, 0u32, 3u32)), // gp::a WithinUnit
+            (102, (2, 0, 0, 3)),                // gp::b WithinUnit
+            (103, (2, 0, 0, 2)),                // gp::c Blocked
+            (201, (1, 1, 0, 4)),                // uv::x CrossUnit
+            (10, (99, 99, 99, 99)),             // gp unit rollup — must be ignored
+            (20, (99, 99, 99, 99)),             // uv unit rollup — must be ignored
+            (1, (99, 99, 99, 99)),              // root rollup — must be ignored
         ]);
         let plan = build_study_plan(&stats, &pools, &tag_deck, &counts, &parent);
         assert_eq!(plan.len(), 3, "one deck per unlocked tier");
@@ -2005,11 +2388,80 @@ mod tests {
         assert_eq!(plan[0].deck_id, 103);
         assert_eq!(plan[0].subtopic_tag.as_deref(), Some("subtopic::gp::c"));
         assert_eq!((plan[0].new, plan[0].review), (2, 0));
+        // Within-unit row OPENS the unit deck (10) but its counts are the SUM of
+        // the in-pool subtopics a+b = (1+2, 0, 0, 3+3), NOT the unit's rolled-up
+        // 99s (which would leak the blocked subtopic c).
         assert_eq!(plan[1].tier, StudyMode::WithinUnit);
         assert_eq!(plan[1].deck_id, 10);
         assert_eq!(plan[1].unit_id.as_deref(), Some("gp"));
+        assert_eq!(
+            (plan[1].new, plan[1].review, plan[1].learn, plan[1].total),
+            (3, 0, 0, 6)
+        );
+        // Cross-unit row OPENS the root (1) but its counts are ONLY the CrossUnit
+        // subtopic x = (1, 1, 0, 4), not the root's rolled-up 99s.
         assert_eq!(plan[2].tier, StudyMode::CrossUnit);
         assert_eq!(plan[2].deck_id, 1);
+        assert_eq!(
+            (plan[2].new, plan[2].review, plan[2].learn, plan[2].total),
+            (1, 1, 0, 4)
+        );
+    }
+
+    #[test]
+    fn study_plan_within_unit_count_excludes_blocked_subtopics() {
+        // The owner's 6-not-12 case: a unit with 6 within-unit + 6 blocked
+        // subtopics. The within-unit row must count ONLY the 6 promoted
+        // (WithinUnit-pool) subtopics — exactly what strict-study serves — not
+        // the unit deck's rolled-up 12.
+        let mut stats = Vec::new();
+        // 6 cleared sub-types (>=2 cleared, unit not fully mastered) -> WithinUnit.
+        for i in 0..6 {
+            stats.push(stat("gp", &format!("ready{i}"), 12, 12, 0.95));
+        }
+        // 6 still-blocked sub-types keep the unit unmastered.
+        for i in 0..6 {
+            stats.push(stat("gp", &format!("blocked{i}"), 0, 0, 0.0));
+        }
+        let pools = compute_pools(&stats);
+
+        let mut tag_deck: HashMap<String, i64> = HashMap::new();
+        let mut counts: HashMap<i64, Counts> = HashMap::new();
+        let mut parent: HashMap<i64, i64> = HashMap::new();
+        // Unit deck 10 -> root 1 -> top 0.
+        parent.insert(10, 1);
+        parent.insert(1, 0);
+        let mut rolled_new = 0u32;
+        for (i, s) in stats.iter().enumerate() {
+            let did = 100 + i as i64;
+            tag_deck.insert(s.tag(), did);
+            parent.insert(did, 10);
+            // 1 new card due in every subtopic (blocked AND within-unit alike).
+            counts.insert(did, (1, 0, 0, 1));
+            rolled_new += 1;
+        }
+        // The unit deck's rolled-up total counts ALL 12 subtopics (6+6). The plan
+        // must NOT use this for the within-unit row.
+        counts.insert(10, (rolled_new, 0, 0, rolled_new));
+        counts.insert(1, (rolled_new, 0, 0, rolled_new));
+        assert_eq!(rolled_new, 12, "unit rolled-up new = 12 (6 within + 6 blocked)");
+
+        let plan = build_study_plan(&stats, &pools, &tag_deck, &counts, &parent);
+        let within = plan
+            .iter()
+            .find(|p| p.tier == StudyMode::WithinUnit)
+            .expect("a within-unit row (6 cleared sub-types to interleave)");
+        assert_eq!(within.deck_id, 10, "row opens the unit deck");
+        assert_eq!(
+            within.new, 6,
+            "within-unit counts ONLY the 6 promoted subtopics, not the unit's rolled-up 12"
+        );
+        // The 6 blocked subtopics still each get their own blocked row.
+        let blocked = plan
+            .iter()
+            .filter(|p| p.tier == StudyMode::Blocked)
+            .count();
+        assert_eq!(blocked, 6, "each still-blocked subtopic is its own blocked row");
     }
 
     #[test]
@@ -2052,10 +2504,15 @@ mod tests {
         // One cleared sub-type isn't enough to interleave, so no within-unit tier
         // (and nothing is mastered, so no cross-unit either).
         let stats = vec![
-            stat("gp", "a", 12, 12, 0.95), // cleared -> WithinUnit pool
+            stat("gp", "a", 12, 12, 0.95), // cleared but ALONE -> Blocked pool
             stat("gp", "b", 0, 0, 0.0),    // blocked
         ];
         let pools = compute_pools(&stats);
+        assert_eq!(
+            pools["subtopic::gp::a"],
+            Pool::Blocked,
+            "a lone cleared sub-type isn't within-unit (nothing to interleave)"
+        );
         let tag_deck = HashMap::from([
             ("subtopic::gp::a".to_string(), 101i64),
             ("subtopic::gp::b".to_string(), 102i64),
@@ -2159,6 +2616,88 @@ mod tests {
         assert_eq!(parse_subtopic_tag("subtopic::onlyunit"), None);
     }
 
+    // --- strict tier study (a tier serves ONLY its own pool, no leak) ---
+
+    #[test]
+    fn pool_eligible_for_tier_truth_table() {
+        use Pool::*;
+        // Within-unit study serves ONLY WithinUnit-pool subtopics.
+        assert!(pool_eligible_for_tier(WithinUnit, TierScope::WithinUnit));
+        assert!(!pool_eligible_for_tier(Blocked, TierScope::WithinUnit));
+        assert!(!pool_eligible_for_tier(CrossUnit, TierScope::WithinUnit));
+        // Cross-unit study serves ONLY CrossUnit-pool subtopics.
+        assert!(pool_eligible_for_tier(CrossUnit, TierScope::CrossUnit));
+        assert!(!pool_eligible_for_tier(Blocked, TierScope::CrossUnit));
+        assert!(!pool_eligible_for_tier(WithinUnit, TierScope::CrossUnit));
+    }
+
+    #[test]
+    fn strict_within_unit_serves_only_within_unit_pool() {
+        // Opening a unit deck for within-unit study must serve ONLY that unit's
+        // promoted (WithinUnit) sub-types: a still-Blocked sibling must NOT leak
+        // in (the bug), and a CrossUnit card is out of this tier too. A card
+        // with no syllabus subtopic is always kept (only the tier is scoped).
+        let pools = HashMap::from([
+            ("subtopic::gp::blocked".to_string(), Pool::Blocked),
+            ("subtopic::gp::ready1".to_string(), Pool::WithinUnit),
+            ("subtopic::gp::ready2".to_string(), Pool::WithinUnit),
+            ("subtopic::uv::done".to_string(), Pool::CrossUnit),
+        ]);
+        let cards = vec![
+            (CardId(1), Some("subtopic::gp::blocked".to_string())),
+            (CardId(2), Some("subtopic::gp::ready1".to_string())),
+            (CardId(3), Some("subtopic::gp::ready2".to_string())),
+            (CardId(4), Some("subtopic::uv::done".to_string())),
+            (CardId(5), None),
+        ];
+        let kept = scope_cards_to_tier(&cards, &pools, TierScope::WithinUnit);
+        // Promoted within-unit cards + the untagged card, in input order.
+        assert_eq!(kept, vec![CardId(2), CardId(3), CardId(5)]);
+        assert!(
+            !kept.contains(&CardId(1)),
+            "a still-blocked subtopic must never be served in the within-unit tier"
+        );
+        assert!(
+            !kept.contains(&CardId(4)),
+            "a cross-unit subtopic is out of the within-unit tier"
+        );
+    }
+
+    #[test]
+    fn strict_cross_unit_serves_only_cross_unit_pool() {
+        // Opening the root deck for cross-unit study must serve ONLY CrossUnit-
+        // pool subtopics: both Blocked AND WithinUnit cards are excluded.
+        let pools = HashMap::from([
+            ("subtopic::gp::blocked".to_string(), Pool::Blocked),
+            ("subtopic::gp::ready".to_string(), Pool::WithinUnit),
+            ("subtopic::uv::done".to_string(), Pool::CrossUnit),
+        ]);
+        let cards = vec![
+            (CardId(1), Some("subtopic::gp::blocked".to_string())),
+            (CardId(2), Some("subtopic::gp::ready".to_string())),
+            (CardId(3), Some("subtopic::uv::done".to_string())),
+            (CardId(4), None),
+        ];
+        let kept = scope_cards_to_tier(&cards, &pools, TierScope::CrossUnit);
+        assert_eq!(kept, vec![CardId(3), CardId(4)]);
+        assert!(!kept.contains(&CardId(1)), "blocked must not leak into cross-unit");
+        assert!(!kept.contains(&CardId(2)), "within-unit must not leak into cross-unit");
+    }
+
+    #[test]
+    fn strict_tier_drops_unknown_syllabus_but_keeps_untagged() {
+        // A syllabus card whose subtopic isn't classified is dropped ("serve
+        // ONLY the in-tier subtopics"); a non-syllabus (untagged) card is kept.
+        let pools = HashMap::from([("subtopic::uv::done".to_string(), Pool::CrossUnit)]);
+        let cards = vec![
+            (CardId(1), Some("subtopic::mystery::z".to_string())), // not in pools
+            (CardId(2), Some("subtopic::uv::done".to_string())),
+            (CardId(3), None),
+        ];
+        let kept = scope_cards_to_tier(&cards, &pools, TierScope::CrossUnit);
+        assert_eq!(kept, vec![CardId(2), CardId(3)]);
+    }
+
     // --- live-queue integration (the opt-in three-tier mastery scheduler) ---
 
     fn add_tagged(col: &mut Collection, tags: &[&str]) -> (CardId, NoteId) {
@@ -2236,6 +2775,83 @@ mod tests {
         col.set_current_deck(DeckId(1)).unwrap();
         let queued = col.get_queued_cards(5, false).unwrap();
         assert_eq!(queued.cards.len(), 2);
+    }
+
+    #[test]
+    fn scope_queues_excludes_blocked_and_is_deck_keyed() {
+        // End to end through the config: all cards are fresh, so every subtopic
+        // is Blocked. Scoping the studied deck to the cross-unit tier must serve
+        // NOTHING (a still-blocked subtopic must not leak into cross-unit), and
+        // the scope only applies to the exact deck it was keyed to.
+        let mut col = Collection::new();
+        let (ca, na) = add_tagged(&mut col, &["subtopic::gp::a"]);
+        let (cb, nb) = add_tagged(&mut col, &["subtopic::uv::x"]);
+        let studied = DeckId(1); // add_tagged adds cards to deck 1
+
+        col.set_config_json(
+            ACTIVE_TIER_SCOPE_KEY,
+            &serde_json::json!({"deck_id": studied.0, "tier": "cross_unit"}),
+            false,
+        )
+        .unwrap();
+
+        // Reads the config, computes pools, and drops the out-of-tier cards.
+        let mut new = vec![nc(ca, na), nc(cb, nb)];
+        let mut review: Vec<DueCard> = Vec::new();
+        col.speedrun_scope_queues_to_tier(studied, &mut new, &mut review)
+            .unwrap();
+        assert!(
+            new.is_empty(),
+            "cross-unit study must not serve still-blocked subtopics"
+        );
+
+        // Deck-keyed: the same scope must be a no-op for a different deck.
+        let mut new_other = vec![nc(ca, na), nc(cb, nb)];
+        col.speedrun_scope_queues_to_tier(DeckId(999), &mut new_other, &mut review)
+            .unwrap();
+        assert_eq!(
+            new_other.len(),
+            2,
+            "a scope keyed to another deck must not affect this one"
+        );
+    }
+
+    #[test]
+    fn scope_queues_no_scope_is_a_noop() {
+        // With no active tier scope, the queue is left exactly as built (the
+        // parent-deck behaviour upstream / plain Anki relies on).
+        let mut col = Collection::new();
+        let (ca, na) = add_tagged(&mut col, &["subtopic::gp::a"]);
+        let mut new = vec![nc(ca, na)];
+        let mut review: Vec<DueCard> = Vec::new();
+        col.speedrun_scope_queues_to_tier(DeckId(1), &mut new, &mut review)
+            .unwrap();
+        assert_eq!(new.len(), 1, "no scope -> nothing is dropped");
+    }
+
+    #[test]
+    fn scope_queues_is_read_only() {
+        // Scoping only drops in-memory gathered cards; it must write nothing, so
+        // undo and collection integrity are untouched.
+        let mut col = Collection::new();
+        let (ca, na) = add_tagged(&mut col, &["subtopic::gp::a"]);
+        col.set_config_json(
+            ACTIVE_TIER_SCOPE_KEY,
+            &serde_json::json!({"deck_id": 1, "tier": "cross_unit"}),
+            false,
+        )
+        .unwrap();
+        // Warm up Anki's lazy timing cache first (its one-time UTC-offset /
+        // rollover config init is unrelated to scoping), so the delta below
+        // isolates writes from OUR method — which must be none.
+        col.timing_today().unwrap();
+        let before = col.changes_since_open().unwrap();
+        let mut new = vec![nc(ca, na)];
+        let mut review: Vec<DueCard> = Vec::new();
+        col.speedrun_scope_queues_to_tier(DeckId(1), &mut new, &mut review)
+            .unwrap();
+        let after = col.changes_since_open().unwrap();
+        assert_eq!(before, after, "tier scoping must not modify the collection");
     }
 
     // --- points-at-stake review order (topic weight x student weakness) ---

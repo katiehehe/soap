@@ -612,10 +612,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     /* Honest urgency in the final minutes — a colour shift, never a glow. */
     .clock.low {
-        border-color: color-mix(in srgb, #c0392b 55%, var(--border));
+        border-color: color-mix(in srgb, var(--sr-wrong) 55%, var(--border));
     }
     .clock.low .clock-time {
-        color: #c0392b;
+        color: var(--sr-wrong);
     }
     .clock.inline {
         flex-direction: row;
@@ -649,12 +649,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         transform: translateY(1px);
     }
     .btn.primary {
-        background: var(--sr-accent);
-        color: #fbfaf6;
+        background: var(--sr-accent-strong);
+        color: var(--sr-on-accent);
         box-shadow: var(--sr-shadow-sm);
     }
     .btn.primary:hover {
-        filter: brightness(1.06);
+        background: var(--sr-accent-strong-2);
     }
     .btn.ghost {
         background: transparent;
@@ -810,11 +810,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin: 0.5rem 0 1.3rem;
     }
     .score-num {
-        font-family: var(--sr-font-heading);
+        font-family: var(--sr-font-body);
         font-weight: 800;
         font-size: 3rem;
         line-height: 1;
-        color: var(--sr-accent);
+        font-variant-numeric: tabular-nums;
+        color: var(--fg);
     }
     .score-den {
         font-size: 1.4rem;
@@ -865,10 +866,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 1.15rem;
     }
     .q.review.correct {
-        border-color: color-mix(in srgb, #2f855a 45%, var(--border));
+        border-color: color-mix(in srgb, var(--sr-correct) 45%, var(--border));
     }
     .q.review.wrong {
-        border-color: color-mix(in srgb, #c0392b 45%, var(--border));
+        border-color: color-mix(in srgb, var(--sr-wrong) 45%, var(--border));
     }
     .verdict {
         font-size: 0.72rem;
@@ -879,20 +880,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-radius: var(--sr-radius-pill, 999px);
     }
     .verdict.ok {
-        background: color-mix(in srgb, #2f855a 18%, transparent);
-        color: #2f855a;
+        background: color-mix(in srgb, var(--sr-correct) 18%, transparent);
+        color: var(--sr-correct);
     }
     .verdict.bad {
-        background: color-mix(in srgb, #c0392b 16%, transparent);
-        color: #c0392b;
+        background: color-mix(in srgb, var(--sr-wrong) 16%, transparent);
+        color: var(--sr-wrong);
     }
     .choice.correct-choice {
-        border-color: #2f855a;
-        background: color-mix(in srgb, #2f855a 12%, var(--canvas));
+        border-color: var(--sr-correct);
+        background: color-mix(in srgb, var(--sr-correct) 12%, var(--canvas));
     }
     .choice.your-wrong {
-        border-color: #c0392b;
-        background: color-mix(in srgb, #c0392b 10%, var(--canvas));
+        border-color: var(--sr-wrong);
+        background: color-mix(in srgb, var(--sr-wrong) 10%, var(--canvas));
     }
     .pill {
         margin-left: auto;
@@ -904,12 +905,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-radius: var(--sr-radius-pill, 999px);
     }
     .pill.ok {
-        background: #2f855a;
-        color: #fbfaf6;
+        background: var(--sr-correct-fill);
+        color: var(--sr-on-accent);
     }
     .pill.bad {
-        background: #c0392b;
-        color: #fbfaf6;
+        background: var(--sr-wrong-fill);
+        color: var(--sr-on-accent);
     }
     .answer {
         margin-top: 0.9rem;

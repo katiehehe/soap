@@ -916,7 +916,6 @@ mod tests {
     use super::wilson_interval;
     use super::PRACTICE_STATS_KEY;
     use crate::collection::Collection;
-    use crate::deckconfig::DeckConfigId;
     use crate::prelude::*;
     use crate::services::SpeedrunService;
     use crate::tests::NoteAdder;

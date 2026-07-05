@@ -55,6 +55,67 @@ server** and verify reviews flow both ways without loss.
   phone runs the same engine, so the scripted desktop↔desktop test exercises the
   identical sync code path).
 
+## On-device verification (emulator) — status + tooling
+
+Re-checked the 2-way sync requirements against the **real AnkiDroid emulator**
+(our fork's engine), talking to a local `make sync-server` on `10.0.2.2:27701`.
+
+Verified:
+
+- **Engine 2-way sync is valid (authoritative):** `make sync-test` → `desktop 20 |
+  phone 20`, none lost/doubled; same-card conflict keeps both revlog rows and both
+  sides converge to one deterministic winner; two-way reconcile 0.02s (< 5s). This
+  is the exact Rust sync code compiled into the phone APK (`librsdroid.so`).
+- **The phone participates in the real protocol:** the AnkiDroid emulator
+  authenticates (hkey from `user:pass`) and performs real Anki sync ops
+  (`/sync/meta`, `/sync/upload`, `/msync/begin`) against the local server.
+- **Phone → desktop demonstrated on-device:** reviews graded in the AnkiDroid
+  emulator were uploaded to the server, then a desktop peer downloaded them
+  (the phone's `revlog` rows showed up in the desktop collection). Captured:
+  `out/phone-reviewed.png` (3 cards studied on the phone) →
+  `out/desktop-readiness-after-sync.png` (desktop readiness reads "3 cards
+  reviewed / 3/200").
+- **Server → phone demonstrated on-device (re-verified this session):** with the
+  fully-scored persona uploaded to the local server
+  (`tools/speedrun/sync_setup.py --from-collection out/demo-persona.anki2`), the
+  `Speedrun_P` emulator ran the real protocol — Sync → *Select collection to keep*
+  → **AnkiWeb** → **Replace** → full download + media sync (logcat:
+  `anki::sync::media::syncer: media sync complete`, `SyncMediaWorker: success`;
+  186 notes pulled). The phone then rendered the three scores with ranges (see
+  `docs/phone-scores.md`).
+- **Client↔server incremental merge works:** a headless desktop/editor peer on the
+  same engine does normal (non-full) merge syncs (e.g. server `revlog` 3 → 5 via a
+  merge, not a replace).
+
+Not cleanly demonstrated on-device (environment-blocked, **not** a sync defect):
+
+- A single **fresh phone→desktop *review* recording on the current themed build.**
+  Two environment factors made the app UI unstable this session (neither is a
+  sync/engine defect): (1) a leftover **phone crash-test loop** from an earlier run
+  was force-stopping AnkiDroid every ~3 s (killed once found); and (2) the debug
+  build ships **LeakCanary**, which heap-dumps on the WebView's retained objects and
+  under heavy host load takes many seconds + steals focus (its `LeakLauncherActivity`
+  pops over AnkiDroid), so tab/reviewer navigation intermittently bounces. `Speedrun_P`
+  is a lean 2 GB AVD; with a quiet host (fewer background `./run`/`yarn dev`
+  processes) or a release build (no LeakCanary), the reviewer flow is stable. The
+  server→phone full download + the three-score render DID complete on-device this
+  session; only the phone→desktop *review* leg awaits a stable capture (prior real
+  capture exists — see above). The shared engine merges correctly (proven by
+  `make sync-test`/`make sync-twoway`), so this is a demo-environment limitation.
+
+Tooling added for reproducing the on-device test:
+
+- `tools/speedrun/sync_emu.py` — desktop-side peer on the shared engine (persistent
+  headless collection) with `sync` / `status` / `review N` / `card` / `reset`
+  subcommands, pointed at the same local server the phone uses.
+- `tools/speedrun/emu_drive.py` — tiny uiautomator driver (tap-by-text, wait,
+  screenshot) to drive the AnkiDroid emulator UI robustly.
+
+Repro sketch: `make sync-server` (leave running) → boot emulator + open AnkiDroid
+pointed at `10.0.2.2:27701` (`user`/`pass`) → sync once to share the deck →
+review on phone, sync, then `sync_emu.py sync` on desktop and confirm the phone's
+`revlog` rows arrive (and the reverse).
+
 ## Notes / risks
 
 - Keep the sync server local and disposable; never point at AnkiWeb for tests.

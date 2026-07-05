@@ -33,7 +33,7 @@ Every number below comes from a one-command, seeded, leakage-checked run — not
 claim. Commands in [Makefile](./Makefile); details in [SPEC_CHECKLIST.md](./SPEC_CHECKLIST.md).
 
 - **Rust engine change** — `SpeedrunService` (7 RPCs) + two opt-in live-queue
-  reorders; ~53 Rust tests + Python-calling tests; undo/no-corruption covered.
+  reorders; 77 Rust tests + Python-calling tests; undo/no-corruption covered.
 - **Study feature + ablation** (`make ablation`) — the three-tier scheduler's
   **within-unit interleaving** tier, tested Full / Ablated / Plain at **equal
   study time**. Reports the pre-registered metric across an effect-size sweep

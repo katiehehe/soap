@@ -87,10 +87,22 @@ class TopWebView(ToolbarWebView):
             else:
                 self.flatten()
 
-        self.adjustHeightToFit()
-        self.show()
+        # Speedrun: don't let a theme/body-class update resurrect a toolbar the
+        # app has intentionally hidden — the custom Home shell is the only top
+        # chrome, so an auto show() here is what brought the gray bar back.
+        if not self.hidden:
+            self.adjustHeightToFit()
+            self.show()
 
     def _onHeight(self, qvar: int | None) -> None:
+        # Speedrun: ignore late height callbacks while hidden. An adjustHeightToFit
+        # scheduled before hide() resolves asynchronously (a JS round-trip) and can
+        # land AFTER the hide, re-expanding the bar back to its natural height —
+        # the gray strip above the custom Home shell. Stay collapsed until an
+        # explicit show().
+        if self.hidden:
+            self.setFixedHeight(0)
+            return
         super()._onHeight(qvar)
         if qvar:
             self.web_height = int(qvar)
@@ -122,11 +134,21 @@ class TopWebView(ToolbarWebView):
         self.eval(
             """document.body.classList.add("hidden"); """,
         )
+        # Speedrun (SOA Exam P fork): collapse the Qt widget too. The "hidden"
+        # body class only hides the toolbar's CONTENT — the QWebEngineView keeps
+        # whatever fixed height a prior adjustHeightToFit gave it, so its own
+        # background shows as a gray strip above the custom Home shell. Zeroing
+        # the widget height removes the bar entirely.
+        self.web_height = 0
+        self.setFixedHeight(0)
 
     def show(self) -> None:
         super().show()
 
         self.eval("""document.body.classList.remove("hidden"); """)
+        # Undo the fixed 0-height from hide() so the bar can grow back to fit its
+        # content (adjustHeightToFit re-fixes the height now that we're visible).
+        self.adjustHeightToFit()
 
     def flatten(self) -> None:
         self.eval("""document.body.classList.add("flat"); """)
@@ -175,6 +197,13 @@ class TopWebView(ToolbarWebView):
         )
 
     def adjustHeightToFit(self) -> None:
+        # Speedrun: a hidden toolbar must measure as zero height. Anki calls this
+        # from draw()/redraw and theme updates; without this guard those paths
+        # re-measure the (content-hidden) bar back to its natural height and
+        # resurrect the gray strip above the custom Home shell.
+        if self.hidden:
+            self.setFixedHeight(0)
+            return
         self.eval("""document.body.style.setProperty("min-height", "0px"); """)
         self.evalWithCallback("document.documentElement.offsetHeight", self._onHeight)
 

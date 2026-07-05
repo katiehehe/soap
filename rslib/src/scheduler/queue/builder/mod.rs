@@ -287,6 +287,18 @@ impl Collection {
 
         queues.gather_cards(self)?;
 
+        // Speedrun (SOA Exam P fork): strict tier study. When the user opens a
+        // within-unit (unit) or cross-unit (root) TIER deck, Python records the
+        // active tier scope keyed to that deck id, and we serve ONLY the cards
+        // whose subtopic is actually in that mastery pool — so a still-Blocked
+        // subtopic never leaks in via the parent deck's subtree. Gated on the
+        // mastery scheduler (so plain Anki / the scheduler-off build are
+        // untouched) and a no-op when no scope targets this deck. Read-only (it
+        // only drops gathered cards, like a per-deck limit), so undo, FSRS
+        // intervals, and collection integrity are untouched.
+        if self.speedrun_mastery_scheduler_enabled() {
+            self.speedrun_scope_queues_to_tier(deck_id, &mut queues.new, &mut queues.review)?;
+        }
         // Speedrun (SOA Exam P fork): the guided-learning gate. Default ON — a
         // fresh learner is guided through the curriculum order — it withholds
         // NEW cards for subtopics whose prerequisites aren't satisfied yet,

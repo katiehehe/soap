@@ -21,31 +21,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import ConceptMap from "../study-map/+page.svelte";
     import PracticeTest from "../practice-test/+page.svelte";
     import Readiness from "../readiness-dashboard/+page.svelte";
-    import Metrics from "../metrics/+page.svelte";
     import FormulaSheet from "../formula-sheet/+page.svelte";
+    import BrandMark from "../speedrun-ui/BrandMark.svelte";
     import type { TestScope } from "../study-map/lib";
-    import type { MetricId } from "../metrics/lib";
 
     // Task-focused tabs: the map, the daily plan, the Memory and Readiness
-    // scores, formulas, coverage stats, and a "how it works" explainer.
+    // scores, formulas, and coverage stats. "How it works" is folded into a
+    // collapsible panel on the Readiness page rather than a separate tab.
     // Performance practice has no tab — it's launched from the map.
-    type Tab =
-        | "map"
-        | "plan"
-        | "memory"
-        | "formula"
-        | "readiness"
-        | "stats"
-        | "metrics";
+    type Tab = "map" | "plan" | "cram" | "readiness" | "stats";
     let tab: Tab = "map";
-    // The "How it works" (metrics) tab can open anchored to one signal when the
-    // user clicks a metric card on the readiness dashboard (the metricinfo event).
-    let metricAnchor: MetricId | null = null;
-    function onMetricInfo(e: CustomEvent<MetricId>): void {
-        metricAnchor = e.detail;
-        tab = "metrics";
-        testActive = false;
-    }
     // Practice-test mode is a focused overlay entered from a bubble's "Practice"
     // action — a subtopic, a unit, or the whole exam via the centre "Exam P"
     // bubble; it takes over the content area and returns to the map when done.
@@ -97,11 +82,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         const known: Tab[] = [
             "map",
             "plan",
-            "memory",
-            "formula",
+            "cram",
             "readiness",
             "stats",
-            "metrics",
         ];
         if (requested && (known as string[]).includes(requested)) {
             tab = requested as Tab;
@@ -134,11 +117,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     const TABS: { id: Tab; label: string; accent: string }[] = [
         { id: "map", label: "Map", accent: "var(--sr-accent)" },
         { id: "plan", label: "Plan", accent: "var(--sr-secondary)" },
-        { id: "memory", label: "Memory", accent: "var(--sr-tertiary)" },
-        { id: "formula", label: "Formulas", accent: "var(--sr-quinary)" },
+        { id: "cram", label: "Cram", accent: "var(--sr-tertiary)" },
         { id: "readiness", label: "Readiness", accent: "var(--sr-quinary)" },
         { id: "stats", label: "Stats", accent: "var(--sr-accent-2)" },
-        { id: "metrics", label: "How it works", accent: "var(--sr-secondary)" },
     ];
 
     // Secondary toolbar actions.
@@ -158,10 +139,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <div class="app">
     <header class="topbar">
         <div class="brand">
-            <span class="brand-mark">P</span>
+            <span class="brand-mark"><BrandMark size={24} /></span>
             <div class="brand-text">
-                <span class="brand-title">Exam&nbsp;P</span>
-                <span class="brand-sub">Speedrun</span>
+                <span class="brand-title">SOAP</span>
+                <span class="brand-sub">SOA&nbsp;Exam&nbsp;P</span>
             </div>
         </div>
 
@@ -175,7 +156,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     on:click={() => {
                         tab = t.id;
                         testActive = false;
-                        metricAnchor = null;
                     }}
                 >
                     {t.label}
@@ -304,24 +284,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             {#key mapKey}
                 <ConceptMap variant="plan" on:practicetest={onPracticeTest} />
             {/key}
-        {:else if tab === "memory"}
+        {:else if tab === "cram"}
             {#key mapKey}
-                <ConceptMap variant="memory" on:practicetest={onPracticeTest} />
+                <ConceptMap variant="cram" on:practicetest={onPracticeTest} />
             {/key}
-        {:else if tab === "formula"}
             <FormulaSheet />
         {:else if tab === "stats"}
-            {#key mapKey}
-                <ConceptMap variant="stats" on:practicetest={onPracticeTest} />
-            {/key}
             <div class="anki-graphs">
                 <h2 class="graphs-title">Review history (Anki stats)</h2>
                 <Graphs />
             </div>
-        {:else if tab === "metrics"}
-            <Metrics anchor={metricAnchor} />
         {:else}
-            <Readiness embedded on:metricinfo={onMetricInfo} />
+            <Readiness />
         {/if}
     </main>
 </div>
@@ -351,22 +325,40 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             var(--canvas);
         font-family: var(--sr-font-body);
     }
-    /* Faint graph-paper dot grid — scholarly texture, easy on the eyes. */
+    /* Faint scatter of soap suds — a soft bubble texture, easy on the eyes. */
     .app::before {
         content: "";
         position: absolute;
         inset: 0;
-        background-image: radial-gradient(
-            circle,
-            rgba(129, 137, 214, 0.05) 1px,
-            transparent 1.2px
-        );
-        background-size: 26px 26px;
+        background-image:
+            radial-gradient(
+                circle at 25% 25%,
+                rgba(70, 199, 209, 0.06) 0 6px,
+                transparent 7px
+            ),
+            radial-gradient(
+                circle at 72% 62%,
+                rgba(70, 199, 209, 0.05) 0 9px,
+                transparent 10px
+            ),
+            radial-gradient(
+                circle at 50% 88%,
+                rgba(70, 199, 209, 0.045) 0 4px,
+                transparent 5px
+            );
+        background-size:
+            140px 140px,
+            200px 200px,
+            110px 110px;
         pointer-events: none;
         z-index: 0;
     }
 
-    /* Top bar — solid and quiet, one hairline underline. */
+    /* Top bar — seamless. It shares the app's own background (canvas + the faint
+       accent wash) with no fill, border, or shadow of its own, so the top of the
+       app is ONLY the background colour / purple — never a grey seam. The content
+       scrolls inside .content (its own box), so nothing ever slides under this
+       bar; a solid fill would only create the seam we are removing. */
     .topbar {
         position: sticky;
         top: 0;
@@ -377,9 +369,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         flex-wrap: wrap;
         gap: 0.75rem 1rem;
         padding: 0.7rem 1.5rem;
-        background: var(--canvas-elevated);
-        border-bottom: 1px solid var(--border);
-        box-shadow: var(--sr-shadow-sm);
+        background: transparent;
+        border-bottom: none;
+        box-shadow: none;
     }
     .brand {
         display: flex;
@@ -394,9 +386,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         place-items: center;
         width: 40px;
         height: 40px;
-        border-radius: 11px;
+        border-radius: var(--sr-radius);
         background: linear-gradient(135deg, var(--sr-accent), var(--sr-accent-2));
-        color: #fbfaf6;
+        color: var(--sr-on-accent);
         font-family: var(--sr-font-heading);
         font-weight: 800;
         font-size: 1.15rem;
@@ -411,7 +403,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .brand-title {
         font-family: var(--sr-font-heading);
         font-weight: 700;
-        font-size: 1.2rem;
+        font-size: 1.4rem;
+        letter-spacing: 0.02em;
     }
     .brand-sub {
         font-size: 0.62rem;
@@ -623,7 +616,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .switch.on .knob {
         transform: translateX(18px);
-        background: #fbfaf6;
+        background: var(--sr-on-accent);
     }
     .switch:focus-visible,
     .seg-opt:focus-visible {

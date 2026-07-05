@@ -39,7 +39,9 @@ const viteConfig = defineViteConfig({
         },
         proxy: {
             "/_anki": {
-                target: "http://127.0.0.1:40000",
+                // Defaults to the desktop app's mediasrv; override with
+                // ANKI_PROXY_TARGET to point the dev server at another backend.
+                target: process.env.ANKI_PROXY_TARGET ?? "http://127.0.0.1:40000",
                 changeOrigin: true,
                 autoRewrite: true,
                 configure,

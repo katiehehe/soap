@@ -3,23 +3,29 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
-    import { createEventDispatcher, onMount } from "svelte";
+    import { onMount } from "svelte";
+    import { slide } from "svelte/transition";
 
     import { computeReadiness } from "@generated/backend";
     import type { ReadinessResult } from "@generated/anki/speedrun_pb";
     import type { MetricId } from "../metrics/lib";
+    import Explainer from "../metrics/Explainer.svelte";
+    import { TAXONOMY, subtopicTag } from "../study-map/lib";
 
-    // Each signal card is clickable: it opens the "How it works" transparency
-    // page anchored to that metric. Inside the Home shell (embedded) we dispatch
-    // "metricinfo" so the shell switches to the metrics tab with the anchor; as a
-    // standalone route we navigate to /metrics#<id> instead.
-    export let embedded = false;
-    const dispatch = createEventDispatcher<{ metricinfo: MetricId }>();
+    // The full method behind every number lives in a collapsible "How is this
+    // calculated?" panel on THIS page (folded in from the old standalone
+    // transparency route, so there is one honesty surface, not a separate tab).
+    // Each signal card is clickable: it opens that panel anchored to the signal.
+    let explainerOpen = false;
+    let explainerAnchor: MetricId | null = null;
     function openMetric(id: MetricId): void {
-        if (embedded) {
-            dispatch("metricinfo", id);
-        } else if (typeof window !== "undefined") {
-            window.location.href = `/metrics#${id}`;
+        explainerAnchor = id;
+        explainerOpen = true;
+    }
+    function toggleExplainer(): void {
+        explainerOpen = !explainerOpen;
+        if (!explainerOpen) {
+            explainerAnchor = null;
         }
     }
     function onCardKey(e: KeyboardEvent, id: MetricId): void {
@@ -53,6 +59,26 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         "subtopic::multivariate::clt",
     ];
 
+    // The readiness engine can only put the raw subtopic TAG into its
+    // next-best-action sentence (the human names live in the syllabus/TAXONOMY on
+    // the client, not in Rust). Swap any tag token for its name so the honesty
+    // bundle reads "Focus your weakest area next: Linear combinations (71% correct
+    // so far)…" instead of "subtopic::multivariate::linear_combinations". Display
+    // only — it never changes the measured number.
+    const SUBTOPIC_NAME = new Map<string, string>(
+        TAXONOMY.flatMap((u) =>
+            u.subtopics.map(
+                (s) => [subtopicTag(u.id, s.id), s.name] as [string, string],
+            ),
+        ),
+    );
+    function humanizeAction(text: string): string {
+        return text.replace(
+            /subtopic::[a-z0-9_]+::[a-z0-9_]+/gi,
+            (tag) => SUBTOPIC_NAME.get(tag) ?? tag,
+        );
+    }
+
     // Official SOA P section weights (range midpoints) so coverage is weighted:
     // skipping a high-weight section can't read as "covered".
     const UNIT_WEIGHTS = [
@@ -81,7 +107,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: memoryRecall = result?.memoryRecall ?? null;
     $: coveragePct = noScore?.coveragePct ?? score?.coveragePct ?? 0;
     $: gradedReviews = noScore?.gradedReviews ?? 0;
-    $: nextAction = noScore?.nextBestAction ?? score?.nextBestAction ?? "—";
+    $: nextAction = humanizeAction(
+        noScore?.nextBestAction ?? score?.nextBestAction ?? "—",
+    );
     // Memory detail line, kept out of the signals array to avoid a nested
     // ternary: reviewed-card count once we have a measured band, else the
     // graded-review count, else nothing studied yet.
@@ -200,6 +228,29 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             {/each}
         </section>
 
+        <section class="how-it-works">
+            <button
+                type="button"
+                class="explainer-toggle"
+                aria-expanded={explainerOpen}
+                on:click={toggleExplainer}
+            >
+                <span>
+                    {explainerOpen
+                        ? "Hide how these are calculated"
+                        : "How is this calculated?"}
+                </span>
+                <span class="chevron" class:open={explainerOpen} aria-hidden="true">
+                    ▾
+                </span>
+            </button>
+            {#if explainerOpen}
+                <div class="explainer-panel" transition:slide>
+                    <Explainer anchor={explainerAnchor} />
+                </div>
+            {/if}
+        </section>
+
         {#if noScore}
             <section class="panel detail-panel">
                 <div class="panel-head">
@@ -238,7 +289,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </div>
                 <div class="next-action">
                     <span class="label">Single best next action</span>
-                    <p>{noScore.nextBestAction}</p>
+                    <p>{humanizeAction(noScore.nextBestAction)}</p>
                 </div>
             </section>
         {:else if score}
@@ -264,7 +315,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </p>
                 <div class="next-action">
                     <span class="label">Single best next action</span>
-                    <p>{score.nextBestAction}</p>
+                    <p>{humanizeAction(score.nextBestAction)}</p>
                 </div>
             </section>
         {/if}
@@ -429,11 +480,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         width: 100%;
         text-align: left;
         border: 1px solid var(--border);
-        border-top: 3px solid var(--signal-color, var(--sr-pending));
         border-radius: var(--sr-radius);
         padding: 1.2rem 1.25rem 1.3rem;
         background: var(--canvas-elevated);
-        box-shadow: var(--sr-shadow-sm);
+        /* 3px top-accent stripe (inset shadow so it tucks into the rounded
+           corners); the signal colour reads the section identity. */
+        box-shadow:
+            inset 0 3px 0 0 var(--signal-color, var(--sr-pending)),
+            var(--sr-shadow-sm);
         cursor: pointer;
         transition:
             transform 0.15s ease,
@@ -443,7 +497,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     /* Clickable affordance: a calm lift, never a glow. */
     .signal:hover {
         transform: translateY(-2px);
-        box-shadow: var(--sr-shadow);
+        box-shadow:
+            inset 0 3px 0 0 var(--signal-color, var(--sr-pending)),
+            var(--sr-shadow);
         border-color: var(--signal-color, var(--sr-pending));
     }
     .signal:active {
@@ -460,6 +516,49 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-weight: 700;
         letter-spacing: 0.03em;
         color: var(--sr-accent);
+    }
+    /* "How is this calculated?" — the transparency method folded in from the
+       old standalone metrics page, revealed inline (not a separate tab). */
+    .how-it-works {
+        margin: 1.25rem 0 0;
+    }
+    .explainer-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        border: 1px solid var(--border);
+        background: var(--canvas-elevated);
+        color: var(--sr-accent);
+        font-family: var(--sr-font-body);
+        font-weight: 700;
+        font-size: 0.8rem;
+        padding: 0.5rem 0.95rem;
+        border-radius: var(--sr-radius-pill);
+        cursor: pointer;
+        transition:
+            border-color 0.2s ease,
+            background 0.2s ease;
+    }
+    .explainer-toggle:hover {
+        border-color: var(--sr-accent);
+        background: var(--sr-accent-weak);
+    }
+    .explainer-toggle:focus-visible {
+        outline: 2px solid var(--sr-focus);
+        outline-offset: 2px;
+    }
+    .chevron {
+        transition: transform 0.2s ease;
+    }
+    .chevron.open {
+        transform: rotate(180deg);
+    }
+    .explainer-panel {
+        margin-top: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--sr-radius-lg);
+        background: var(--canvas-elevated);
+        overflow: hidden;
     }
     .signal.pending {
         --signal-color: var(--sr-pending);
@@ -496,9 +595,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .signal .value {
         margin: 0;
-        font-family: var(--sr-font-heading);
+        /* Measured number: clean body font (never the bubbly display font) with
+           tabular figures, so the score reads as serious data. */
+        font-family: var(--sr-font-body);
+        font-variant-numeric: tabular-nums;
         font-size: 1.3rem;
-        font-weight: 600;
+        font-weight: 700;
         line-height: 1.1;
         color: var(--fg);
     }
@@ -522,11 +624,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
        the panel uses a calm cyan frame. Numbers inside stay white + high-contrast. */
     .detail-panel:not(.score-panel) {
         border: 1px solid var(--border);
-        border-top: 3px solid var(--sr-progress);
+        box-shadow:
+            inset 0 3px 0 0 var(--sr-progress),
+            var(--sr-shadow);
     }
     .score-panel {
         border: 1px solid var(--border);
-        border-top: 3px solid var(--sr-mastered);
+        box-shadow:
+            inset 0 3px 0 0 var(--sr-mastered),
+            var(--sr-shadow);
     }
     .badge {
         display: inline-block;
@@ -609,9 +715,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     /* The score itself: large + white + calm. No glow, no pulse — a measured
        number shown with its range, never dressed up. */
     .score-panel .point {
-        font-family: var(--sr-font-heading);
+        /* Measured readiness estimate: clean body font + tabular figures, never
+           the bubbly display font — the number must read as data, not decoration. */
+        font-family: var(--sr-font-body);
+        font-variant-numeric: tabular-nums;
         font-size: 2.6rem;
-        font-weight: 600;
+        font-weight: 800;
         line-height: 1;
         color: var(--fg);
     }
@@ -633,8 +742,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
        high-contrast + readable. */
     .bundle-panel {
         border: 1px solid var(--border);
-        border-top: 3px solid var(--sr-quinary);
-        box-shadow: var(--sr-shadow);
+        box-shadow:
+            inset 0 3px 0 0 var(--sr-quinary),
+            var(--sr-shadow);
     }
     .bundle-panel h2 {
         margin: 0 0 0.5rem;

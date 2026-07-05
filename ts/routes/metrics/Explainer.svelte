@@ -26,9 +26,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         type MetricId,
     } from "./lib";
 
-    // When embedded in the Home shell, the parent passes the signal to reveal
-    // (e.g. after a click on a readiness card). As a standalone route we read the
-    // URL hash instead (/metrics#memory). Either way we scroll to it and flash it.
+    // Embedded in the readiness dashboard's collapsible "How is this calculated?"
+    // panel. The parent passes the signal to reveal (e.g. after a click on a
+    // readiness signal card); we scroll to it and briefly flash it.
     export let anchor: MetricId | null = null;
 
     let readiness: ReadinessResult | null = null;
@@ -116,11 +116,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     onMount(async () => {
         mounted = true;
-        const hash =
-            typeof window !== "undefined"
-                ? (window.location.hash.replace("#", "") as MetricId)
-                : null;
-        const target = anchor ?? (hash || null);
+        const target = anchor;
         try {
             const inputs = masteryInputs();
             [readiness, mastery] = await Promise.all([
@@ -542,12 +538,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     /* Give-up rule callout — honest amber top accent (we're withholding). */
     .rule {
         border: 1px solid var(--border);
-        border-top: 3px solid var(--sr-progress);
         border-radius: var(--sr-radius-lg);
         padding: 1.3rem 1.5rem;
         margin-bottom: 1.6rem;
         background: var(--canvas-elevated);
-        box-shadow: var(--sr-shadow-sm);
+        box-shadow:
+            inset 0 3px 0 0 var(--sr-progress),
+            var(--sr-shadow-sm);
     }
     .rule p {
         margin: 0.5rem 0 0;
@@ -561,12 +558,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .card {
         position: relative;
         border: 1px solid var(--border);
-        border-top: 3px solid var(--accent, var(--sr-accent));
         border-radius: var(--sr-radius-lg);
         padding: 1.6rem 1.7rem;
         margin-bottom: 1.4rem;
         background: var(--canvas-elevated);
-        box-shadow: var(--sr-shadow);
+        box-shadow:
+            inset 0 3px 0 0 var(--accent, var(--sr-accent)),
+            var(--sr-shadow);
         scroll-margin-top: 1rem;
     }
     .card.memory {
@@ -585,12 +583,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     @keyframes metric-flash {
         0%,
         100% {
-            box-shadow: var(--sr-shadow);
+            box-shadow:
+                inset 0 3px 0 0 var(--accent, var(--sr-accent)),
+                var(--sr-shadow);
         }
         30% {
             box-shadow:
-                var(--sr-shadow),
-                inset 0 0 0 2px var(--accent);
+                inset 0 3px 0 0 var(--accent, var(--sr-accent)),
+                inset 0 0 0 2px var(--accent),
+                var(--sr-shadow);
         }
     }
 
@@ -617,14 +618,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 0.9rem;
     }
 
-    /* Live-inputs panel — measured (calm sage) vs withheld (honest amber). */
+    /* Live-inputs panel — measured (calm sage) vs withheld (honest amber). The
+       state colour reads on the badge + a top accent (never a side stripe). */
     .live {
         margin: 1.1rem 0 0.4rem;
         padding: 1.1rem 1.2rem;
         border: 1px solid var(--border);
-        border-left: 3px solid var(--live-accent, var(--sr-pending));
         border-radius: var(--sr-radius);
         background: var(--canvas-inset);
+        box-shadow: inset 0 3px 0 0 var(--live-accent, var(--sr-pending));
     }
     .live.measured {
         --live-accent: var(--sr-mastered);
@@ -738,10 +740,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg-subtle);
     }
     code {
-        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-family: var(--sr-font-mono);
         font-size: 0.85em;
         background: var(--canvas-inset);
         padding: 0.05rem 0.3rem;
-        border-radius: 4px;
+        border-radius: var(--sr-radius-sm);
     }
 </style>

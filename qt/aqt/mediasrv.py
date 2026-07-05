@@ -425,6 +425,8 @@ def is_sveltekit_page(path: str) -> bool:
         "home",
         "readiness-dashboard",
         "study-map",
+        "metrics",
+        "formula-sheet",
     ]
 
 

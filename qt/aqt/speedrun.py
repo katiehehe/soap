@@ -194,6 +194,14 @@ def _open_named_deck(mw: aqt.main.AnkiQt, name: str | None) -> bool:
     deck_id = mw.col.decks.id_for_name(name)
     if deck_id is None:
         return False
+    # Strict tier study: scope a unit deck to within-unit and the root deck to
+    # cross-unit (a subtopic/other deck clears the scope), so a parent deck never
+    # serves its still-blocked descendants. Selection only — the Rust queue
+    # builder just drops out-of-tier gathered cards, so FSRS intervals + undo are
+    # untouched.
+    from anki.speedrun import apply_tier_scope_for_deck
+
+    apply_tier_scope_for_deck(mw.col, int(deck_id), name)
     _start_review(mw, deck_id)
     return True
 
@@ -243,6 +251,11 @@ def _start_practice(mw: aqt.main.AnkiQt, search: str) -> bool:
     term.limit = 9999
     term.order = FilteredDeckConfig.SearchTerm.Order.RANDOM  # good for practice
     out = mw.col.sched.add_or_update_filtered_deck(deck)
+    # Unlimited practice is not tier-restricted; drop any active tier scope so the
+    # practice deck serves everything in its search.
+    from anki.speedrun import clear_tier_scope
+
+    clear_tier_scope(mw.col)
     _start_review(mw, DeckId(out.id))
     return True
 
@@ -595,8 +608,13 @@ def open_deck_by_id(mw: aqt.main.AnkiQt, deck_id: int) -> bool:
     names. Returns False if the deck no longer exists."""
     from anki.decks import DeckId
 
+    from anki.speedrun import apply_tier_scope_for_deck
+
     if mw.col.decks.get(DeckId(deck_id), default=False) is None:
         return False
+    # A plan row / "Study next" opens a tier deck by id; scope it to that tier so
+    # cross-/within-unit study never serves a still-blocked subtopic.
+    apply_tier_scope_for_deck(mw.col, int(deck_id), mw.col.decks.name(DeckId(deck_id)))
     _start_review(mw, DeckId(deck_id))
     return True
 
@@ -671,6 +689,11 @@ def extend_new_and_study(mw: aqt.main.AnkiQt, n: int) -> bool:
         return False
     mw.col.decks.select(did)
     mw.col.sched.extend_limits(n, 0)
+    # "Study more today" raises the daily new limit to study MORE (blocked) cards,
+    # so it is deliberately not tier-restricted: clear any active tier scope.
+    from anki.speedrun import clear_tier_scope
+
+    clear_tier_scope(mw.col)
     _start_review(mw, did)
     return True
 
@@ -983,10 +1006,18 @@ def _dispatch_home_cmd(mw: aqt.main.AnkiQt, cmd: str) -> None:
 # (Blocked / Within-unit / Cross-unit), so the tier is visible rather than an
 # invisible reorder. Registered once from main.py; read-only (no writes).
 
+# MasteryPool enum values (from proto/anki/speedrun.proto).
+_POOL_BLOCKED = 0
+_POOL_WITHIN_UNIT = 1
+_POOL_CROSS_UNIT = 2
+
 _TIER_LABELS: dict[int, tuple[str, str]] = {
-    0: ("Blocked practice", "#d3a95f"),  # honey — build procedure in isolation
-    1: ("Within-unit interleaving", "#8189d6"),  # periwinkle — train recognition
-    2: ("Cross-unit review", "#6fa892"),  # sage — spacing
+    # honey — build procedure in isolation
+    _POOL_BLOCKED: ("Blocked practice", "#d3a95f"),
+    # periwinkle — train recognition across a unit's confusable sub-types
+    _POOL_WITHIN_UNIT: ("Within-unit interleaving", "#8189d6"),
+    # sage — spacing across units
+    _POOL_CROSS_UNIT: ("Cross-unit review", "#6fa892"),
 }
 
 
@@ -999,7 +1030,7 @@ def _current_subtopic_tag(card: Card) -> str | None:
 
 
 def _tier_for_tag(col: Collection, tag: str) -> tuple[str, str] | None:
-    from anki.speedrun import expected_subtopic_tags, subtopic_name
+    from anki.speedrun import expected_subtopic_tags, tier_scope_name
 
     state = col._backend.get_mastery_state(
         expected_subtopics=expected_subtopic_tags(),
@@ -1011,13 +1042,12 @@ def _tier_for_tag(col: Collection, tag: str) -> tuple[str, str] | None:
     pool = next((s.pool for s in state.subtopics if s.tag == tag), None)
     if pool is None:
         return None
-    label, color = _TIER_LABELS.get(pool, _TIER_LABELS[0])
-    parts = tag.split("::")
-    try:
-        name = subtopic_name(parts[1], parts[2])
-    except (IndexError, KeyError):
-        name = tag
-    return (f"{label} · {name}", color)
+    label, color = _TIER_LABELS.get(pool, _TIER_LABELS[_POOL_BLOCKED])
+    # The scope after the tier name is the TIER's scope (subtopic for blocked,
+    # unit for within-unit, all units for cross-unit) — see tier_scope_name.
+    # This mirrors the study map's Today's-plan labels, so the reviewer banner
+    # and the plan never disagree about what a tier is scoped to.
+    return (f"{label} · {tier_scope_name(pool, tag)}", color)
 
 
 def _show_tier_banner(card: Card) -> None:
@@ -1305,13 +1335,16 @@ body {{ padding-top: 3.1rem; }}
 </style>"""
 
 
-def _review_bar_html() -> str:
+def _review_bar_html(cmd: str = "speedrun-home") -> str:
     # The shared back-to-home affordance (reviewer, deck list, overview). Just the
     # "← Exam P" button — during review the current subtopic is shown by the
     # mastery-tier banner right below it, so we don't repeat the topic name here.
+    # `cmd` lets the bar target a specific landing: the reviewer sends the user
+    # back to the daily Plan (where they came from), while the deck list / overview
+    # go to the home shell's default (Map) view.
     return (
         '<div id="speedrun-review-bar">'
-        '<button class="sr-back" onclick="pycmd(\'speedrun-home\')" '
+        f"<button class=\"sr-back\" onclick=\"pycmd('{cmd}')\" "
         'title="Back to Exam P home">&#8592;&nbsp;Exam&nbsp;P</button>'
         "</div>"
     )
@@ -1324,7 +1357,11 @@ def _on_webview_content(web_content: WebContent, context: object) -> None:
 
     if isinstance(context, aqt.reviewer.Reviewer):
         web_content.head += _reviewer_head_css() + _back_bar_css()
-        web_content.body += _review_bar_html()
+        # During question-solving the back arrow returns to the daily Plan tab
+        # (where the study session was launched from), not the map — so leaving a
+        # card lands you back on your plan. Handled by 'speedrun-plan' in
+        # _on_js_message → go_home_tab(mw, "plan").
+        web_content.body += _review_bar_html("speedrun-plan")
     elif isinstance(context, (aqt.deckbrowser.DeckBrowser, aqt.overview.Overview)):
         # Anki's top toolbar is hidden on these screens too (see main.py's
         # _deckBrowserState / _overviewState), so without this they'd have no

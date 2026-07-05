@@ -11,9 +11,9 @@ ARGS ?=
 -include .env
 export
 
-.PHONY: bench crash-test calibration performance seed-persona practice-test classify ai-eval ai-report sync-test paraphrase ablation demo leakage-scan leakage-scan-sources problems phone phone-install phone-rebuild phone-rebuild-dry sync-server sync-seed sync-desktop sync-phone-config sync-twoway
+.PHONY: bench crash-test calibration performance seed-persona practice-test classify ai-eval ai-report sync-test paraphrase ablation demo leakage-scan leakage-scan-sources problems phone phone-install phone-rebuild phone-rebuild-dry sync-server sync-seed sync-seed-persona sync-desktop sync-phone-config sync-twoway
 
-# Boot the phone emulator (Medium_Phone) and open AnkiDroid — our shared-engine
+# Boot the phone emulator (Speedrun_P, a lean AOSP-34 AVD) and open AnkiDroid — our shared-engine
 # fork. `make phone` just boots + opens; `make phone-install` also reinstalls the
 # freshest built APK first (use after rebuilding it in the Anki-Android checkout).
 # Then tap the ☰ menu → Exam readiness to see the three scores on the phone.
@@ -43,6 +43,14 @@ sync-server:
 # Seed the local server with the Exam P deck (needs `make sync-server` running).
 sync-seed:
 	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/sync_setup.py $(ARGS)
+
+# Seed the server with the FULLY-SCORED synthetic persona (builds it first if
+# missing) so that, after the phone syncs, its readiness screen shows all THREE
+# scores with ranges instead of the honest abstain state. Needs the sync server
+# running (`make sync-server`). Then on the phone: Sync -> keep AnkiWeb -> Replace.
+sync-seed-persona:
+	test -f out/demo-persona.anki2 || $(MAKE) seed-persona
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/sync_setup.py --from-collection out/demo-persona.anki2 $(ARGS)
 
 # Point the DESKTOP profile at the local server and pull the shared collection
 # (run with the desktop app closed; backs the collection up first).

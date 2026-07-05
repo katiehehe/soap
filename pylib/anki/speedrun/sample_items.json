@@ -1,5 +1,5 @@
 {
-    "note": "ORIGINAL exam-style items authored for the SOA Exam P Speedrun fork. These use standard probability results and are NOT copied from any real SOA exam. They are the committed, no-copyright FALLBACK held-out set. To evaluate against the official public 'Exam P Sample Questions', drop the extracted items into data/soa_sample_p/items.json (gitignored); the loader prefers that file. See docs/ai-results.md and data/soa_sample_p/README.md.",
+    "note": "ORIGINAL exam-style items authored for the SOA Exam P Speedrun fork. These use standard probability results and are NOT copied from any real SOA exam. They are the committed, no-copyright FALLBACK held-out set. To evaluate against the official public 'Exam P Sample Questions', drop the extracted items into data/soa_sample_p/items.json (gitignored); the loader prefers that file. See docs/ai-results.md and data/soa_sample_p/README.md. Math is written as MathJax LaTeX (\\( \\) inline, \\[ \\] block); answers keep their numeric tokens in original order so the practice-test grader (which reads the final number) is unchanged.",
     "source": "original-speedrun",
     "license_note": "Original content, AGPL-3.0-or-later with the rest of the fork. Held out of all AI training/index/few-shot; the leakage scan (tools/speedrun/leakage_scan.py) runs over these.",
     "items": [
@@ -8,266 +8,266 @@
             "subtopic": "subtopic::general::sets_axioms",
             "difficulty": "easy",
             "question": "A number is drawn at random from the integers 1 through 20. What is the probability that it is divisible by 3 or by 5?",
-            "answer": "9/20 = 0.45"
+            "answer": "\\(\\frac{9}{20} = 0.45\\)"
         },
         {
             "id": "gp-sets-2",
             "subtopic": "subtopic::general::sets_axioms",
             "difficulty": "medium",
-            "question": "For two events, P(A) = 0.6, P(B) = 0.5, and P(A or B) = 0.8. Find the probability that both occur.",
-            "answer": "0.3"
+            "question": "For two events, \\(P(A) = 0.6\\), \\(P(B) = 0.5\\), and \\(P(A \\cup B) = 0.8\\). Find the probability that both occur.",
+            "answer": "\\(0.3\\)"
         },
         {
             "id": "gp-comb-1",
             "subtopic": "subtopic::general::combinatorics",
             "difficulty": "medium",
             "question": "A committee of 4 is chosen at random from 7 men and 5 women. What is the probability it contains exactly 2 men and 2 women?",
-            "answer": "C(7,2)C(5,2)/C(12,4) = 210/495 \u2248 0.424"
+            "answer": "\\(\\binom{7}{2}\\binom{5}{2}/\\binom{12}{4} = 210/495 \\approx 0.424\\)"
         },
         {
             "id": "gp-comb-2",
             "subtopic": "subtopic::general::combinatorics",
             "difficulty": "easy",
             "question": "How many distinct arrangements are there of the letters in the word LEVEL?",
-            "answer": "5!/(2!2!) = 30"
+            "answer": "\\(5!/(2!\\,2!) = 30\\)"
         },
         {
             "id": "gp-indep-1",
             "subtopic": "subtopic::general::independence",
             "difficulty": "easy",
             "question": "Two components operate independently, each working with probability 0.9. If they are connected in series, what is the probability the system works?",
-            "answer": "0.81"
+            "answer": "\\(0.81\\)"
         },
         {
             "id": "gp-indep-2",
             "subtopic": "subtopic::general::independence",
             "difficulty": "medium",
-            "question": "Events A and B are independent with P(A) = 0.4 and P(B) = 0.7. Find the probability that exactly one of them occurs.",
-            "answer": "0.54"
+            "question": "Events \\(A\\) and \\(B\\) are independent with \\(P(A) = 0.4\\) and \\(P(B) = 0.7\\). Find the probability that exactly one of them occurs.",
+            "answer": "\\(0.54\\)"
         },
         {
             "id": "gp-addmult-1",
             "subtopic": "subtopic::general::add_mult_rules",
             "difficulty": "easy",
-            "question": "Suppose P(A) = 0.5 and P(B given A) = 0.3. Find the probability that A and B both occur.",
-            "answer": "0.15"
+            "question": "Suppose \\(P(A) = 0.5\\) and \\(P(B \\mid A) = 0.3\\). Find the probability that \\(A\\) and \\(B\\) both occur.",
+            "answer": "\\(0.15\\)"
         },
         {
             "id": "gp-addmult-2",
             "subtopic": "subtopic::general::add_mult_rules",
             "difficulty": "medium",
             "question": "Two cards are drawn without replacement from a standard 52-card deck. What is the probability that both are aces?",
-            "answer": "(4/52)(3/51) \u2248 0.0045"
+            "answer": "\\(\\frac{4}{52}\\cdot\\frac{3}{51} \\approx 0.0045\\)"
         },
         {
             "id": "gp-cond-1",
             "subtopic": "subtopic::general::conditional",
             "difficulty": "easy",
-            "question": "Given that P(A and B) = 0.24 and P(B) = 0.6, find the conditional probability of A given B.",
-            "answer": "0.4"
+            "question": "Given that \\(P(A \\cap B) = 0.24\\) and \\(P(B) = 0.6\\), find \\(P(A \\mid B)\\).",
+            "answer": "\\(0.4\\)"
         },
         {
             "id": "gp-cond-2",
             "subtopic": "subtopic::general::conditional",
             "difficulty": "medium",
             "question": "On a rainy day the probability of heavy traffic is 0.8. The probability of rain is 0.3. Find the probability that it rains and there is heavy traffic.",
-            "answer": "0.24"
+            "answer": "\\(0.24\\)"
         },
         {
             "id": "gp-bayes-1",
             "subtopic": "subtopic::general::bayes",
             "difficulty": "hard",
             "question": "A disease affects 1% of a population. A screening test is 95% sensitive and 90% specific. Given a positive test, what is the probability the person has the disease?",
-            "answer": "0.0095/0.1085 \u2248 0.088"
+            "answer": "\\(0.0095/0.1085 \\approx 0.088\\)"
         },
         {
             "id": "gp-bayes-2",
             "subtopic": "subtopic::general::bayes",
             "difficulty": "hard",
             "question": "Machine A produces 70% of output with a 1% defect rate; machine B produces 30% with a 4% defect rate. An item is found defective. What is the probability it came from machine B?",
-            "answer": "0.012/0.019 \u2248 0.632"
+            "answer": "\\(0.012/0.019 \\approx 0.632\\)"
         },
         {
             "id": "uv-basics-1",
             "subtopic": "subtopic::univariate::rv_basics",
             "difficulty": "medium",
-            "question": "A continuous random variable has density f(x) = c*x for 0 < x < 2 and 0 otherwise. Determine the constant c.",
-            "answer": "c = 1/2"
+            "question": "A continuous random variable has density \\(f(x) = cx\\) for \\(0 < x < 2\\) and \\(0\\) otherwise. Determine the constant \\(c\\).",
+            "answer": "\\(c = \\tfrac{1}{2}\\)"
         },
         {
             "id": "uv-basics-2",
             "subtopic": "subtopic::univariate::rv_basics",
             "difficulty": "medium",
-            "question": "A random variable has cdf F(x) = 1 - e^(-x/2) for x > 0. Find the probability that it falls between 1 and 3.",
-            "answer": "e^(-0.5) - e^(-1.5) \u2248 0.383"
+            "question": "A random variable has cdf \\(F(x) = 1 - e^{-x/2}\\) for \\(x > 0\\). Find the probability that it falls between 1 and 3.",
+            "answer": "\\(e^{-0.5} - e^{-1.5} \\approx 0.383\\)"
         },
         {
             "id": "uv-exp-1",
             "subtopic": "subtopic::univariate::expectation",
             "difficulty": "medium",
-            "question": "A random variable has density f(x) = 2x on (0, 1). Find its expected value.",
-            "answer": "2/3 \u2248 0.667"
+            "question": "A random variable has density \\(f(x) = 2x\\) on \\((0, 1)\\). Find its expected value.",
+            "answer": "\\(\\frac{2}{3} \\approx 0.667\\)"
         },
         {
             "id": "uv-exp-2",
             "subtopic": "subtopic::univariate::expectation",
             "difficulty": "easy",
-            "question": "A discrete variable takes values 1, 2, and 5 with probabilities 0.2, 0.5, and 0.3. Find its expected value.",
-            "answer": "2.7"
+            "question": "A discrete variable takes the values 1, 2, and 5 with probabilities 0.2, 0.5, and 0.3. Find its expected value.",
+            "answer": "\\(2.7\\)"
         },
         {
             "id": "uv-var-1",
             "subtopic": "subtopic::univariate::variance",
             "difficulty": "hard",
-            "question": "A random variable has density f(x) = 2x on (0, 1). Find its variance.",
-            "answer": "1/18 \u2248 0.0556"
+            "question": "A random variable has density \\(f(x) = 2x\\) on \\((0, 1)\\). Find its variance.",
+            "answer": "\\(\\frac{1}{18} \\approx 0.0556\\)"
         },
         {
             "id": "uv-var-2",
             "subtopic": "subtopic::univariate::variance",
             "difficulty": "easy",
-            "question": "A random variable has E[X] = 3 and E[X^2] = 13. Find its standard deviation.",
-            "answer": "2"
+            "question": "A random variable has \\(E[X] = 3\\) and \\(E[X^2] = 13\\). Find its standard deviation.",
+            "answer": "\\(2\\)"
         },
         {
             "id": "uv-disc-1",
             "subtopic": "subtopic::univariate::discrete_dists",
             "difficulty": "medium",
             "question": "A binomial random variable has 10 trials and success probability 0.3. Find the probability of exactly 2 successes.",
-            "answer": "\u2248 0.233"
+            "answer": "\\(\\approx 0.233\\)"
         },
         {
             "id": "uv-disc-2",
             "subtopic": "subtopic::univariate::discrete_dists",
             "difficulty": "medium",
             "question": "Calls arrive at a help desk as a Poisson process averaging 4 per hour. Find the probability that exactly 2 calls arrive in a given hour.",
-            "answer": "e^(-4)*4^2/2! \u2248 0.147"
+            "answer": "\\(e^{-4}\\cdot 4^{2}/2! \\approx 0.147\\)"
         },
         {
             "id": "uv-cont-1",
             "subtopic": "subtopic::univariate::continuous_dists",
             "difficulty": "medium",
             "question": "A lifetime is exponential with mean 5 years. Find the probability it exceeds 8 years.",
-            "answer": "e^(-1.6) \u2248 0.202"
+            "answer": "\\(e^{-1.6} \\approx 0.202\\)"
         },
         {
             "id": "uv-cont-2",
             "subtopic": "subtopic::univariate::continuous_dists",
             "difficulty": "medium",
             "question": "Scores are normally distributed with mean 100 and standard deviation 15. Find the probability a score exceeds 130.",
-            "answer": "P(Z>2) \u2248 0.0228"
+            "answer": "\\(P(Z > 2) \\approx 0.0228\\)"
         },
         {
             "id": "uv-ins-1",
             "subtopic": "subtopic::univariate::insurance_apps",
             "difficulty": "hard",
             "question": "A loss is uniformly distributed on (0, 1000). A policy has an ordinary deductible of 200. Find the expected payment per loss.",
-            "answer": "320"
+            "answer": "\\(320\\)"
         },
         {
             "id": "uv-ins-2",
             "subtopic": "subtopic::univariate::insurance_apps",
             "difficulty": "hard",
             "question": "A loss is exponential with mean 1000. A policy pays the loss up to a maximum of 2000 (no deductible). Find the expected payment per loss.",
-            "answer": "1000(1 - e^(-2)) \u2248 864.7"
+            "answer": "\\(1000(1 - e^{-2}) \\approx 864.7\\)"
         },
         {
             "id": "mv-joint-1",
             "subtopic": "subtopic::multivariate::joint_distributions",
             "difficulty": "medium",
-            "question": "A joint density is constant equal to k on the region 0 < x < y < 1. Find k.",
-            "answer": "2"
+            "question": "A joint density is constant equal to \\(k\\) on the region \\(0 < x < y < 1\\). Find \\(k\\).",
+            "answer": "\\(2\\)"
         },
         {
             "id": "mv-joint-2",
             "subtopic": "subtopic::multivariate::joint_distributions",
             "difficulty": "hard",
-            "question": "For the joint density f(x, y) = x + y on the unit square, find the probability that both X and Y are less than 1/2.",
-            "answer": "0.125"
+            "question": "For the joint density \\(f(x, y) = x + y\\) on the unit square, find the probability that both \\(X\\) and \\(Y\\) are less than \\(\\tfrac{1}{2}\\).",
+            "answer": "\\(0.125\\)"
         },
         {
             "id": "mv-marg-1",
             "subtopic": "subtopic::multivariate::marginal_conditional",
             "difficulty": "medium",
-            "question": "For the joint density f(x, y) = 2 on 0 < x < y < 1, find the marginal density of X.",
-            "answer": "f_X(x) = 2(1 - x), 0 < x < 1"
+            "question": "For the joint density \\(f(x, y) = 2\\) on \\(0 < x < y < 1\\), find the marginal density of \\(X\\).",
+            "answer": "\\(f_X(x) = 2(1 - x),\\ 0 < x < 1\\)"
         },
         {
             "id": "mv-marg-2",
             "subtopic": "subtopic::multivariate::marginal_conditional",
             "difficulty": "hard",
-            "question": "For the joint density f(x, y) = 2 on 0 < x < y < 1, find the conditional density of Y given X = x.",
-            "answer": "1/(1 - x) for x < y < 1 (uniform)"
+            "question": "For the joint density \\(f(x, y) = 2\\) on \\(0 < x < y < 1\\), find the conditional density of \\(Y\\) given \\(X = x\\).",
+            "answer": "\\(\\frac{1}{1 - x}\\) for \\(x < y < 1\\) (uniform)"
         },
         {
             "id": "mv-jmom-1",
             "subtopic": "subtopic::multivariate::joint_moments",
             "difficulty": "hard",
-            "question": "For the joint density f(x, y) = x + y on the unit square, find E[XY].",
-            "answer": "1/3 \u2248 0.333"
+            "question": "For the joint density \\(f(x, y) = x + y\\) on the unit square, find \\(E[XY]\\).",
+            "answer": "\\(\\frac{1}{3} \\approx 0.333\\)"
         },
         {
             "id": "mv-jmom-2",
             "subtopic": "subtopic::multivariate::joint_moments",
             "difficulty": "medium",
-            "question": "Suppose Y is uniform on (0, 1) and, given Y = y, X is uniform on (0, y). Use the tower rule to find E[X].",
-            "answer": "1/4"
+            "question": "Suppose \\(Y\\) is uniform on \\((0, 1)\\) and, given \\(Y = y\\), \\(X\\) is uniform on \\((0, y)\\). Use the tower rule to find \\(E[X]\\).",
+            "answer": "\\(\\tfrac{1}{4}\\)"
         },
         {
             "id": "mv-cov-1",
             "subtopic": "subtopic::multivariate::covariance_correlation",
             "difficulty": "easy",
-            "question": "Two variables have Var(X) = 4, Var(Y) = 9, and Cov(X, Y) = 3. Find their correlation coefficient.",
-            "answer": "0.5"
+            "question": "Two variables have \\(\\mathrm{Var}(X) = 4\\), \\(\\mathrm{Var}(Y) = 9\\), and \\(\\mathrm{Cov}(X, Y) = 3\\). Find their correlation coefficient.",
+            "answer": "\\(0.5\\)"
         },
         {
             "id": "mv-cov-2",
             "subtopic": "subtopic::multivariate::covariance_correlation",
             "difficulty": "medium",
-            "question": "Given Cov(X, Y) = -2, find Cov(2X + 1, 3Y - 4).",
-            "answer": "-12"
+            "question": "Given \\(\\mathrm{Cov}(X, Y) = -2\\), find \\(\\mathrm{Cov}(2X + 1,\\ 3Y - 4)\\).",
+            "answer": "\\(-12\\)"
         },
         {
             "id": "mv-order-1",
             "subtopic": "subtopic::multivariate::order_statistics",
             "difficulty": "medium",
-            "question": "Three independent Uniform(0, 1) variables are observed. Find the probability that the maximum is less than 0.8.",
-            "answer": "0.512"
+            "question": "Three independent \\(\\mathrm{Uniform}(0, 1)\\) variables are observed. Find the probability that the maximum is less than 0.8.",
+            "answer": "\\(0.512\\)"
         },
         {
             "id": "mv-order-2",
             "subtopic": "subtopic::multivariate::order_statistics",
             "difficulty": "medium",
-            "question": "Four independent Exponential(mean 1) variables are observed. Find the probability that the minimum exceeds 0.5.",
-            "answer": "e^(-2) \u2248 0.135"
+            "question": "Four independent exponential variables with mean 1 are observed. Find the probability that the minimum exceeds 0.5.",
+            "answer": "\\(e^{-2} \\approx 0.135\\)"
         },
         {
             "id": "mv-lin-1",
             "subtopic": "subtopic::multivariate::linear_combinations",
             "difficulty": "medium",
-            "question": "X and Y are independent with Var(X) = 4 and Var(Y) = 9. Find Var(2X - Y).",
-            "answer": "25"
+            "question": "\\(X\\) and \\(Y\\) are independent with \\(\\mathrm{Var}(X) = 4\\) and \\(\\mathrm{Var}(Y) = 9\\). Find \\(\\mathrm{Var}(2X - Y)\\).",
+            "answer": "\\(25\\)"
         },
         {
             "id": "mv-lin-2",
             "subtopic": "subtopic::multivariate::linear_combinations",
             "difficulty": "medium",
-            "question": "X and Y each have variance 1 and Cov(X, Y) = 0.5. Find Var(X + Y).",
-            "answer": "3"
+            "question": "\\(X\\) and \\(Y\\) each have variance 1 and \\(\\mathrm{Cov}(X, Y) = 0.5\\). Find \\(\\mathrm{Var}(X + Y)\\).",
+            "answer": "\\(3\\)"
         },
         {
             "id": "mv-clt-1",
             "subtopic": "subtopic::multivariate::clt",
             "difficulty": "hard",
             "question": "A sample of 64 independent observations has mean 10 and standard deviation 4. Using the central limit theorem, approximate the probability the sample mean exceeds 11.",
-            "answer": "P(Z>2) \u2248 0.0228"
+            "answer": "\\(P(Z > 2) \\approx 0.0228\\)"
         },
         {
             "id": "mv-clt-2",
             "subtopic": "subtopic::multivariate::clt",
             "difficulty": "hard",
-            "question": "The sum of 100 independent variables each has mean 2 and variance 1. Approximate the probability the sum exceeds 220.",
-            "answer": "P(Z>2) \u2248 0.0228"
+            "question": "The sum of 100 independent variables, each with mean 2 and variance 1. Approximate the probability the sum exceeds 220.",
+            "answer": "\\(P(Z > 2) \\approx 0.0228\\)"
         }
     ]
 }

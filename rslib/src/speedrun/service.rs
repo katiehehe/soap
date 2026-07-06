@@ -63,11 +63,11 @@ const PRACTICE_STATS_KEY: &str = "speedrunPracticeStats";
 ///
 /// `questions`/`correct`/`tests` are the RAW integer counts (the give-up gate
 /// uses `questions`). `weighted_*` are the same evidence scaled by each test's
-/// representativeness (`practice_test.readiness_weight`: a full, whole-exam official
-/// test counts 1.0; narrower scope or generated sources count for less). The
-/// readiness BAND uses the weighted proportion; they default to 0 for tests
-/// recorded before weighting existed, in which case the band falls back to the
-/// raw counts.
+/// representativeness (`practice_test.readiness_weight`: a full, whole-exam
+/// official test counts 1.0; narrower scope or generated sources count for
+/// less). The readiness BAND uses the weighted proportion; they default to 0
+/// for tests recorded before weighting existed, in which case the band falls
+/// back to the raw counts.
 #[derive(serde::Deserialize, Default)]
 struct PracticeStats {
     #[serde(default)]
@@ -514,12 +514,13 @@ impl crate::services::SpeedrunService for Collection {
         Ok(StudyPlan { items })
     }
 
-    /// Mastery pace vs the user's exam date. Counts the syllabus subtopics whose
-    /// mastery gate is cleared (the SAME gate the map and Overall-mastery use),
-    /// measures the study history from the first graded review, and works out
-    /// whether the observed clear-rate masters the rest before the exam. Pure
-    /// arithmetic over measured counts (see `compute_mastery_pace`); it is a
-    /// mastery pace, never the readiness score. Read-only.
+    /// Mastery pace vs the user's exam date. Counts the syllabus subtopics
+    /// whose mastery gate is cleared (the SAME gate the map and
+    /// Overall-mastery use), measures the study history from the first
+    /// graded review, and works out whether the observed clear-rate masters
+    /// the rest before the exam. Pure arithmetic over measured counts (see
+    /// `compute_mastery_pace`); it is a mastery pace, never the readiness
+    /// score. Read-only.
     fn get_study_pace(&mut self, input: MasteryRequest) -> error::Result<StudyPace> {
         let exam_ts = self.get_config_optional::<i64, _>(EXAM_DATE_KEY);
         let has_exam_date = exam_ts.is_some();
@@ -618,27 +619,30 @@ fn study_mode_to_proto(
 }
 
 impl Collection {
-    /// The single best next action for a readiness score. This MIRRORS the study
-    /// map's "Practice next" heuristic, so the readiness banner's "Do next" and
-    /// the map always name the SAME topic: selection is by PERFORMANCE
-    /// (practice-test evidence) times exam WEIGHT, not memory/revlog accuracy.
+    /// The single best next action for a readiness score. This MIRRORS the
+    /// study map's "Practice next" heuristic, so the readiness banner's "Do
+    /// next" and the map always name the SAME topic: selection is by
+    /// PERFORMANCE (practice-test evidence) times exam WEIGHT, not
+    /// memory/revlog accuracy.
     ///
     /// Over every expected syllabus subtopic, using its exam-importance weight:
     /// skip any subtopic that is already performance-mastered (the map's
     /// "strong"), let `acc` be its practice-test accuracy (a NEVER-practiced
-    /// topic counts as fully weak, `acc = 0`), score it `weight * (1 - acc)`, and
-    /// take the maximum. Weights come from the same config Python writes from the
-    /// topic map (`speedrun_subtopic_weights_config`, treated as equal/1.0 when a
-    /// weight is missing) and performance from the same config the mastery query
+    /// topic counts as fully weak, `acc = 0`), score it `weight * (1 - acc)`,
+    /// and take the maximum. Weights come from the same config Python
+    /// writes from the topic map (`speedrun_subtopic_weights_config`,
+    /// treated as equal/1.0 when a weight is missing) and performance from
+    /// the same config the mastery query
     /// reads (`speedrun_performance_config`), so both surfaces score identical
     /// data. Iterating `expected` in request (taxonomy) order with a strict `>`
     /// keeps the tie-break (first topic wins) identical to the frontend.
     ///
-    /// Always evidence-grounded: it only ever names a real syllabus subtopic, and
-    /// distinguishes a never-practiced pick ("not practiced yet") from a measured
-    /// one ("N% correct so far") so it never dresses up a missing measurement as
-    /// 0%. Falls back to the top study priority when every subtopic is already
-    /// performance-mastered, so the action string is never empty.
+    /// Always evidence-grounded: it only ever names a real syllabus subtopic,
+    /// and distinguishes a never-practiced pick ("not practiced yet") from
+    /// a measured one ("N% correct so far") so it never dresses up a
+    /// missing measurement as 0%. Falls back to the top study priority when
+    /// every subtopic is already performance-mastered, so the action string
+    /// is never empty.
     fn readiness_next_action(&mut self, expected: &[String]) -> error::Result<String> {
         let stats = self.speedrun_subtopic_stats(expected)?;
         let perf = self.speedrun_performance_config();
@@ -703,10 +707,10 @@ impl Collection {
         Ok(count.max(0) as u32)
     }
 
-    /// Unix seconds of the FIRST graded review (revlog.id is epoch millis), i.e.
-    /// when studying began, used to measure the study history for the mastery
-    /// pace. `None` when there are no graded reviews yet (min() over an empty set
-    /// is NULL). Read-only.
+    /// Unix seconds of the FIRST graded review (revlog.id is epoch millis),
+    /// i.e. when studying began, used to measure the study history for the
+    /// mastery pace. `None` when there are no graded reviews yet (min()
+    /// over an empty set is NULL). Read-only.
     fn first_graded_review_secs(&self) -> error::Result<Option<i64>> {
         let first_ms: Option<i64> =
             self.storage
@@ -874,10 +878,10 @@ struct ReadinessBand {
 /// it only summarises real graded results.
 ///
 /// `questions`/`correct` are f64 so the caller can pass REPRESENTATIVENESS-
-/// WEIGHTED evidence: a less representative test contributes a smaller effective
-/// sample size, which correctly widens the band (less certain) as well as moving
-/// the proportion. Passing the raw integer counts (as f64) is the unweighted
-/// special case.
+/// WEIGHTED evidence: a less representative test contributes a smaller
+/// effective sample size, which correctly widens the band (less certain) as
+/// well as moving the proportion. Passing the raw integer counts (as f64) is
+/// the unweighted special case.
 fn readiness_from_practice(questions: f64, correct: f64, coverage_pct: f64) -> ReadinessBand {
     let n = questions.max(1.0);
     let p = (correct / n).clamp(0.0, 1.0);
@@ -905,16 +909,16 @@ fn readiness_from_practice(questions: f64, correct: f64, coverage_pct: f64) -> R
 
 /// 95% Wilson score interval for a binomial proportion (z = 1.96), integer
 /// counts. Robust near 0/1 and for small n, unlike the plain normal
-/// approximation. Thin wrapper over the float form. Test-only now: the readiness
-/// band uses wilson_interval_f directly.
+/// approximation. Thin wrapper over the float form. Test-only now: the
+/// readiness band uses wilson_interval_f directly.
 #[cfg(test)]
 fn wilson_interval(correct: u32, total: u32) -> (f64, f64) {
     wilson_interval_f(correct as f64, total as f64)
 }
 
-/// 95% Wilson score interval on a proportion `correct / total`, with real-valued
-/// counts so the effective (representativeness-weighted) sample size can widen
-/// the band. `correct` is clamped into `[0, total]` for safety.
+/// 95% Wilson score interval on a proportion `correct / total`, with
+/// real-valued counts so the effective (representativeness-weighted) sample
+/// size can widen the band. `correct` is clamped into `[0, total]` for safety.
 fn wilson_interval_f(correct: f64, total: f64) -> (f64, f64) {
     if total <= 0.0 {
         return (0.0, 0.0);
@@ -1210,7 +1214,8 @@ mod tests {
         // gate still passes on the RAW question count (120 >= 30).
         let mut col = Collection::new();
         for tag in expected() {
-            add_reviewed_note(&mut col, &[tag.as_str()], 50); // 200 reviews, full coverage
+            add_reviewed_note(&mut col, &[tag.as_str()], 50); // 200 reviews,
+                                                              // full coverage
         }
         col.set_config_json(
             PRACTICE_STATS_KEY,
@@ -1461,11 +1466,11 @@ mod tests {
             .unwrap();
     }
 
-    /// Pure Rust twin of the frontend `practiceNextTag` (study-map +page.svelte):
-    /// same skip-if-performance-mastered, same acc=0 for a never-practiced topic,
-    /// same `weight * (1 - acc)` score, same strict-`>` first-in-order tie-break.
-    /// Lets a test assert the engine names the SAME topic the map would, on
-    /// identical data.
+    /// Pure Rust twin of the frontend `practiceNextTag` (study-map
+    /// +page.svelte): same skip-if-performance-mastered, same acc=0 for a
+    /// never-practiced topic, same `weight * (1 - acc)` score, same
+    /// strict-`>` first-in-order tie-break. Lets a test assert the engine
+    /// names the SAME topic the map would, on identical data.
     fn map_practice_next(
         expected: &[&str],
         weights: &[(&str, f64)],
@@ -1505,7 +1510,10 @@ mod tests {
         set_perf(&mut col, &[(a, 10, 5), (b, 10, 9), (c, 10, 6)]); // 0.5 / 0.9 / 0.6
         let expected = vec![a.to_string(), b.to_string(), c.to_string()];
         let msg = col.readiness_next_action(&expected).unwrap();
-        assert!(msg.contains(c), "should pick c (weight 5 x 0.4 = 2.0): {msg}");
+        assert!(
+            msg.contains(c),
+            "should pick c (weight 5 x 0.4 = 2.0): {msg}"
+        );
         assert!(!msg.contains(b), "mastered b must be skipped: {msg}");
         assert!(msg.contains("60% correct so far"), "measured detail: {msg}");
         // The engine names the SAME topic the map's practiceNextTag would.

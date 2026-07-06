@@ -93,10 +93,10 @@ Held-out gold set: the **official SOA sample corpus, 715 items** across all 19
 subtopics (leakage over AI inputs: CLEAN). The committed original fallback corpus
 reproduces the same structure with different absolute values.
 
-| method               | top-1      | top-3      | wrong-rate (top-1) | status                          |
-| :------------------- | :--------- | :--------- | :----------------- | :------------------------------ |
-| keyword baseline     | 13.15%     | 33.29%     | 86.85%             | committed, reproducible offline |
-| AI (OpenAI, gpt-4o-mini) | **38.18%** | **70.77%** | **61.82%**     | committed (full 715-item keyed run) |
+| method                   | top-1      | top-3      | wrong-rate (top-1) | status                              |
+| :----------------------- | :--------- | :--------- | :----------------- | :---------------------------------- |
+| keyword baseline         | 13.15%     | 33.29%     | 86.85%             | committed, reproducible offline     |
+| AI (OpenAI, gpt-4o-mini) | **38.18%** | **70.77%** | **61.82%**         | committed (full 715-item keyed run) |
 
 Pre-registered bar (in the artifact): **AI top-1 must beat the baseline by ≥ 5
 points** (`AI_TOP1_MARGIN=0.05`). Actual margin **+25.0 pts → PASS**.
@@ -108,10 +108,10 @@ gate). Human reference cards: **186** (structural-OK 100%, meaning the rubric pa
 hand-written cards). Rubric per card, over a 50-card sample: correct / wrong /
 bad-teaching.
 
-| generator                    | correct         | wrong   | bad-teaching | status                          |
-| :--------------------------- | :-------------- | :------ | :----------- | :------------------------------ |
-| template/extraction baseline | 30% (15/50)     | 35      | 0%           | committed, reproducible offline |
-| AI (OpenAI, gpt-4o-mini)     | **92% (46/50)** | **4**   | **0%**       | committed (full 50-card keyed run) |
+| generator                    | correct         | wrong | bad-teaching | status                             |
+| :--------------------------- | :-------------- | :---- | :----------- | :--------------------------------- |
+| template/extraction baseline | 30% (15/50)     | 35    | 0%           | committed, reproducible offline    |
+| AI (OpenAI, gpt-4o-mini)     | **92% (46/50)** | **4** | **0%**       | committed (full 50-card keyed run) |
 
 Pre-registered cutoff (set before looking; in the artifact): ship AI generation
 only if **correct ≥ 60% AND bad-teaching ≤ 20% AND it beats the baseline's correct
@@ -139,12 +139,12 @@ no rate limits), committed to `tools/speedrun/evals/results/ai_eval.json`
 apples-to-apples comparison (`ai.baseline_on_sample`); leakage CLEAN throughout;
 every AI output source-traced.
 
-| eval (full held-out)               | AI (gpt-4o-mini)                          | baseline                          | result             |
-| :--------------------------------- | :---------------------------------------- | :-------------------------------- | :----------------- |
-| classify: top-1 (715 items)        | **38.18%** (wrong 61.82%)                 | 13.15% (wrong 86.85%)             | AI **+25.0 pts** ✓ |
-| classify: top-3 (715 items)        | **70.77%**                                | 33.29%                            | AI **+37.5 pts** ✓ |
-| generate: correct (50 cards)       | **92%** (46/50, 4 wrong, 0 bad-teaching)  | 30% (15/50, 35 wrong)             | AI **+62 pts** ✓   |
-| problems: verified (19 subtopics)  | **84.2%** (32/38, 0 leaks), covers 19/19  | 100% by construction, covers 9/19 | AI **wider cov.** ✓ |
+| eval (full held-out)              | AI (gpt-4o-mini)                         | baseline                          | result              |
+| :-------------------------------- | :--------------------------------------- | :-------------------------------- | :------------------ |
+| classify: top-1 (715 items)       | **38.18%** (wrong 61.82%)                | 13.15% (wrong 86.85%)             | AI **+25.0 pts** ✓  |
+| classify: top-3 (715 items)       | **70.77%**                               | 33.29%                            | AI **+37.5 pts** ✓  |
+| generate: correct (50 cards)      | **92%** (46/50, 4 wrong, 0 bad-teaching) | 30% (15/50, 35 wrong)             | AI **+62 pts** ✓    |
+| problems: verified (19 subtopics) | **84.2%** (32/38, 0 leaks), covers 19/19 | 100% by construction, covers 9/19 | AI **wider cov.** ✓ |
 
 Every pre-registered cutoff cleared: classifier margin ≥ 5 pts (actual **+25.0**);
 generation correct ≥ 60% + bad-teaching ≤ 20% + beats baseline (**92% / 0% / >30%**);
@@ -157,7 +157,7 @@ any time with `make ai-report ARGS="--no-ai"`.
 An earlier keyed run, recorded before this artifact pipeline existed, measured
 classifier AI top-1 38% / top-3 70% and generation AI 92% (46/50). The full keyed
 run above **re-confirms** these (classifier 38.18% / 70.77%, generation 92%) and
-commits them as a machine-readable artifact. Note the generation *baseline* moved
+commits them as a machine-readable artifact. Note the generation _baseline_ moved
 from the historical 24% (12/50, 8-source set) to 30% (15/50, 19-source set) as the
 sources expanded 8 → 19; the AI still clears the cutoff on the current sources.
 

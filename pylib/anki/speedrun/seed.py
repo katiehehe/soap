@@ -927,7 +927,9 @@ SEED_CARDS.extend(
     [
         # --- General Probability: sets & axioms ---
         SeedCard(
-            "general", "sets_axioms", "medium",
+            "general",
+            "sets_axioms",
+            "medium",
             "State Kolmogorov's three axioms of probability.",
             r"1) \(P(A) \ge 0\) for every event \(A\).<br>"
             r"2) \(P(S) = 1\) for the sample space \(S\).<br>"
@@ -935,27 +937,35 @@ SEED_CARDS.extend(
             r"\(P\!\left(\bigcup_i A_i\right) = \sum_i P(A_i)\).",
         ),
         SeedCard(
-            "general", "sets_axioms", "easy",
+            "general",
+            "sets_axioms",
+            "easy",
             "State the complement rule and De Morgan's laws.",
             r"Complement: \(P(A^c) = 1 - P(A)\).<br>"
             r"De Morgan: \((A \cup B)^c = A^c \cap B^c\) and "
             r"\((A \cap B)^c = A^c \cup B^c\).",
         ),
         SeedCard(
-            "general", "sets_axioms", "medium",
+            "general",
+            "sets_axioms",
+            "medium",
             "State inclusion-exclusion for two and three events.",
             r"\(P(A \cup B) = P(A) + P(B) - P(A \cap B)\).<br>"
             r"\(P(A \cup B \cup C) = P(A)+P(B)+P(C) - P(AB) - P(AC) - P(BC) + P(ABC)\).",
         ),
         # --- General Probability: combinatorics ---
         SeedCard(
-            "general", "combinatorics", "medium",
+            "general",
+            "combinatorics",
+            "medium",
             "Permutations vs. combinations of k chosen from n.",
             r"Order matters (permutations): \(P(n,k) = \dfrac{n!}{(n-k)!}\).<br>"
             r"Order doesn't (combinations): \(\binom{n}{k} = \dfrac{n!}{k!\,(n-k)!}\).",
         ),
         SeedCard(
-            "general", "combinatorics", "medium",
+            "general",
+            "combinatorics",
+            "medium",
             "State the multinomial coefficient (split n items into groups of "
             "sizes n_1, ..., n_r).",
             r"\(\dbinom{n}{n_1, n_2, \dots, n_r} = \dfrac{n!}{n_1!\,n_2!\cdots n_r!}\), "
@@ -963,13 +973,17 @@ SEED_CARDS.extend(
         ),
         # --- General Probability: addition & multiplication rules ---
         SeedCard(
-            "general", "add_mult_rules", "easy",
+            "general",
+            "add_mult_rules",
+            "easy",
             "State the multiplication (chain) rule for a joint probability.",
             r"\(P(A \cap B) = P(A)\,P(B \mid A) = P(B)\,P(A \mid B)\).",
         ),
         # --- General Probability: conditional probability ---
         SeedCard(
-            "general", "conditional", "medium",
+            "general",
+            "conditional",
+            "medium",
             "Define conditional probability and the law of total probability.",
             r"\(P(A \mid B) = \dfrac{P(A \cap B)}{P(B)}\), \(P(B) > 0\).<br>"
             r"For a partition \(B_1, \dots, B_n\): "
@@ -977,7 +991,9 @@ SEED_CARDS.extend(
         ),
         # --- General Probability: independence ---
         SeedCard(
-            "general", "independence", "medium",
+            "general",
+            "independence",
+            "medium",
             "When are A and B independent, and how does that differ from "
             "mutually exclusive?",
             r"Independent: \(P(A \cap B) = P(A)\,P(B)\) (so \(P(A \mid B) = P(A)\)).<br>"
@@ -986,50 +1002,62 @@ SEED_CARDS.extend(
         ),
         # --- General Probability: Bayes' theorem ---
         SeedCard(
-            "general", "bayes", "medium",
+            "general",
+            "bayes",
+            "medium",
             "State Bayes' theorem for a partition of the sample space.",
             r"\(P(B_j \mid A) = \dfrac{P(A \mid B_j)\,P(B_j)}"
             r"{\sum_i P(A \mid B_i)\,P(B_i)}\).",
         ),
         # --- Univariate: random variables, PDFs, CDFs ---
         SeedCard(
-            "univariate", "rv_basics", "medium",
+            "univariate",
+            "rv_basics",
+            "medium",
             "State the relationship between the pdf f and cdf F of a continuous "
             "random variable.",
             r"\(F(x) = \displaystyle\int_{-\infty}^{x} f(t)\,dt\) and \(f(x) = F'(x)\).<br>"
             r"\(P(a < X \le b) = F(b) - F(a) = \int_a^b f(x)\,dx\).",
         ),
         SeedCard(
-            "univariate", "rv_basics", "easy",
-            "State the defining properties of a cumulative distribution function "
-            "F(x).",
+            "univariate",
+            "rv_basics",
+            "easy",
+            "State the defining properties of a cumulative distribution function F(x).",
             r"Non-decreasing; right-continuous; "
             r"\(\lim_{x \to -\infty} F(x) = 0\) and \(\lim_{x \to \infty} F(x) = 1\).",
         ),
         # --- Univariate: expectation, moments, MGF ---
         SeedCard(
-            "univariate", "expectation", "medium",
+            "univariate",
+            "expectation",
+            "medium",
             "Define E[X] (discrete and continuous) and the law of the "
             "unconscious statistician (LOTUS).",
             r"\(E[X] = \sum_x x\,p(x)\) or \(\displaystyle\int_{-\infty}^{\infty} x f(x)\,dx\).<br>"
             r"LOTUS: \(E[g(X)] = \sum_x g(x)p(x)\) or \(\int g(x) f(x)\,dx\).",
         ),
         SeedCard(
-            "univariate", "expectation", "medium",
+            "univariate",
+            "expectation",
+            "medium",
             "State the survival-function (tail) formula for the mean of a "
             "nonnegative random variable.",
             r"For \(X \ge 0\): \(E[X] = \displaystyle\int_0^\infty \big(1 - F(x)\big)\,dx "
             r"= \int_0^\infty S(x)\,dx\), where \(S(x) = P(X > x)\).",
         ),
         SeedCard(
-            "univariate", "expectation", "hard",
-            "Define the moment generating function and how to recover moments "
-            "from it.",
+            "univariate",
+            "expectation",
+            "hard",
+            "Define the moment generating function and how to recover moments from it.",
             r"\(M_X(t) = E[e^{tX}]\). Then \(M_X'(0) = E[X]\), \(M_X''(0) = E[X^2]\), "
             r"and \(M_X^{(n)}(0) = E[X^n]\).",
         ),
         SeedCard(
-            "univariate", "expectation", "hard",
+            "univariate",
+            "expectation",
+            "hard",
             "State the MGF rules for a linear transform and for a sum of "
             "independent variables.",
             r"\(M_{aX+b}(t) = e^{bt} M_X(at)\); if \(X, Y\) independent, "
@@ -1038,7 +1066,9 @@ SEED_CARDS.extend(
         ),
         # --- Univariate: variance, SD, CV ---
         SeedCard(
-            "univariate", "variance", "easy",
+            "univariate",
+            "variance",
+            "easy",
             "Define variance and give its computational formula; how does a "
             "linear transform change it?",
             r"\(\mathrm{Var}(X) = E[(X-\mu)^2] = E[X^2] - (E[X])^2\); "
@@ -1046,136 +1076,182 @@ SEED_CARDS.extend(
             r"\(\mathrm{Var}(aX + b) = a^2\,\mathrm{Var}(X)\).",
         ),
         SeedCard(
-            "univariate", "variance", "medium",
-            "State Chebyshev's inequality and define the coefficient of "
-            "variation.",
+            "univariate",
+            "variance",
+            "medium",
+            "State Chebyshev's inequality and define the coefficient of variation.",
             r"\(P(|X - \mu| \ge k\sigma) \le \dfrac{1}{k^2}\) for any \(k > 0\).<br>"
             r"Coefficient of variation \(= \dfrac{\sigma}{\mu}\).",
         ),
         # --- Univariate: common discrete distributions (the table) ---
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the pmf of Bernoulli(p).",
             r"\(P(X=1)=p,\ P(X=0)=1-p\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the mean of Bernoulli(p).",
             r"\(E[X]=p\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the variance of Bernoulli(p).",
             r"\(\mathrm{Var}(X)=p(1-p)\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the MGF of Bernoulli(p).",
             r"\(M(t)=1-p+pe^{t}\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the pmf of Binomial(n, p).",
             r"\(P(X=k)=\binom{n}{k}p^{k}(1-p)^{n-k}\), \(k=0,\dots,n\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the mean of Binomial(n, p).",
             r"\(E[X]=np\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the variance of Binomial(n, p).",
             r"\(\mathrm{Var}(X)=np(1-p)\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the MGF of Binomial(n, p).",
             r"\(M(t)=(1-p+pe^{t})^{n}\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the pmf of Geometric(p) (number of trials up to and including "
             "the first success).",
             r"\(P(X=k)=(1-p)^{k-1}p\), \(k=1,2,\dots\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the mean of Geometric(p) (number of trials up to and including "
             "the first success).",
             r"\(E[X]=\dfrac{1}{p}\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the variance of Geometric(p) (number of trials up to and "
             "including the first success).",
             r"\(\mathrm{Var}(X)=\dfrac{1-p}{p^{2}}\). (It is memoryless.)",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "hard",
-            "State the pmf of Negative Binomial(r, p) (trials until the r-th "
-            "success).",
+            "univariate",
+            "discrete_dists",
+            "hard",
+            "State the pmf of Negative Binomial(r, p) (trials until the r-th success).",
             r"\(P(X=k)=\binom{k-1}{r-1}p^{r}(1-p)^{k-r}\), \(k=r,r+1,\dots\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "hard",
+            "univariate",
+            "discrete_dists",
+            "hard",
             "State the mean of Negative Binomial(r, p) (trials until the r-th "
             "success).",
             r"\(E[X]=\dfrac{r}{p}\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "hard",
+            "univariate",
+            "discrete_dists",
+            "hard",
             "State the variance of Negative Binomial(r, p) (trials until the r-th "
             "success).",
             r"\(\mathrm{Var}(X)=\dfrac{r(1-p)}{p^{2}}\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the pmf of Poisson(lambda).",
             r"\(P(X=k)=\dfrac{e^{-\lambda}\lambda^{k}}{k!}\), \(k=0,1,\dots\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the mean of Poisson(lambda).",
             r"\(E[X]=\lambda\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the variance of Poisson(lambda).",
             r"\(\mathrm{Var}(X)=\lambda\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "State the MGF of Poisson(lambda).",
             r"\(M(t)=e^{\lambda(e^{t}-1)}\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "hard",
+            "univariate",
+            "discrete_dists",
+            "hard",
             "State the pmf of the Hypergeometric distribution (n draws without "
             "replacement from N items, K of them successes).",
             r"\(P(X=k)=\dfrac{\binom{K}{k}\binom{N-K}{n-k}}{\binom{N}{n}}\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "hard",
+            "univariate",
+            "discrete_dists",
+            "hard",
             "State the mean of the Hypergeometric distribution (n draws without "
             "replacement from N items, K of them successes).",
             r"\(E[X]=n\dfrac{K}{N}\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "hard",
+            "univariate",
+            "discrete_dists",
+            "hard",
             "State the variance of the Hypergeometric distribution (n draws "
             "without replacement from N items, K of them successes).",
             r"\(\mathrm{Var}(X)=n\dfrac{K}{N}\Big(1-\dfrac{K}{N}\Big)\dfrac{N-n}{N-1}\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "In a Poisson process with rate lambda, what is the distribution of "
             "the number of events in an interval of length t?",
             r"The number of events in an interval of length \(t\) is "
             r"\(\mathrm{Poisson}(\lambda t)\).",
         ),
         SeedCard(
-            "univariate", "discrete_dists", "medium",
+            "univariate",
+            "discrete_dists",
+            "medium",
             "In a Poisson process with rate lambda, what is the distribution of "
             "the interarrival (waiting) times between consecutive events?",
             r"The interarrival times are \(\mathrm{Exponential}\) with mean "
@@ -1183,133 +1259,179 @@ SEED_CARDS.extend(
         ),
         # --- Univariate: common continuous distributions (the table) ---
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the pdf of a continuous Uniform(a, b).",
             r"\(f(x)=\dfrac{1}{b-a}\), \(a<x<b\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the mean of a continuous Uniform(a, b).",
             r"\(E[X]=\dfrac{a+b}{2}\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the variance of a continuous Uniform(a, b).",
             r"\(\mathrm{Var}(X)=\dfrac{(b-a)^{2}}{12}\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the pdf of an Exponential with mean theta.",
             r"\(f(x)=\dfrac{1}{\theta}e^{-x/\theta}\), \(x>0\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the cdf of an Exponential with mean theta.",
             r"\(F(x)=1-e^{-x/\theta}\), \(x>0\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the mean of an Exponential with mean theta.",
             r"\(E[X]=\theta\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the variance of an Exponential with mean theta.",
             r"\(\mathrm{Var}(X)=\theta^{2}\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the MGF of an Exponential with mean theta.",
             r"\(M(t)=\dfrac{1}{1-\theta t}\) for \(t<1/\theta\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the memoryless property of the exponential distribution.",
             r"\(P(X > s+t \mid X > s) = P(X > t)\) for all \(s,t \ge 0\). "
             r"The exponential is the only continuous distribution with this property.",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "hard",
+            "univariate",
+            "continuous_dists",
+            "hard",
             "State the pdf of a Gamma with shape alpha and scale theta.",
             r"\(f(x)=\dfrac{x^{\alpha-1}e^{-x/\theta}}{\Gamma(\alpha)\,\theta^{\alpha}}\), "
             r"\(x>0\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "hard",
+            "univariate",
+            "continuous_dists",
+            "hard",
             "State the mean of a Gamma with shape alpha and scale theta.",
             r"\(E[X]=\alpha\theta\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "hard",
+            "univariate",
+            "continuous_dists",
+            "hard",
             "State the variance of a Gamma with shape alpha and scale theta.",
             r"\(\mathrm{Var}(X)=\alpha\theta^{2}\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "hard",
+            "univariate",
+            "continuous_dists",
+            "hard",
             "State the MGF of a Gamma with shape alpha and scale theta.",
             r"\(M(t)=(1-\theta t)^{-\alpha}\). (\(\alpha=1\) is the exponential; a "
             r"sum of \(\alpha\) iid exponentials.)",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the pdf of Normal(mu, sigma^2).",
             r"\(f(x)=\dfrac{1}{\sigma\sqrt{2\pi}}\exp\!\Big(-\dfrac{(x-\mu)^2}{2\sigma^2}\Big)\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the mean of Normal(mu, sigma^2).",
             r"\(E[X]=\mu\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the variance of Normal(mu, sigma^2).",
             r"\(\mathrm{Var}(X)=\sigma^{2}\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "medium",
+            "univariate",
+            "continuous_dists",
+            "medium",
             "State the MGF of Normal(mu, sigma^2).",
             r"\(M(t)=\exp\!\big(\mu t + \tfrac12\sigma^{2}t^{2}\big)\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "easy",
-            "How do you standardize a normal random variable X ~ Normal(mu, "
-            "sigma^2)?",
+            "univariate",
+            "continuous_dists",
+            "easy",
+            "How do you standardize a normal random variable X ~ Normal(mu, sigma^2)?",
             r"\(Z=\dfrac{X-\mu}{\sigma}\sim N(0,1)\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "easy",
-            "For X ~ Normal(mu, sigma^2), how do you find the p-th percentile "
-            "x_p?",
+            "univariate",
+            "continuous_dists",
+            "easy",
+            "For X ~ Normal(mu, sigma^2), how do you find the p-th percentile x_p?",
             r"\(x_p = \mu + z_p\,\sigma\), where \(z_p\) is the standard-normal "
             r"\(p\)-th percentile (\(\Phi(z_p)=p\), from the z-table). The median "
             r"is \(\mu\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "hard",
+            "univariate",
+            "continuous_dists",
+            "hard",
             "State the pdf of a Beta(alpha, beta) on (0, 1).",
             r"\(f(x)=\dfrac{\Gamma(\alpha+\beta)}{\Gamma(\alpha)\Gamma(\beta)}"
             r"x^{\alpha-1}(1-x)^{\beta-1}\), \(0<x<1\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "hard",
+            "univariate",
+            "continuous_dists",
+            "hard",
             "State the mean of a Beta(alpha, beta) on (0, 1).",
             r"\(E[X]=\dfrac{\alpha}{\alpha+\beta}\).",
         ),
         SeedCard(
-            "univariate", "continuous_dists", "hard",
+            "univariate",
+            "continuous_dists",
+            "hard",
             "State the variance of a Beta(alpha, beta) on (0, 1).",
             r"\(\mathrm{Var}(X)=\dfrac{\alpha\beta}{(\alpha+\beta)^2(\alpha+\beta+1)}\).",
         ),
         # --- Univariate: insurance applications ---
         SeedCard(
-            "univariate", "insurance_apps", "hard",
+            "univariate",
+            "insurance_apps",
+            "hard",
             "Give the expected cost per loss with an ordinary deductible d.",
             r"Payment \(=(X-d)_+=\max(X-d,0)\).<br>"
             r"\(E[(X-d)_+]=\displaystyle\int_d^\infty (x-d)f(x)\,dx "
             r"= \int_d^\infty \big(1-F(x)\big)\,dx\).",
         ),
         SeedCard(
-            "univariate", "insurance_apps", "hard",
+            "univariate",
+            "insurance_apps",
+            "hard",
             "Give the expected payment with a policy limit u (a capped loss), and "
             "with a coinsurance factor alpha.",
             r"\(E[\min(X,u)] = \displaystyle\int_0^u \big(1-F(x)\big)\,dx\).<br>"
@@ -1318,14 +1440,18 @@ SEED_CARDS.extend(
         ),
         # --- Multivariate: joint distributions ---
         SeedCard(
-            "multivariate", "joint_distributions", "medium",
+            "multivariate",
+            "joint_distributions",
+            "medium",
             "Define a joint pdf and how to get a probability over a region.",
             r"\(f_{X,Y}(x,y) \ge 0\), \(\iint f = 1\).<br>"
             r"\(P((X,Y) \in A) = \displaystyle\iint_A f_{X,Y}(x,y)\,dx\,dy\).",
         ),
         # --- Multivariate: marginal & conditional ---
         SeedCard(
-            "multivariate", "marginal_conditional", "medium",
+            "multivariate",
+            "marginal_conditional",
+            "medium",
             "How do you get marginal densities, the conditional density, and "
             "test independence from a joint density?",
             r"\(f_X(x)=\displaystyle\int f_{X,Y}(x,y)\,dy\); "
@@ -1333,30 +1459,37 @@ SEED_CARDS.extend(
             r"Independent \(\iff f_{X,Y}(x,y)=f_X(x)f_Y(y)\) for all \(x,y\).",
         ),
         SeedCard(
-            "multivariate", "marginal_conditional", "hard",
-            "State the double-expectation (tower) rule and the law of total "
-            "variance.",
+            "multivariate",
+            "marginal_conditional",
+            "hard",
+            "State the double-expectation (tower) rule and the law of total variance.",
             r"\(E[Y]=E\big[E[Y\mid X]\big]\).<br>"
             r"\(\mathrm{Var}(Y)=E\big[\mathrm{Var}(Y\mid X)\big]"
             r"+\mathrm{Var}\big(E[Y\mid X]\big)\).",
         ),
         # --- Multivariate: joint moments ---
         SeedCard(
-            "multivariate", "joint_moments", "medium",
+            "multivariate",
+            "joint_moments",
+            "medium",
             "How do you compute E[g(X, Y)] from a joint density?",
             r"\(E[g(X,Y)] = \displaystyle\iint g(x,y)\,f_{X,Y}(x,y)\,dx\,dy\); "
             r"in particular \(E[XY]=\iint xy\,f_{X,Y}\,dx\,dy\).",
         ),
         # --- Multivariate: covariance & correlation ---
         SeedCard(
-            "multivariate", "covariance_correlation", "medium",
+            "multivariate",
+            "covariance_correlation",
+            "medium",
             "Define covariance and correlation and give the key identities.",
             r"\(\mathrm{Cov}(X,Y)=E[XY]-E[X]E[Y]\); "
             r"\(\rho=\dfrac{\mathrm{Cov}(X,Y)}{\sigma_X\sigma_Y}\in[-1,1]\).<br>"
             r"Independent \(\Rightarrow \mathrm{Cov}=0\) (the converse is false).",
         ),
         SeedCard(
-            "multivariate", "covariance_correlation", "hard",
+            "multivariate",
+            "covariance_correlation",
+            "hard",
             "State the variance of a sum and the bilinearity of covariance.",
             r"\(\mathrm{Var}(aX+bY)=a^{2}\mathrm{Var}(X)+b^{2}\mathrm{Var}(Y)"
             r"+2ab\,\mathrm{Cov}(X,Y)\).<br>"
@@ -1364,7 +1497,9 @@ SEED_CARDS.extend(
         ),
         # --- Multivariate: order statistics ---
         SeedCard(
-            "multivariate", "order_statistics", "hard",
+            "multivariate",
+            "order_statistics",
+            "hard",
             "Give the densities of the min and max of n iid variables with cdf F "
             "and pdf f.",
             r"Max: \(F_{(n)}(x)=F(x)^{n}\), \(f_{(n)}(x)=nF(x)^{n-1}f(x)\).<br>"
@@ -1372,23 +1507,28 @@ SEED_CARDS.extend(
             r"\(f_{(1)}(x)=n(1-F(x))^{n-1}f(x)\).",
         ),
         SeedCard(
-            "multivariate", "order_statistics", "hard",
+            "multivariate",
+            "order_statistics",
+            "hard",
             "Give the density of the k-th order statistic of n iid variables.",
             r"\(f_{(k)}(x)=\dfrac{n!}{(k-1)!\,(n-k)!}\,"
             r"F(x)^{k-1}\big(1-F(x)\big)^{n-k}f(x)\).",
         ),
         # --- Multivariate: linear combinations ---
         SeedCard(
-            "multivariate", "linear_combinations", "medium",
-            "Give the mean and variance of a linear combination of random "
-            "variables.",
+            "multivariate",
+            "linear_combinations",
+            "medium",
+            "Give the mean and variance of a linear combination of random variables.",
             r"\(E\big[\sum a_i X_i\big]=\sum a_i E[X_i]\).<br>"
             r"\(\mathrm{Var}\big(\sum a_i X_i\big)=\sum a_i^{2}\mathrm{Var}(X_i)"
             r"+2\sum_{i<j}a_i a_j\,\mathrm{Cov}(X_i,X_j)\) "
             r"(covariance terms vanish if independent).",
         ),
         SeedCard(
-            "multivariate", "linear_combinations", "hard",
+            "multivariate",
+            "linear_combinations",
+            "hard",
             "State the reproductive properties of sums of independent common "
             "distributions.",
             r"Independent sums: "
@@ -1400,7 +1540,9 @@ SEED_CARDS.extend(
         ),
         # --- Multivariate: central limit theorem ---
         SeedCard(
-            "multivariate", "clt", "medium",
+            "multivariate",
+            "clt",
+            "medium",
             "State the Central Limit Theorem for the sample mean.",
             r"For iid \(X_i\) with mean \(\mu\) and variance \(\sigma^{2}\), for large "
             r"\(n\): \(\bar X_n \approx N\!\Big(\mu,\dfrac{\sigma^{2}}{n}\Big)\), "
@@ -1505,8 +1647,7 @@ def basic_back(answer: str, solution: str) -> str:
     parts: list[str] = []
     if answer:
         parts.append(
-            '<div style="font-weight:700;margin-bottom:0.5em">'
-            f"Answer: {answer}</div>"
+            f'<div style="font-weight:700;margin-bottom:0.5em">Answer: {answer}</div>'
         )
     if solution:
         parts.append(f'<div style="text-align:left;line-height:1.5">{solution}</div>')
@@ -1628,9 +1769,7 @@ def convert_seeded_short_answer_to_basic(col: Collection) -> int:
         raise RuntimeError("Basic notetype not found in collection")
 
     # Seeded curriculum cards only (difficulty::*). Never the AI quarantine cards.
-    nids = list(
-        col.find_notes(f'note:"{SHORT_ANSWER_NOTETYPE}" tag:difficulty::*')
-    )
+    nids = list(col.find_notes(f'note:"{SHORT_ANSWER_NOTETYPE}" tag:difficulty::*'))
     if not nids:
         return 0
 
@@ -1640,8 +1779,7 @@ def convert_seeded_short_answer_to_basic(col: Collection) -> int:
         note = col.get_note(nid)
         note["Explanation"] = basic_back(note["Answer"], note["Explanation"])
         note.tags = [
-            "format::flashcard" if t == "format::short_answer" else t
-            for t in note.tags
+            "format::flashcard" if t == "format::short_answer" else t for t in note.tags
         ]
         if "format::flashcard" not in note.tags:
             note.add_tag("format::flashcard")

@@ -9,6 +9,7 @@ Run this over the target file(s) or the current diff. Do not touch logic,
 only text.
 
 ## Replace all dashes
+
 - Em-dash and en-dash are banned. Replace by rewriting the sentence:
   - Aside or interruption: use a comma or parentheses.
   - Range (e.g. "6-10"): use a hyphen.
@@ -17,6 +18,7 @@ only text.
   hits: U+2013, U+2014, U+2015, U+2212.
 
 ## Cut unnecessary explanation
+
 - Delete restatements of the request and after-the-fact summaries.
 - Delete filler adjectives: comprehensive, robust, seamless, powerful,
   cutting-edge, elegant.
@@ -26,10 +28,12 @@ only text.
 - Keep at most one or two sentences on a real trade-off. Drop the rest.
 
 ## What not to change
+
 - Do not alter numbers, identifiers, quoted exam content, or the honesty
   score copy (evidence, missing data, calibration, range, give-up rule).
   Those are correctness-critical and get reviewed by diff, not cleaned.
 - Do not reformat code or rename anything.
 
 ## Report
+
 State how many dashes you removed and how many lines you cut, in one line.

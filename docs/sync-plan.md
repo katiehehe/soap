@@ -78,7 +78,7 @@ Verified:
 - **Server → phone demonstrated on-device (re-verified this session):** with the
   fully-scored persona uploaded to the local server
   (`tools/speedrun/sync_setup.py --from-collection out/demo-persona.anki2`), the
-  `Speedrun_P` emulator ran the real protocol: Sync → *Select collection to keep*
+  `Speedrun_P` emulator ran the real protocol: Sync → _Select collection to keep_
   → **AnkiWeb** → **Replace** → full download + media sync (logcat:
   `anki::sync::media::syncer: media sync complete`, `SyncMediaWorker: success`;
   186 notes pulled). The phone then rendered the three scores with ranges (see
@@ -89,7 +89,7 @@ Verified:
 
 Not cleanly demonstrated on-device (environment-blocked, **not** a sync defect):
 
-- A single **fresh phone→desktop *review* recording on the current themed build.**
+- A single **fresh phone→desktop _review_ recording on the current themed build.**
   Two environment factors made the app UI unstable this session (neither is a
   sync/engine defect): (1) a leftover **phone crash-test loop** from an earlier run
   was force-stopping AnkiDroid every ~3 s (killed once found); and (2) the debug
@@ -99,7 +99,7 @@ Not cleanly demonstrated on-device (environment-blocked, **not** a sync defect):
   is a lean 2 GB AVD; with a quiet host (fewer background `./run`/`yarn dev`
   processes) or a release build (no LeakCanary), the reviewer flow is stable. The
   server→phone full download + the three-score render DID complete on-device this
-  session; only the phone→desktop *review* leg awaits a stable capture (prior real
+  session; only the phone→desktop _review_ leg awaits a stable capture (prior real
   capture exists, see above). The shared engine merges correctly (proven by
   `make sync-test`/`make sync-twoway`), so this is a demo-environment limitation.
 

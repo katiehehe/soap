@@ -1,3 +1,5 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 """Two-way sync check through the LIVE local server (the one the emulator uses).
 
 Two clients each download the shared collection, review a DIFFERENT set of cards
@@ -80,7 +82,9 @@ def main() -> int:
         a_total, b_total = revlog(a) - base, revlog(b) - base
         expected = 2 * N
         print(f"reviewed offline : A {N} + B {N} = {expected}")
-        print(f"after sync       : A {a_total} | B {b_total}  (expected {expected} each)")
+        print(
+            f"after sync       : A {a_total} | B {b_total}  (expected {expected} each)"
+        )
         ok = a_total == expected and b_total == expected
         print(f"TWO-WAY SYNC: {'PASS' if ok else 'FAIL'}  ({ENDPOINT})")
         return 0 if ok else 1

@@ -187,18 +187,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             // 6-min-per-question pace over however many questions the bank could
             // supply for that scope.
             startTimer(
-                isFullExam
-                    ? FULL_EXAM_SECONDS
-                    : items.length * SECONDS_PER_QUESTION,
+                isFullExam ? FULL_EXAM_SECONDS : items.length * SECONDS_PER_QUESTION,
             );
         }
     }
     onDestroy(stopTimer);
 
     $: total = items.length;
-    $: answered = items.filter(
-        (it) => (responses[it.id] ?? "").trim() !== "",
-    ).length;
+    $: answered = items.filter((it) => (responses[it.id] ?? "").trim() !== "").length;
     $: allAnswered = total > 0 && answered === total;
     // Re-typeset MathJax when the phase (and thus the rendered container) changes.
     $: mjDep = `${phase}:${total}`;
@@ -242,9 +238,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         });
         bridgeCommand(`speedrun-record-test:${payload}`, (r: GradeResult) => {
             result = r;
-            reviewById = Object.fromEntries(
-                (r?.review ?? []).map((x) => [x.id, x]),
-            );
+            reviewById = Object.fromEntries((r?.review ?? []).map((x) => [x.id, x]));
             phase = "results";
         });
     }
@@ -298,13 +292,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 while you test.
             </p>
             <p class="timing-line">
-                A visible countdown <b>auto-submits at zero</b>.
+                A visible countdown <b>auto-submits at zero</b>
+                .
             </p>
             <p class="note">
-                Submitting records <b>real graded evidence</b>: each question is marked
-                objectively against the correct choice (no
-                self-marking). {readinessLine} It feeds Readiness, which stays hidden
-                until the give-up threshold and always shows a range.
+                Submitting records <b>real graded evidence</b>
+                : each question is marked objectively against the correct choice (no self-marking).
+                {readinessLine} It feeds Readiness, which stays hidden until the give-up threshold
+                and always shows a range.
             </p>
             <div class="actions">
                 <button class="btn primary" on:click={startTest}>
@@ -421,16 +416,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     <b>{result.stats.questions}</b>
                     questions graded all-time. Open the
                     <b>Readiness</b>
-                    tab to see how this moves your P(pass) band; it stays hidden until
-                    you have enough evidence, and is always a range.
+                    tab to see how this moves your P(pass) band; it stays hidden until you
+                    have enough evidence, and is always a range.
                 </p>
                 <div class="actions">
                     <button class="btn primary" on:click={restart}>
                         Take another test
                     </button>
-                    <button class="btn ghost" on:click={backToMap}>
-                        Back to map
-                    </button>
+                    <button class="btn ghost" on:click={backToMap}>Back to map</button>
                 </div>
             </section>
 

@@ -35,7 +35,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         opacity="0.4"
     />
     <!-- bubbles rising off the bar -->
-    <circle cx="8" cy="7.2" r="3" fill="none" stroke="currentColor" stroke-width="1.5" />
+    <circle
+        cx="8"
+        cy="7.2"
+        r="3"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+    />
     <circle cx="14.6" cy="6" r="2" fill="currentColor" />
     <circle cx="12" cy="10.2" r="1.3" fill="currentColor" />
 </svg>

@@ -1,3 +1,5 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 """Download the current server collection into a throwaway client and report
 note/card/review counts. Used to verify sync (e.g. reviews done on the phone
 show up on the server after it syncs).

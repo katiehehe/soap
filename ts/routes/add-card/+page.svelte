@@ -132,7 +132,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             {#if suggestions.length}
                 <div class="suggestions">
                     <span class="sug-label">
-                        {provider === "openai" ? "AI suggestions" : "Keyword suggestions"}
+                        {provider === "openai"
+                            ? "AI suggestions"
+                            : "Keyword suggestions"}
                     </span>
                     {#each suggestions as sug}
                         <button

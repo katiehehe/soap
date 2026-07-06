@@ -48,11 +48,11 @@ pub(crate) const ABLATE_WITHIN_UNIT_KEY: &str = "speedrunAblateWithinUnit";
 /// `{deck_id, tier}` here so the queue builder serves ONLY the subtopics that
 /// are actually in that tier's mastery pool. Without it a parent (unit/root)
 /// deck studies its whole subtree, so a still-Blocked subtopic would leak into
-/// within-/cross-unit study. The scope is keyed to the deck it was set for, so a
-/// stale value never affects a different deck; absent -> no scoping (the deck is
-/// studied exactly as upstream builds it). Mirrors the practice-deck scoping in
-/// `qt/aqt/speedrun.py`, but at the queue level so FSRS still schedules normally
-/// (no filtered deck). See `speedrun_scope_queues_to_tier`.
+/// within-/cross-unit study. The scope is keyed to the deck it was set for, so
+/// a stale value never affects a different deck; absent -> no scoping (the deck
+/// is studied exactly as upstream builds it). Mirrors the practice-deck scoping
+/// in `qt/aqt/speedrun.py`, but at the queue level so FSRS still schedules
+/// normally (no filtered deck). See `speedrun_scope_queues_to_tier`.
 pub(crate) const ACTIVE_TIER_SCOPE_KEY: &str = "speedrunActiveTierScope";
 
 /// Config key holding the target exam date as a unix timestamp (local noon of
@@ -112,7 +112,8 @@ pub(crate) const MIN_CLEARED_TO_INTERLEAVE: u32 = 2;
 pub(crate) enum Pool {
     /// Not yet mastered, so practice this subtopic in isolation.
     Blocked,
-    /// Cleared, but its unit isn't fully mastered, so interleave within the unit.
+    /// Cleared, but its unit isn't fully mastered, so interleave within the
+    /// unit.
     WithinUnit,
     /// Its unit is mastered, so interleave across units (spacing).
     CrossUnit,
@@ -120,8 +121,8 @@ pub(crate) enum Pool {
 
 /// Which mastery TIER a study session is scoped to (the strict-tier study). A
 /// unit deck opens the within-unit tier; the root deck opens the cross-unit
-/// tier. Blocked practice needs no scope (a subtopic/leaf deck already holds one
-/// subtopic), so it is intentionally absent here. Parsed from the transient
+/// tier. Blocked practice needs no scope (a subtopic/leaf deck already holds
+/// one subtopic), so it is intentionally absent here. Parsed from the transient
 /// `speedrunActiveTierScope` config.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TierScope {
@@ -146,7 +147,8 @@ impl TierScope {
 /// This is the strict-tier rule: within-unit study serves only WithinUnit-pool
 /// subtopics; cross-unit study serves only CrossUnit-pool subtopics. A
 /// still-Blocked subtopic is eligible for NEITHER, so it can never leak into a
-/// parent-deck (unit/root) study session. Pure, so it is directly unit-testable.
+/// parent-deck (unit/root) study session. Pure, so it is directly
+/// unit-testable.
 pub(crate) fn pool_eligible_for_tier(pool: Pool, tier: TierScope) -> bool {
     match tier {
         TierScope::WithinUnit => matches!(pool, Pool::WithinUnit),
@@ -222,12 +224,12 @@ impl SubtopicStats {
             && self.mean_retrievability() >= MIN_RETRIEVABILITY
     }
 
-    /// FULL mastery: the memory gate is cleared AND practice-test PERFORMANCE is
-    /// mastered, so you can both RECALL the fact and SOLVE exam-style problems with
-    /// it. This is the "done" bar the Overall-mastery rollups and the mastery
-    /// pace burn down to. Memory and Performance stay SEPARATE signals (each
-    /// shown with its own range); this only ANDs their two gates, it never
-    /// averages them into one blended score.
+    /// FULL mastery: the memory gate is cleared AND practice-test PERFORMANCE
+    /// is mastered, so you can both RECALL the fact and SOLVE exam-style
+    /// problems with it. This is the "done" bar the Overall-mastery rollups
+    /// and the mastery pace burn down to. Memory and Performance stay
+    /// SEPARATE signals (each shown with its own range); this only ANDs
+    /// their two gates, it never averages them into one blended score.
     pub(crate) fn fully_mastered(&self) -> bool {
         self.gate_cleared() && self.performance.mastered()
     }
@@ -523,12 +525,12 @@ pub(crate) struct MasteryOverallCounts {
 }
 
 /// Roll up per-subtopic stats into honest overall counts. A subtopic is
-/// `not_started` with zero reviews, `mastered` once it is FULLY mastered (memory
-/// gate cleared AND practice-test performance mastered), and `in_progress`
-/// otherwise; the three partition the syllabus so nothing is double-counted or
-/// invented. A unit is mastered when it has >= 1 subtopic and all are fully
-/// mastered. (Callers must attach each stat's `performance`; unset performance
-/// counts as not-yet-mastered.)
+/// `not_started` with zero reviews, `mastered` once it is FULLY mastered
+/// (memory gate cleared AND practice-test performance mastered), and
+/// `in_progress` otherwise; the three partition the syllabus so nothing is
+/// double-counted or invented. A unit is mastered when it has >= 1 subtopic and
+/// all are fully mastered. (Callers must attach each stat's `performance`;
+/// unset performance counts as not-yet-mastered.)
 pub(crate) fn mastery_overall(stats: &[SubtopicStats]) -> MasteryOverallCounts {
     let subtopics_total = stats.len() as u32;
     let subtopics_mastered = stats.iter().filter(|s| s.fully_mastered()).count() as u32;
@@ -563,11 +565,11 @@ pub(crate) fn mastery_overall(stats: &[SubtopicStats]) -> MasteryOverallCounts {
 
 /// Importance-weighted mastery rollup. `overall_pct` and each unit's pct are
 /// the share of that group's total weight that sits on FULLY-mastered subtopics
-/// (memory gate cleared AND practice-test performance mastered). When no weights
-/// are supplied (total weight 0) it falls back to the plain mastered/total count
-/// fraction, so a caller that omits weights still gets a sensible number. Every
-/// value is MEASURED demonstrated mastery, never a predicted score. (Callers must
-/// attach each stat's `performance`.)
+/// (memory gate cleared AND practice-test performance mastered). When no
+/// weights are supplied (total weight 0) it falls back to the plain
+/// mastered/total count fraction, so a caller that omits weights still gets a
+/// sensible number. Every value is MEASURED demonstrated mastery, never a
+/// predicted score. (Callers must attach each stat's `performance`.)
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct WeightedMastery {
     pub overall_pct: f64,
@@ -810,10 +812,11 @@ fn is_actionable(c: Counts) -> bool {
 }
 
 /// Sum today's `(new, review, learn, total)` across a set of subtopics, reading
-/// each subtopic's OWN (leaf) deck counts. A parent-tier row (within-/cross-unit)
-/// uses this so it reflects exactly the cards STRICT-study serves for that tier,
-/// only the in-pool subtopics, instead of the parent deck's rolled-up total,
-/// which would also count the tier's out-of-pool (e.g. still-blocked) subtopics.
+/// each subtopic's OWN (leaf) deck counts. A parent-tier row
+/// (within-/cross-unit) uses this so it reflects exactly the cards STRICT-study
+/// serves for that tier, only the in-pool subtopics, instead of the parent
+/// deck's rolled-up total, which would also count the tier's out-of-pool (e.g.
+/// still-blocked) subtopics.
 fn sum_subtopic_counts<'a>(
     tags: impl IntoIterator<Item = &'a str>,
     tag_deck: &HashMap<String, i64>,
@@ -847,9 +850,9 @@ fn sum_subtopic_counts<'a>(
 ///   cross-unit spacing. Its counts sum ONLY those subtopics, not the root
 ///   deck's rolled-up total.
 ///
-/// Tier membership is read from `pools` (via `pool_eligible_for_tier`), the SAME
-/// predicate the live strict queue (`scope_cards_to_tier`) uses, so the plan
-/// counts and what the queue serves can never drift apart.
+/// Tier membership is read from `pools` (via `pool_eligible_for_tier`), the
+/// SAME predicate the live strict queue (`scope_cards_to_tier`) uses, so the
+/// plan counts and what the queue serves can never drift apart.
 ///
 /// Only decks with something due today are returned (`is_actionable`). Pure: it
 /// reorders/labels measured state and never fabricates a score.
@@ -986,9 +989,9 @@ pub(crate) fn build_study_plan(
 }
 
 /// Minimum study history (in days) before we extrapolate a mastery finish date.
-/// Below this we have too little history to project a rate honestly, so the pace
-/// reports the raw counts but abstains from a projection / on-track verdict,
-/// applying the same give-up discipline the scores use to the pace.
+/// Below this we have too little history to project a rate honestly, so the
+/// pace reports the raw counts but abstains from a projection / on-track
+/// verdict, applying the same give-up discipline the scores use to the pace.
 pub(crate) const MIN_PACE_HISTORY_DAYS: i64 = 7;
 
 /// Mastery-pace arithmetic: given the subtopics still to master, how many are
@@ -1106,11 +1109,11 @@ pub(crate) fn order_new_cards(
         })
         .collect();
     // Sort key within a tier `(group, round_robin, subtopic)`:
-    // - Blocked: group by subtopic (round-robin/subtopic unused) -> each
-    //   subtopic drilled together in isolation.
-    // - Full within-unit: group by UNIT, then round-robin across the unit's
-    //   cleared sub-types (this IS the within-unit interleaving the ablation
-    //   removes: confusable siblings mixed *with each other*).
+    // - Blocked: group by subtopic (round-robin/subtopic unused) -> each subtopic
+    //   drilled together in isolation.
+    // - Full within-unit: group by UNIT, then round-robin across the unit's cleared
+    //   sub-types (this IS the within-unit interleaving the ablation removes:
+    //   confusable siblings mixed *with each other*).
     // - Ablated mixed pool + cross-unit spacing: no grouping, so cleared cards
     //   interleave globally in input order.
     let key = |r: u8, pool: Option<Pool>, tag: &str, rr: usize| -> (String, usize, String) {
@@ -1142,14 +1145,14 @@ pub(crate) fn order_new_cards(
 }
 
 /// The card ids to KEEP when a study session is scoped to `tier`: the strict
-/// tier rule applied to a gathered queue. A card is kept when its subtopic is in
-/// an eligible pool for the tier (`pool_eligible_for_tier`); a card carrying NO
-/// syllabus subtopic (`tag == None`) is always kept, so only the tiered syllabus
-/// is scoped and any non-speedrun card sharing the deck is never dropped. A
-/// syllabus card whose subtopic isn't in `pools` (shouldn't happen, since pools are
-/// computed over every present subtopic) is dropped, matching "serve ONLY the
-/// subtopics in this tier". Pure and order-preserving, so the strict-tier
-/// behaviour is unit-testable without a live collection.
+/// tier rule applied to a gathered queue. A card is kept when its subtopic is
+/// in an eligible pool for the tier (`pool_eligible_for_tier`); a card carrying
+/// NO syllabus subtopic (`tag == None`) is always kept, so only the tiered
+/// syllabus is scoped and any non-speedrun card sharing the deck is never
+/// dropped. A syllabus card whose subtopic isn't in `pools` (shouldn't happen,
+/// since pools are computed over every present subtopic) is dropped, matching
+/// "serve ONLY the subtopics in this tier". Pure and order-preserving, so the
+/// strict-tier behaviour is unit-testable without a live collection.
 pub(crate) fn scope_cards_to_tier(
     cards: &[(CardId, Option<String>)],
     pools: &HashMap<String, Pool>,
@@ -1628,8 +1631,8 @@ impl Collection {
     /// Per-subtopic importance weights from config (written by Python from the
     /// topic map). Empty when unset, which makes the reorder weight every
     /// subtopic equally (weakest-topic-first). Also read by
-    /// `readiness_next_action` so the banner's "Do next" weights topics the same
-    /// way the study map does.
+    /// `readiness_next_action` so the banner's "Do next" weights topics the
+    /// same way the study map does.
     pub(crate) fn speedrun_subtopic_weights_config(&self) -> HashMap<String, f64> {
         self.get_config_optional::<HashMap<String, f64>, _>(SUBTOPIC_WEIGHTS_KEY)
             .unwrap_or_default()
@@ -1756,8 +1759,8 @@ impl Collection {
     /// `speedrunActiveTierScope` config is set AND keyed to this exact deck.
     /// Returns `None` when unset, malformed, targeting a different deck, or
     /// carrying an unknown tier, so a stale scope can never affect the wrong
-    /// deck, and a missing/invalid value is simply a no-op (upstream/plain decks
-    /// untouched). Read-only.
+    /// deck, and a missing/invalid value is simply a no-op (upstream/plain
+    /// decks untouched). Read-only.
     pub(crate) fn speedrun_active_tier_scope(&self, deck_id: DeckId) -> Option<TierScope> {
         #[derive(serde::Deserialize)]
         struct ScopeConfig {
@@ -1775,18 +1778,20 @@ impl Collection {
 
     /// Strict tier study: when `deck_id` is the deck the active tier scope was
     /// set for, retain in the gathered `new` and `review` queues ONLY the cards
-    /// whose subtopic is actually in that tier's mastery pool (within-unit study
-    /// serves only WithinUnit-pool subtopics; cross-unit study serves only
-    /// CrossUnit-pool subtopics). This stops a parent (unit/root) deck from
-    /// serving its still-Blocked descendants, so the tiers no longer leak. Pools
-    /// depend on whole-unit mastery, so stats are computed over every syllabus
-    /// subtopic present, not just the gathered cards' (mirrors the reorders).
+    /// whose subtopic is actually in that tier's mastery pool (within-unit
+    /// study serves only WithinUnit-pool subtopics; cross-unit study serves
+    /// only CrossUnit-pool subtopics). This stops a parent (unit/root) deck
+    /// from serving its still-Blocked descendants, so the tiers no longer
+    /// leak. Pools depend on whole-unit mastery, so stats are computed over
+    /// every syllabus subtopic present, not just the gathered cards'
+    /// (mirrors the reorders).
     ///
     /// A no-op when no scope targets this deck, or when no gathered card is a
-    /// syllabus card. Read-only: it only drops gathered cards from the in-memory
-    /// queue (like the guided new-card gate / a per-deck limit), so it writes
-    /// nothing (undo, FSRS intervals, and collection integrity are untouched),
-    /// and cards without a syllabus subtopic are never dropped.
+    /// syllabus card. Read-only: it only drops gathered cards from the
+    /// in-memory queue (like the guided new-card gate / a per-deck limit),
+    /// so it writes nothing (undo, FSRS intervals, and collection integrity
+    /// are untouched), and cards without a syllabus subtopic are never
+    /// dropped.
     pub(crate) fn speedrun_scope_queues_to_tier(
         &mut self,
         deck_id: DeckId,
@@ -1799,7 +1804,9 @@ impl Collection {
         let note_subtopics = self.speedrun_note_subtopic_map()?;
         // Nothing tiered gathered -> leave the queue exactly as built.
         let touches_syllabus = new.iter().any(|c| note_subtopics.contains_key(&c.note_id))
-            || review.iter().any(|c| note_subtopics.contains_key(&c.note_id));
+            || review
+                .iter()
+                .any(|c| note_subtopics.contains_key(&c.note_id));
         if !touches_syllabus {
             return Ok(());
         }
@@ -2447,7 +2454,10 @@ mod tests {
         // must NOT use this for the within-unit row.
         counts.insert(10, (rolled_new, 0, 0, rolled_new));
         counts.insert(1, (rolled_new, 0, 0, rolled_new));
-        assert_eq!(rolled_new, 12, "unit rolled-up new = 12 (6 within + 6 blocked)");
+        assert_eq!(
+            rolled_new, 12,
+            "unit rolled-up new = 12 (6 within + 6 blocked)"
+        );
 
         let plan = build_study_plan(&stats, &pools, &tag_deck, &counts, &parent);
         let within = plan
@@ -2460,11 +2470,11 @@ mod tests {
             "within-unit counts ONLY the 6 promoted subtopics, not the unit's rolled-up 12"
         );
         // The 6 blocked subtopics still each get their own blocked row.
-        let blocked = plan
-            .iter()
-            .filter(|p| p.tier == StudyMode::Blocked)
-            .count();
-        assert_eq!(blocked, 6, "each still-blocked subtopic is its own blocked row");
+        let blocked = plan.iter().filter(|p| p.tier == StudyMode::Blocked).count();
+        assert_eq!(
+            blocked, 6,
+            "each still-blocked subtopic is its own blocked row"
+        );
     }
 
     #[test]
@@ -2683,8 +2693,14 @@ mod tests {
         ];
         let kept = scope_cards_to_tier(&cards, &pools, TierScope::CrossUnit);
         assert_eq!(kept, vec![CardId(3), CardId(4)]);
-        assert!(!kept.contains(&CardId(1)), "blocked must not leak into cross-unit");
-        assert!(!kept.contains(&CardId(2)), "within-unit must not leak into cross-unit");
+        assert!(
+            !kept.contains(&CardId(1)),
+            "blocked must not leak into cross-unit"
+        );
+        assert!(
+            !kept.contains(&CardId(2)),
+            "within-unit must not leak into cross-unit"
+        );
     }
 
     #[test]

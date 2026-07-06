@@ -35,7 +35,7 @@ but wasn't.
 Root cause (full logcat, `Anki-Android/.../pages/SpeedrunPageFragment.kt`): the
 home button routed sync through the stock **`com.ichi2.anki.DO_SYNC`** intent →
 `IntentHandler.handleSyncIntent` → `startActivity(DeckPicker, CLEAR_TOP)` (which
-first *destroys* the home shell) → `DoSync.handleAsyncMessage` → `deckPicker.sync()`
+first _destroys_ the home shell) → `DoSync.handleAsyncMessage` → `deckPicker.sync()`
 **immediately followed by an unconditional `deckPicker.finish()`**. That
 `finish()` is fine for a fire-and-forget widget/shortcut, but from the in-app
 button it tears down the only remaining activity before the first-sync

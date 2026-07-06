@@ -273,8 +273,7 @@ def _tpl_expectation(rng: random.Random) -> tuple[str, float, str]:
     return (
         f"\\(E[X] = {m}\\). Find \\(E[{a}X + {b}]\\).",
         a * m + b,
-        f"By linearity, \\(E[{a}X + {b}] = {a}\\,E[X] + {b} = "
-        f"{a}\\cdot{m} + {b}\\).",
+        f"By linearity, \\(E[{a}X + {b}] = {a}\\,E[X] + {b} = {a}\\cdot{m} + {b}\\).",
     )
 
 
@@ -456,9 +455,9 @@ def _audit_problem(
         "feature": "generate_problem",
         "model": model,
         "source": subtopic_tag,
-        "prompt_hash": hashlib.sha256(
-            problem.get("question", "").encode()
-        ).hexdigest()[:16],
+        "prompt_hash": hashlib.sha256(problem.get("question", "").encode()).hexdigest()[
+            :16
+        ],
         "verified": verified,
     }
     try:

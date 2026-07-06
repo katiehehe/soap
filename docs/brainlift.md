@@ -84,7 +84,7 @@ product, not a footnote on it.
   _what_ to study but _when_.
 - **Why it's parked:** the rubric wants exactly one ablated study feature
   (SPOV 1), so this stays in the spec's feature-ideas list and is deliberately
-  not built this project. 
+  not built this project.
 
 ## 3. Key insights / decisions (why the build looks like it does)
 

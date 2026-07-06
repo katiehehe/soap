@@ -7,10 +7,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { slide } from "svelte/transition";
 
     import { computeReadiness, getMasteryState } from "@generated/backend";
-    import type {
-        MasteryState,
-        ReadinessResult,
-    } from "@generated/anki/speedrun_pb";
+    import type { MasteryState, ReadinessResult } from "@generated/anki/speedrun_pb";
     import { MIN_PERF_QUESTIONS, type MetricId, wilsonInterval } from "../metrics/lib";
     import Explainer from "../metrics/Explainer.svelte";
     import { masteryInputs } from "../study-map/lib";
@@ -218,9 +215,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             name: "Performance",
             question: "Can you solve a new, exam-style question?",
             state: perfMeasured ? "score" : "pending",
-            value: perfMeasured && perfBand
-                ? `${pct(perf.accuracy)} (${pct(perfBand.low)}-${pct(perfBand.high)})`
-                : "Not yet measured",
+            value:
+                perfMeasured && perfBand
+                    ? `${pct(perf.accuracy)} (${pct(perfBand.low)}-${pct(perfBand.high)})`
+                    : "Not yet measured",
             detail: perfDetail,
             source: "Performance model",
         },

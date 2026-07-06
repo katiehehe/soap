@@ -5,10 +5,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <script lang="ts">
     import { onMount } from "svelte";
 
-    import {
-        bridgeCommand,
-        bridgeCommandsAvailable,
-    } from "@tslib/bridgecommand";
+    import { bridgeCommand, bridgeCommandsAvailable } from "@tslib/bridgecommand";
 
     import { subtopicTag, TAXONOMY } from "../study-map/lib";
     import { formulasForTag, type Formula } from "./formulas";
@@ -82,9 +79,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         if (!q) {
             return true;
         }
-        return `${c.front} ${c.back} ${subName} ${unitName}`
-            .toLowerCase()
-            .includes(q);
+        return `${c.front} ${c.back} ${subName} ${unitName}`.toLowerCase().includes(q);
     }
 
     interface SubView {
@@ -129,9 +124,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 accent: UNIT_ACCENTS[i % UNIT_ACCENTS.length],
                 subs,
             };
-        }).filter(
-            (u) => (filter === "all" || u.id === filter) && u.subs.length > 0,
-        );
+        }).filter((u) => (filter === "all" || u.id === filter) && u.subs.length > 0);
     }
 
     // Rebuild the visible tree whenever the query, the unit filter, or the user's
@@ -183,8 +176,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
         {#if !hasResults}
             <p class="empty">
-                No formulas match “{query}”. Try another keyword, or clear the
-                search.
+                No formulas match “{query}”. Try another keyword, or clear the search.
             </p>
         {/if}
 
@@ -197,10 +189,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     </h2>
 
                     {#each unit.subs as sub (sub.tag)}
-                        <section
-                            class="subtopic"
-                            style="--card-accent:{unit.accent}"
-                        >
+                        <section class="subtopic" style="--card-accent:{unit.accent}">
                             <h3 class="sub-title">{sub.name}</h3>
 
                             {#if sub.formulas.length > 0}
@@ -208,9 +197,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                     {#each sub.formulas as f (f.name)}
                                         <li class="formula">
                                             <div class="formula-body">
-                                                <span class="formula-name"
-                                                    >{f.name}</span
-                                                >
+                                                <span class="formula-name">
+                                                    {f.name}
+                                                </span>
                                                 <div class="formula-math">
                                                     {f.latex}
                                                 </div>

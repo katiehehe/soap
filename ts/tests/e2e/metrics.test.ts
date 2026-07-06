@@ -3,9 +3,7 @@
 
 import { expect, test } from "./fixtures";
 
-test("the readiness explainer documents the three signals + the give-up rule", async ({
-    page,
-}) => {
+test("the readiness explainer documents the three signals + the give-up rule", async ({ page }) => {
     // The standalone /metrics route was folded into a collapsible "How is this
     // calculated?" explainer on the Readiness page (one honesty surface, not a
     // separate tab), so the same method text is opened inline here. Each signal's
@@ -112,9 +110,7 @@ test("the readiness explainer documents the three signals + the give-up rule", a
     await page.screenshot({ path: "out/metrics.png", fullPage: true });
 });
 
-test("a readiness card opens the how-it-works explainer inline (no separate tab)", async ({
-    page,
-}) => {
+test("a readiness card opens the how-it-works explainer inline (no separate tab)", async ({ page }) => {
     await page.goto("/home");
 
     await expect(page.getByText("SOAP")).toBeVisible({ timeout: 15000 });

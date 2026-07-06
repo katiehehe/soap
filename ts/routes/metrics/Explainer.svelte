@@ -6,10 +6,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { onMount } from "svelte";
 
     import { computeReadiness, getMasteryState } from "@generated/backend";
-    import type {
-        MasteryState,
-        ReadinessResult,
-    } from "@generated/anki/speedrun_pb";
+    import type { MasteryState, ReadinessResult } from "@generated/anki/speedrun_pb";
 
     // Reuse the SAME taxonomy + weights the map/readiness screens send, so the
     // live inputs shown here match the numbers the engine computes elsewhere.
@@ -196,7 +193,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </div>
 
         <div class="live {memory?.hasData ? 'measured' : 'withheld'}">
-            <span class="badge">{memory?.hasData ? "Measured" : "Withheld: no reviews yet"}</span>
+            <span class="badge">
+                {memory?.hasData ? "Measured" : "Withheld: no reviews yet"}
+            </span>
             {#if memory?.hasData}
                 <p class="live-value">
                     {pct(memory.point)}
@@ -205,14 +204,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     </span>
                 </p>
                 <p class="live-note">
-                    Mean P(recall today) across {memory.reviewedCards} reviewed
-                    cards · range is the 10th-90th percentile.
+                    Mean P(recall today) across {memory.reviewedCards} reviewed cards · range
+                    is the 10th-90th percentile.
                 </p>
             {:else}
                 <p class="live-value muted">Not yet scored</p>
                 <p class="live-note">
-                    No syllabus card has a graded review, so Memory shows nothing
-                    rather than a fabricated number.
+                    No syllabus card has a graded review, so Memory shows nothing rather
+                    than a fabricated number.
                 </p>
             {/if}
         </div>
@@ -221,31 +220,33 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <div class="block">
                 <p class="k">What data goes in</p>
                 <p>
-                    Your review history, per card: the grades and timing FSRS
-                    uses to fit each card's forgetting curve. Only cards tagged to
-                    the syllabus that you have actually reviewed count.
+                    Your review history, per card: the grades and timing FSRS uses to
+                    fit each card's forgetting curve. Only cards tagged to the syllabus
+                    that you have actually reviewed count.
                 </p>
             </div>
             <div class="block">
                 <p class="k">How it is calculated</p>
                 <p>
-                    For every reviewed syllabus card the engine reads FSRS's
-                    predicted probability of recall <i>today</i>. The point value
-                    is the <b>mean</b> of those per-card probabilities; the range
-                    is their <b>10th-90th percentile</b>, so you see the spread,
-                    not just an average. It never mixes in practice-test results.
+                    For every reviewed syllabus card the engine reads FSRS's predicted
+                    probability of recall <i>today</i>
+                    . The point value is the
+                    <b>mean</b>
+                    of those per-card probabilities; the range is their
+                    <b>10th-90th percentile</b>
+                    , so you see the spread, not just an average. It never mixes in practice-test
+                    results.
                 </p>
                 <p class="formula">
-                    point = mean(P(recall)) · band = [P10, P90] over reviewed
-                    cards
+                    point = mean(P(recall)) · band = [P10, P90] over reviewed cards
                 </p>
             </div>
             <div class="block">
                 <p class="k">Data thresholds</p>
                 <p>
-                    Abstains until at least one syllabus card has a graded review
-                    (<code>has_data = false</code> when empty). No reviews → no
-                    number, by construction.
+                    Abstains until at least one syllabus card has a graded review (
+                    <code>has_data = false</code>
+                    when empty). No reviews → no number, by construction.
                 </p>
             </div>
         </div>
@@ -308,20 +309,24 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <div class="block">
                 <p class="k">What data goes in</p>
                 <p>
-                    Correct / total on <b>disguised, parameterized</b> A-E
-                    questions, tallied <b>per subtopic</b>. The numbers regenerate
-                    on each attempt, so this measures whether you can run the
-                    procedure, not whether you recognise a memorised cue.
+                    Correct / total on <b>disguised, parameterized</b>
+                    A-E questions, tallied
+                    <b>per subtopic</b>
+                    . The numbers regenerate on each attempt, so this measures whether you
+                    can run the procedure, not whether you recognise a memorised cue.
                 </p>
             </div>
             <div class="block">
                 <p class="k">How it is calculated</p>
                 <p>
-                    Per subtopic, performance accuracy = correct ÷ graded
-                    questions. A subtopic reads <b>mastered</b> once it has ≥ {MIN_PERF_QUESTIONS}
-                    graded questions <b>and</b> ≥ {pct(MIN_PERF_ACCURACY)} correct
-                    ("strong"). Performance is kept <b>separate</b> from Memory:
-                    it can satisfy a prerequisite in the guided map, but it never
+                    Per subtopic, performance accuracy = correct ÷ graded questions. A
+                    subtopic reads <b>mastered</b>
+                    once it has ≥ {MIN_PERF_QUESTIONS}
+                    graded questions
+                    <b>and</b>
+                    ≥ {pct(MIN_PERF_ACCURACY)} correct ("strong"). Performance is kept
+                    <b>separate</b>
+                    from Memory: it can satisfy a prerequisite in the guided map, but it never
                     moves the memory gate and the two are never averaged together.
                 </p>
                 <p class="formula">
@@ -334,10 +339,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 <p>
                     A subtopic shows no performance status below {MIN_PERF_QUESTIONS}
                     graded questions. The calibrated cross-item model that predicts
-                    <i>unseen</i> questions is validated on a held-out item corpus
-                    plus a synthetic cohort, and reads "not yet measured" on a real
-                    student until a real labelled dataset exists, never a
-                    fabricated number.
+                    <i>unseen</i>
+                    questions is validated on a held-out item corpus plus a synthetic cohort,
+                    and reads "not yet measured" on a real student until a real labelled dataset
+                    exists, never a fabricated number.
                 </p>
             </div>
         </div>
@@ -387,22 +392,27 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </div>
         {:else}
             <div class="live withheld">
-                <span class="badge">Withheld: {noScore ? "give-up rule" : "no data"}</span>
+                <span class="badge">
+                    Withheld: {noScore ? "give-up rule" : "no data"}
+                </span>
                 <p class="live-value muted">Not enough data yet</p>
                 {#if noScore}
                     <p class="live-note">{noScore.reason}</p>
                     <ul class="gates">
                         <li class:ok={reviewsMet}>
                             Graded reviews:
-                            <b>{gradedReviews ?? "≥ 200"}</b> / {MIN_GRADED_REVIEWS}
+                            <b>{gradedReviews ?? "≥ 200"}</b>
+                            / {MIN_GRADED_REVIEWS}
                         </li>
                         <li class:ok={coverageMet}>
                             Weighted coverage:
-                            <b>{pct(coveragePct)}</b> / {pct(MIN_COVERAGE)}
+                            <b>{pct(coveragePct)}</b>
+                            / {pct(MIN_COVERAGE)}
                         </li>
                         <li class:ok={practiceMet}>
                             Practice questions:
-                            <b>{practiceQuestions}</b> / {MIN_PRACTICE_QUESTIONS}
+                            <b>{practiceQuestions}</b>
+                            / {MIN_PRACTICE_QUESTIONS}
                         </li>
                     </ul>
                 {/if}
@@ -413,52 +423,57 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <div class="block">
                 <p class="k">What data goes in</p>
                 <p>
-                    The proportion correct <b>p̂ = correct ÷ questions</b> over all
-                    your graded practice-test questions, plus your weighted
-                    syllabus coverage (each section weighted by its official SOA
-                    exam weight, so skipping a heavy section can't read as
-                    "covered").
+                    The proportion correct <b>p̂ = correct ÷ questions</b>
+                    over all your graded practice-test questions, plus your weighted syllabus
+                    coverage (each section weighted by its official SOA exam weight, so skipping
+                    a heavy section can't read as "covered").
                 </p>
             </div>
             <div class="block">
                 <p class="k">How it is calculated</p>
                 <p>
-                    <b>Projected 0-{SCALE_MAX} band:</b> the point is ≈ {SCALE_MAX}
-                    × p̂; the range is {SCALE_MAX} × the <b>95% Wilson interval</b>
-                    on p̂ (robust for small samples), so it is always a range, never
-                    a bare point.
+                    <b>Projected 0-{SCALE_MAX} band:</b>
+                    the point is ≈ {SCALE_MAX}
+                    × p̂; the range is {SCALE_MAX} × the
+                    <b>95% Wilson interval</b>
+                    on p̂ (robust for small samples), so it is always a range, never a bare
+                    point.
                 </p>
                 <p>
-                    <b>P(pass):</b> SOA P passes at scaled ≥ {PASS_SCALED}, i.e.
-                    p̂ ≥ {PASS_PROPORTION} under the linear map. Then
-                    <span class="nowrap">P(pass) = Φ((p̂ − {PASS_PROPORTION}) / se)</span>, <!-- dash-ok -->
+                    <b>P(pass):</b>
+                    SOA P passes at scaled ≥ {PASS_SCALED}, i.e. p̂ ≥ {PASS_PROPORTION} under
+                    the linear map. Then
+                    <span class="nowrap">
+                        P(pass) = Φ((p̂ - {PASS_PROPORTION}) / se)
+                    </span>
+                    , <!-- dash-ok -->
                     with se = √(p̂(1−p̂)/n). The {PASS_PROPORTION} cutoff is a <!-- dash-ok -->
-                    stated, recalibratable assumption, never tuned to flatter a
-                    result.
+                    stated, recalibratable assumption, never tuned to flatter a result.
                 </p>
                 <p>
-                    <b>Confidence</b> rises with a tighter band and more coverage.
-                    Every score also carries its reasons, the last-updated time,
-                    past-prediction accuracy (shown "not yet available" until
-                    there is a track record), and the single best next action:
-                    the honesty bundle, enforced by the type so a bare number
-                    can't ship.
+                    <b>Confidence</b>
+                    rises with a tighter band and more coverage. Every score also carries
+                    its reasons, the last-updated time, past-prediction accuracy (shown "not
+                    yet available" until there is a track record), and the single best next
+                    action: the honesty bundle, enforced by the type so a bare number can't
+                    ship.
                 </p>
                 <p class="formula">
-                    point = {SCALE_MAX}·p̂ · band = {SCALE_MAX}·Wilson₉₅(p̂) ·
-                    P(pass) = Φ((p̂ − {PASS_PROPORTION}) / se) <!-- dash-ok -->
+                    point = {SCALE_MAX}·p̂ · band = {SCALE_MAX}·Wilson₉₅(p̂) · P(pass) =
+                    Φ((p̂ − {PASS_PROPORTION}) / se) <!-- dash-ok -->
                 </p>
             </div>
             <div class="block">
                 <p class="k">Data thresholds (give-up rule)</p>
                 <p>
-                    Below <b>≥ {MIN_GRADED_REVIEWS} graded reviews and ≥ {pct(
-                        MIN_COVERAGE,
-                    )} weighted coverage and ≥ {MIN_PRACTICE_QUESTIONS} graded
-                    practice questions</b>, the engine returns
-                    <code>NoScore</code> with the reason and the missing data. The
-                    projected band always comes from your graded practice-test
-                    evidence and is always shown as a range.
+                    Below <b>
+                        ≥ {MIN_GRADED_REVIEWS} graded reviews and ≥ {pct(MIN_COVERAGE)} weighted
+                        coverage and ≥ {MIN_PRACTICE_QUESTIONS} graded practice questions
+                    </b>
+                    , the engine returns
+                    <code>NoScore</code>
+                    with the reason and the missing data. The projected band always comes
+                    from your graded practice-test evidence and is always shown as a range.
                     <span class="method-note">
                         More representative tests count more: each test's evidence is
                         weighted by scope × source (a full official whole-exam test =
@@ -524,12 +539,24 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .tab:hover {
         border-color: var(--tab-accent, var(--sr-accent));
         color: var(--tab-accent, var(--sr-accent));
-        background: color-mix(in srgb, var(--tab-accent, var(--sr-accent)) 10%, transparent);
+        background: color-mix(
+            in srgb,
+            var(--tab-accent, var(--sr-accent)) 10%,
+            transparent
+        );
     }
     .tab.active {
         color: var(--tab-accent, var(--sr-accent));
-        background: color-mix(in srgb, var(--tab-accent, var(--sr-accent)) 16%, transparent);
-        border-color: color-mix(in srgb, var(--tab-accent, var(--sr-accent)) 55%, transparent);
+        background: color-mix(
+            in srgb,
+            var(--tab-accent, var(--sr-accent)) 16%,
+            transparent
+        );
+        border-color: color-mix(
+            in srgb,
+            var(--tab-accent, var(--sr-accent)) 55%,
+            transparent
+        );
         font-weight: 700;
     }
     .tab:focus-visible {

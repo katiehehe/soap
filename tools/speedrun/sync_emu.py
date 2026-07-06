@@ -113,9 +113,7 @@ def cmd_status(col: Collection) -> None:
             print(
                 f"  [{d.id}] {d.name}: new={tree.new_count} lrn={tree.learn_count} rev={tree.review_count}"
             )
-    rows = col.db.all(
-        "select id, cid, ease, type from revlog order by id desc limit 6"
-    )
+    rows = col.db.all("select id, cid, ease, type from revlog order by id desc limit 6")
     if rows:
         print("last revlog rows (id ms, cid, ease, type):")
         for r in rows:

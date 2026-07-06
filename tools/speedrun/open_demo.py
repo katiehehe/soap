@@ -127,7 +127,9 @@ def main() -> int:
     shutil.copy(persona, base / PROFILE / "collection.anki2")
 
     print("=" * 70)
-    print(f"Opening the {args.scenario!r} SYNTHETIC DEMO PERSONA in a throwaway profile.")
+    print(
+        f"Opening the {args.scenario!r} SYNTHETIC DEMO PERSONA in a throwaway profile."
+    )
     print(f"  base    : {base}")
     print("  profile : Demo   (your real Anki collection is NOT touched)")
     print("Everything is pre-populated: open Tools -> Exam readiness (Speedrun)")

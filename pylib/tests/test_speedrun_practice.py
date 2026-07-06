@@ -170,7 +170,9 @@ def test_gate_passes_clean_latex_and_word_problems():
     )
     # A pure word problem (prose + plain numbers, no real math) renders as text.
     assert is_well_formatted(
-        _item("A committee of 4 is chosen from 12 people. Find the probability.", "0.42")
+        _item(
+            "A committee of 4 is chosen from 12 people. Find the probability.", "0.42"
+        )
     )
 
 

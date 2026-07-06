@@ -87,9 +87,9 @@ consumes our engine `.aar` (see `docs/android-build.md`):
   **Home** drawer entry → `HomePage`.
 - `pages/PostRequestHandler.kt`: the SpeedrunService RPCs were already registered.
 - **Deleted:** `ReadinessScoresActivity.kt` + `res/layout/activity_readiness_scores.xml`
-  + its `AndroidManifest.xml` entry. That native Kotlin screen re-drew the scores
-  outside the WebView; readiness now stays engine-sourced via the Svelte route
-  (honesty rule).
+  - its `AndroidManifest.xml` entry. That native Kotlin screen re-drew the scores
+    outside the WebView; readiness now stays engine-sourced via the Svelte route
+    (honesty rule).
 - `gradle/libs.versions.toml`: `ankiBackend` bumped `0.1.64-anki25.09.2` →
   `0.1.65-anki26.05b1` (matches the local backend `VERSION_NAME`, so a non-local
   build can't silently pull stock upstream Anki).
@@ -105,7 +105,7 @@ consumes our engine `.aar` (see `docs/android-build.md`):
   `PageFragment: Loading http://127.0.0.1:PORT/home`,
   `SingleFragmentActivity::HomePage::onResume`, `ResumedActivity=…SingleFragmentActivity`,
   no `FATAL`). The Map/Readiness/How-it-works/Formulas tabs all render and their
-  engine calls fire (  `AnkiServer: POST /_anki/{getMasteryState,computeReadiness,
+  engine calls fire ( `AnkiServer: POST /_anki/{getMasteryState,computeReadiness,
   getStudyPlan,getStudyPace}`). Readiness shows the three separate signals with the
   honest abstain state; "How it works" shows the give-up rule "enforced in Rust".
 - **Populated three-scores capture (this session, `Speedrun_P`):** after the
@@ -119,10 +119,10 @@ consumes our engine `.aar` (see `docs/android-build.md`):
   - **Readiness** `5.5 (4.6-6.4)` · `SCORE AVAILABLE` · Coverage 100% · confidence
     0.91 · P(pass today) 14% · single best next action
     (`out/phone-3scores-readiness.png`)
-  The coloured study map renders the same data (`out/phone-studymap.png`). This is
-  the identical `oneof {NoScore, ReadinessScore}` the desktop shows, using the same engine,
-  same inputs, same numbers (verified: `compute_readiness` on the on-device
-  collection returns `5.5 (4.6-6.4)`), never a bare or fabricated number.
+    The coloured study map renders the same data (`out/phone-studymap.png`). This is
+    the identical `oneof {NoScore, ReadinessScore}` the desktop shows, using the same engine,
+    same inputs, same numbers (verified: `compute_readiness` on the on-device
+    collection returns `5.5 (4.6-6.4)`), never a bare or fabricated number.
 
 **Engine version note (reconciliation):** the currently-built APK bundles engine
 `0.1.65-anki26.05b1` at commit **`f876127df`** (logcat: `Backend Version = …

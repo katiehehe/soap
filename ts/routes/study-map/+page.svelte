@@ -682,19 +682,29 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                     </span>
                                     <span class="rb-outof">/ 10</span>
                                     <span class="rb-range">
-                                        ({readinessScore.low.toFixed(1)}-{readinessScore.high.toFixed(
+                                        ({readinessScore.low.toFixed(
                                             1,
-                                        )})
+                                        )}-{readinessScore.high.toFixed(1)})
                                     </span>
                                 </div>
                                 <div class="rb-facts">
                                     <span>
-                                        P(pass) <b>{pct(readinessScore.passProbability)}</b>
+                                        P(pass) <b>
+                                            {pct(readinessScore.passProbability)}
+                                        </b>
                                     </span>
                                     <span class="rb-dot" aria-hidden="true">·</span>
-                                    <span>Coverage <b>{pct(readinessScore.coveragePct)}</b></span>
+                                    <span>
+                                        Coverage <b>
+                                            {pct(readinessScore.coveragePct)}
+                                        </b>
+                                    </span>
                                     <span class="rb-dot" aria-hidden="true">·</span>
-                                    <span>Confidence <b>{pct(readinessScore.confidence)}</b></span>
+                                    <span>
+                                        Confidence <b>
+                                            {pct(readinessScore.confidence)}
+                                        </b>
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -707,16 +717,22 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                 <p class="rb-reason">{noScore.reason}</p>
                                 <div class="rb-gates">
                                     <span class="rb-gate">
-                                        <span class="rb-gate-label">Graded reviews</span>
+                                        <span class="rb-gate-label">
+                                            Graded reviews
+                                        </span>
                                         <b>{noScore.gradedReviews} / 200</b>
                                     </span>
                                     <span class="rb-gate">
-                                        <span class="rb-gate-label">Syllabus practiced</span>
+                                        <span class="rb-gate-label">
+                                            Syllabus practiced
+                                        </span>
                                         <b>{pct(noScore.coveragePct)}</b>
                                         <span class="rb-gate-need">need ≥ 50%</span>
                                     </span>
                                     <span class="rb-gate">
-                                        <span class="rb-gate-label">Graded practice tests</span>
+                                        <span class="rb-gate-label">
+                                            Graded practice tests
+                                        </span>
                                         <b>
                                             {readinessNeedsPractice
                                                 ? "needed now"
@@ -776,7 +792,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                         stroke-linecap="round"
                                         stroke-linejoin="round"
                                     >
-                                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                                        <polyline
+                                            points="23 6 13.5 15.5 8.5 10.5 1 18"
+                                        />
                                         <polyline points="17 6 23 6 23 12" />
                                     </svg>
                                 </span>
@@ -973,7 +991,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     </p>
                     <p class="pace-fix">
                         To be ready in time you'd need to master about
-                        <b>{paceView.recommendedPerWeek.toFixed(1)}/week</b>.
+                        <b>{paceView.recommendedPerWeek.toFixed(1)}/week</b>
+                        .
                     </p>
                 {:else}
                     {@const projWeeks = projectedFinishWeeks(
@@ -1322,7 +1341,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                 </mask>
                             </defs>
                             <g mask="url(#sr-bubble-mask)">
-                            <!-- Two rails per link, offset so they never overlap.
+                                <!-- Two rails per link, offset so they never overlap.
                             They are told apart four ways at once so the pair is
                             unmistakable and clustered edges stay legible:
                               • Memory  = THIN SOLID periwinkle (support signal).
@@ -1565,7 +1584,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                 </div>
                                 <div>
                                     <dt>Units mastered</dt>
-                                    <dd>{overall.unitsMastered} / {overall.unitsTotal}</dd>
+                                    <dd>
+                                        {overall.unitsMastered} / {overall.unitsTotal}
+                                    </dd>
                                 </div>
                                 <div>
                                     <dt>Mastery by weight</dt>
@@ -1643,9 +1664,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                             <div>
                                 <dt>Interleaving tier</dt>
                                 <dd>
-                                    {um?.mastered
-                                        ? "cross-unit"
-                                        : "within-unit"}
+                                    {um?.mastered ? "cross-unit" : "within-unit"}
                                 </dd>
                             </div>
                         </dl>
@@ -2135,10 +2154,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
        warm tint + a TOP accent stripe (never a side stripe, per the system). */
     .rec-perf {
         background:
-            linear-gradient(
-                rgba(211, 169, 95, 0.12),
-                rgba(211, 169, 95, 0.12)
-            ),
+            linear-gradient(rgba(211, 169, 95, 0.12), rgba(211, 169, 95, 0.12)),
             var(--canvas-elevated);
         border: 1px solid rgba(211, 169, 95, 0.55);
         box-shadow: inset 0 3px 0 0 var(--perf-line);

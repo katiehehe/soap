@@ -45,16 +45,16 @@ Order.RELATIVE_OVERDUENESS -> translations.decksRelativeOverdueness()
 (`git checkout <sha>`) before overlaying the working tree. Two **nested**
 submodules of `anki`, `qt/installer/mac-template` (`briefcase-mac-template`) and
 `qt/installer/windows-template` (`briefcase-windows-template`), used only for the
-*desktop* installer and irrelevant to the Android engine, can carry a stale
+_desktop_ installer and irrelevant to the Android engine, can carry a stale
 `.git` gitdir pointer:
 
     gitdir: ../../../.git/modules/briefcase-mac-template        # WRONG
 
-`anki`'s own `.git` is a *file* (`gitdir: ../.git/modules/anki`), so the real
+`anki`'s own `.git` is a _file_ (`gitdir: ../.git/modules/anki`), so the real
 nested git dirs live one level deeper. With the wrong pointer, the checkout
 aborts with `fatal: not a git repository: .../.git/modules/briefcase-mac-template`
 and phone-rebuild silently **falls back to the OLD submodule commit** (warning:
-"couldn't move submodule …"), so the phone would be built minus every *committed*
+"couldn't move submodule …"), so the phone would be built minus every _committed_
 change since that old commit. Fix = repoint each nested `.git` (one extra `../`
 plus the `anki/modules/` segment):
 
@@ -63,7 +63,7 @@ plus the `anki/modules/` segment):
     qt/installer/windows-template/.git:
       gitdir: ../../../../.git/modules/anki/modules/briefcase-windows-template
 
-Also: `phone-rebuild.sh` runs `git checkout` *before* its `git reset --hard` +
+Also: `phone-rebuild.sh` runs `git checkout` _before_ its `git reset --hard` +
 `git clean`, so a submodule left dirty by a prior overlay **and** needing a commit
 move fails the checkout ("local changes would be overwritten"). Reset+clean the
 submodule first, then check out soap HEAD:

@@ -3,9 +3,7 @@
 
 import { expect, test } from "./fixtures";
 
-test("centre Exam P bubble opens its mastery detail, which launches the practice test", async ({
-    page,
-}) => {
+test("centre Exam P bubble opens its mastery detail, which launches the practice test", async ({ page }) => {
     await page.goto("/home");
     await expect(page.getByRole("heading", { name: "Study map" })).toBeVisible({
         timeout: 15000,

@@ -84,9 +84,7 @@ test("home shell tabs, actions, and settings strip", async ({ page }) => {
     await page.screenshot({ path: "out/home.png", fullPage: true });
 });
 
-test("Add is an overlay that a tab click dismisses (toolbar can't freeze behind it)", async ({
-    page,
-}) => {
+test("Add is an overlay that a tab click dismisses (toolbar can't freeze behind it)", async ({ page }) => {
     // Regression guard for a demo-breaking freeze: the content area is a priority
     // chain ({#if addActive} … {:else if testActive} … {:else if tab === …}), so an
     // open Add screen outranks every tab. A tab click used to reset testActive but
@@ -116,9 +114,7 @@ test("Add is an overlay that a tab click dismisses (toolbar can't freeze behind 
     await expect(page.getByRole("button", { name: /^Readiness:/ })).toBeVisible();
 });
 
-test("narrow widths: actions collapse into a transparent-backdrop ☰ menu", async ({
-    page,
-}) => {
+test("narrow widths: actions collapse into a transparent-backdrop ☰ menu", async ({ page }) => {
     // On phone-width viewports the Add / Browse / Settings icons collapse into the
     // top-right "☰" menu to keep the top bar compact (the desktop icon row hides).
     await page.setViewportSize({ width: 480, height: 900 });

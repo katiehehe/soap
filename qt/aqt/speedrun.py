@@ -632,7 +632,6 @@ def open_deck_by_id(mw: aqt.main.AnkiQt, deck_id: int) -> bool:
     id the engine returned, so it's robust to display names differing from deck
     names. Returns False if the deck no longer exists."""
     from anki.decks import DeckId
-
     from anki.speedrun import apply_tier_scope_for_deck
 
     if mw.col.decks.get(DeckId(deck_id), default=False) is None:
@@ -1369,7 +1368,7 @@ def _review_bar_html(cmd: str = "speedrun-home") -> str:
     # go to the home shell's default (Map) view.
     return (
         '<div id="speedrun-review-bar">'
-        f"<button class=\"sr-back\" onclick=\"pycmd('{cmd}')\" "
+        f'<button class="sr-back" onclick="pycmd(\'{cmd}\')" '
         'title="Back to Exam P home">&#8592;&nbsp;Exam&nbsp;P</button>'
         "</div>"
     )

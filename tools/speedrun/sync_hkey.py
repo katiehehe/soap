@@ -1,3 +1,5 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 """Print an auth hkey for the local sync server (login only, no seeding).
 
 Used by tools/speedrun/phone_sync_config.sh to authenticate AnkiDroid without a

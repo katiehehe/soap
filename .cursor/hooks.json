@@ -1,10 +1,10 @@
 {
-  "version": 1,
-  "hooks": {
-    "postToolUse": [
-      {
-        "command": "python3 .cursor/hooks/prose-dash-hook.py"
-      }
-    ]
-  }
+    "version": 1,
+    "hooks": {
+        "postToolUse": [
+            {
+                "command": "python3 .cursor/hooks/prose-dash-hook.py"
+            }
+        ]
+    }
 }

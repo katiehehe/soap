@@ -115,7 +115,8 @@ export const FORMULAS: Record<string, Formula[]> = {
         },
         {
             name: "Inclusion-exclusion (three events)",
-            latex: String.raw`\[ P(A \cup B \cup C) = P(A)+P(B)+P(C) - P(A \cap B) - P(A \cap C) - P(B \cap C) + P(A \cap B \cap C) \]`,
+            latex: String
+                .raw`\[ P(A \cup B \cup C) = P(A)+P(B)+P(C) - P(A \cap B) - P(A \cap C) - P(B \cap C) + P(A \cap B \cap C) \]`,
             source: SOURCES.ross,
         },
     ],
@@ -170,7 +171,8 @@ export const FORMULAS: Record<string, Formula[]> = {
         },
         {
             name: "Bayes with total probability",
-            latex: String.raw`\[ P(A_{j} \mid B) = \frac{P(B \mid A_{j})\,P(A_{j})}{\sum_{i} P(B \mid A_{i})\,P(A_{i})} \]`,
+            latex: String
+                .raw`\[ P(A_{j} \mid B) = \frac{P(B \mid A_{j})\,P(A_{j})}{\sum_{i} P(B \mid A_{i})\,P(A_{i})} \]`,
             source: SOURCES.ross,
         },
     ],
@@ -250,17 +252,20 @@ export const FORMULAS: Record<string, Formula[]> = {
     [subtopicTag("univariate", "discrete_dists")]: [
         {
             name: "Binomial(n, p)",
-            latex: String.raw`\[ P(X=k) = \binom{n}{k} p^{k} (1-p)^{n-k}, \quad E[X]=np, \ \operatorname{Var}(X)=np(1-p) \]`,
+            latex: String
+                .raw`\[ P(X=k) = \binom{n}{k} p^{k} (1-p)^{n-k}, \quad E[X]=np, \ \operatorname{Var}(X)=np(1-p) \]`,
             source: SOURCES.hassett,
         },
         {
             name: "Poisson(λ)",
-            latex: String.raw`\[ P(X=k) = \frac{e^{-\lambda}\lambda^{k}}{k!}, \quad E[X]=\operatorname{Var}(X)=\lambda \]`,
+            latex: String
+                .raw`\[ P(X=k) = \frac{e^{-\lambda}\lambda^{k}}{k!}, \quad E[X]=\operatorname{Var}(X)=\lambda \]`,
             source: SOURCES.hassett,
         },
         {
             name: "Geometric(p)",
-            latex: String.raw`\[ P(X=k) = (1-p)^{k-1} p, \quad E[X]=\frac{1}{p}, \ \operatorname{Var}(X)=\frac{1-p}{p^{2}} \]`,
+            latex: String
+                .raw`\[ P(X=k) = (1-p)^{k-1} p, \quad E[X]=\frac{1}{p}, \ \operatorname{Var}(X)=\frac{1-p}{p^{2}} \]`,
             source: SOURCES.hassett,
         },
         {
@@ -278,12 +283,14 @@ export const FORMULAS: Record<string, Formula[]> = {
     [subtopicTag("univariate", "continuous_dists")]: [
         {
             name: "Uniform(a, b)",
-            latex: String.raw`\[ f(x) = \frac{1}{b-a}, \quad E[X] = \frac{a+b}{2}, \ \operatorname{Var}(X) = \frac{(b-a)^{2}}{12} \]`,
+            latex: String
+                .raw`\[ f(x) = \frac{1}{b-a}, \quad E[X] = \frac{a+b}{2}, \ \operatorname{Var}(X) = \frac{(b-a)^{2}}{12} \]`,
             source: SOURCES.hassett,
         },
         {
             name: "Exponential(λ)",
-            latex: String.raw`\[ f(x) = \lambda e^{-\lambda x}, \quad E[X] = \frac{1}{\lambda}, \ \operatorname{Var}(X) = \frac{1}{\lambda^{2}} \]`,
+            latex: String
+                .raw`\[ f(x) = \lambda e^{-\lambda x}, \quad E[X] = \frac{1}{\lambda}, \ \operatorname{Var}(X) = \frac{1}{\lambda^{2}} \]`,
             source: SOURCES.hassett,
         },
         {
@@ -299,7 +306,8 @@ export const FORMULAS: Record<string, Formula[]> = {
         },
         {
             name: "Gamma(α, λ)",
-            latex: String.raw`\[ E[X] = \frac{\alpha}{\lambda}, \quad \operatorname{Var}(X) = \frac{\alpha}{\lambda^{2}} \]`,
+            latex: String
+                .raw`\[ E[X] = \frac{\alpha}{\lambda}, \quad \operatorname{Var}(X) = \frac{\alpha}{\lambda^{2}} \]`,
             source: SOURCES.hassett,
         },
     ],
@@ -397,7 +405,8 @@ export const FORMULAS: Record<string, Formula[]> = {
         },
         {
             name: "Correlation coefficient",
-            latex: String.raw`\[ \rho_{XY} = \frac{\operatorname{Cov}(X,Y)}{\sigma_{X}\,\sigma_{Y}}, \quad -1 \le \rho_{XY} \le 1 \]`,
+            latex: String
+                .raw`\[ \rho_{XY} = \frac{\operatorname{Cov}(X,Y)}{\sigma_{X}\,\sigma_{Y}}, \quad -1 \le \rho_{XY} \le 1 \]`,
             source: SOURCES.ross,
         },
         {
@@ -407,7 +416,8 @@ export const FORMULAS: Record<string, Formula[]> = {
         },
         {
             name: "Variance of a sum",
-            latex: String.raw`\[ \operatorname{Var}(X + Y) = \operatorname{Var}(X) + \operatorname{Var}(Y) + 2\operatorname{Cov}(X,Y) \]`,
+            latex: String
+                .raw`\[ \operatorname{Var}(X + Y) = \operatorname{Var}(X) + \operatorname{Var}(Y) + 2\operatorname{Cov}(X,Y) \]`,
             source: SOURCES.ross,
         },
     ],
@@ -442,12 +452,14 @@ export const FORMULAS: Record<string, Formula[]> = {
         },
         {
             name: "Variance of aX + bY",
-            latex: String.raw`\[ \operatorname{Var}(aX + bY) = a^{2}\operatorname{Var}(X) + b^{2}\operatorname{Var}(Y) + 2ab\,\operatorname{Cov}(X,Y) \]`,
+            latex: String
+                .raw`\[ \operatorname{Var}(aX + bY) = a^{2}\operatorname{Var}(X) + b^{2}\operatorname{Var}(Y) + 2ab\,\operatorname{Cov}(X,Y) \]`,
             source: SOURCES.ross,
         },
         {
             name: "Independent sum: variances add",
-            latex: String.raw`\[ X \perp Y \implies \operatorname{Var}(X + Y) = \operatorname{Var}(X) + \operatorname{Var}(Y) \]`,
+            latex: String
+                .raw`\[ X \perp Y \implies \operatorname{Var}(X + Y) = \operatorname{Var}(X) + \operatorname{Var}(Y) \]`,
             source: SOURCES.ross,
         },
         {
@@ -470,7 +482,8 @@ export const FORMULAS: Record<string, Formula[]> = {
         },
         {
             name: "Standardised sample mean",
-            latex: String.raw`\[ Z = \frac{\bar{X}_{n} - \mu}{\sigma / \sqrt{n}} \ \longrightarrow \ \mathcal{N}(0,1) \]`,
+            latex: String
+                .raw`\[ Z = \frac{\bar{X}_{n} - \mu}{\sigma / \sqrt{n}} \ \longrightarrow \ \mathcal{N}(0,1) \]`,
             source: SOURCES.ross,
         },
     ],

@@ -462,9 +462,7 @@ def test_tier_for_deck_name_classifies_by_level():
     # or any non-exam deck needs no scope (it is already a single subtopic).
     assert tier_for_deck_name(ROOT_DECK) == TIER_CROSS_UNIT
     assert tier_for_deck_name("SOA Exam P::General Probability") == TIER_WITHIN_UNIT
-    assert (
-        tier_for_deck_name("SOA Exam P::General Probability::Bayes' theorem") is None
-    )
+    assert tier_for_deck_name("SOA Exam P::General Probability::Bayes' theorem") is None
     assert tier_for_deck_name("Some Other Deck") is None
     assert tier_for_deck_name("") is None
 
@@ -518,8 +516,8 @@ def test_tier_scope_is_deck_keyed_and_read_only():
     # keyed scope must not apply here.
     col.decks.select(col.decks.id(sub_deck))
     revlog_before = col.db.scalar("select count() from revlog")
-    assert (
-        col.sched.getCard() is not None
-    ), "a root-keyed scope must not affect a subtopic deck"
+    assert col.sched.getCard() is not None, (
+        "a root-keyed scope must not affect a subtopic deck"
+    )
     # Building the (scoped) queue never writes to the revlog.
     assert col.db.scalar("select count() from revlog") == revlog_before

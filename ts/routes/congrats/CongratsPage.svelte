@@ -98,15 +98,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
             {#if info.bridgeCommandsSupported}
                 <div class="sr-actions">
-                    <button
-                        class="sr-btn sr-btn-primary"
-                        on:click={studyNext}
-                    >
+                    <button class="sr-btn sr-btn-primary" on:click={studyNext}>
                         Study next&nbsp;&rarr;
                     </button>
-                    <button class="sr-btn" on:click={backToPlan}>
-                        Back to plan
-                    </button>
+                    <button class="sr-btn" on:click={backToPlan}>Back to plan</button>
                 </div>
             {/if}
 

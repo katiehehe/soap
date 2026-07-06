@@ -29,10 +29,11 @@ make sync-desktop        # point the desktop profile at the same server (app CLO
 
 On-device sync verified this session (server→phone): tapping **Sync** in the home
 shell → **Select collection to keep → AnkiWeb → Replace** ran a real full download
-+ media sync from the local server (logcat: `anki::sync::media::syncer: media sync
+
+- media sync from the local server (logcat: `anki::sync::media::syncer: media sync
 complete`, `SyncMediaWorker: success`). The phone runs the exact `librsdroid.so`
-engine, so the two-way + conflict + offline path is the same one `make sync-test`
-(20/20) and `make sync-twoway` (live server) assert green.
+  engine, so the two-way + conflict + offline path is the same one `make sync-test`
+  (20/20) and `make sync-twoway` (live server) assert green.
 
 Record (one take):
 

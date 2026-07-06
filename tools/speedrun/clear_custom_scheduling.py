@@ -63,7 +63,10 @@ def clear(path: str, *, dry_run: bool) -> int:
     try:
         col = Collection(path)
     except Exception as exc:  # pragma: no cover - lock/other IO errors
-        print(f"could not open collection (is Anki still running?): {exc}", file=sys.stderr)
+        print(
+            f"could not open collection (is Anki still running?): {exc}",
+            file=sys.stderr,
+        )
         return 2
     try:
         current = col.get_config(_CONFIG_KEY, None)

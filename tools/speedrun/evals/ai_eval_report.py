@@ -40,6 +40,16 @@ for _p in (os.path.join(_REPO, "pylib"), os.path.join(_REPO, "out", "pylib")):
 # The sibling eval scripts live next to this file.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from classify_eval import (  # type: ignore[import-not-found]  # noqa: E402
+    collect_results as classify_results,
+)
+from generate_eval import (  # type: ignore[import-not-found]  # noqa: E402
+    collect_results as generate_results,
+)
+from problem_eval import (  # type: ignore[import-not-found]  # noqa: E402
+    collect_results as problem_results,
+)
+
 from anki.speedrun.ai import DEFAULT_OPENAI_MODEL, available_provider  # noqa: E402
 from anki.speedrun.ai_eval import (  # noqa: E402
     DEFAULT_ARTIFACT_PATH,
@@ -47,9 +57,6 @@ from anki.speedrun.ai_eval import (  # noqa: E402
     read_git_sha,
     write_report,
 )
-from classify_eval import collect_results as classify_results  # type: ignore[import-not-found]  # noqa: E402
-from generate_eval import collect_results as generate_results  # type: ignore[import-not-found]  # noqa: E402
-from problem_eval import collect_results as problem_results  # type: ignore[import-not-found]  # noqa: E402
 
 
 def _fmt_pct(x: float | None) -> str:
@@ -125,13 +132,19 @@ def main() -> int:
     # Run + print each eval incrementally (with elapsed time) so a long keyed
     # run is observable in the log rather than silent until the end.
     order = (
-        ("classify", lambda: classify_results(
-            run_ai=run_ai, limit=args.classify_limit, seed=args.seed
-        )),
+        (
+            "classify",
+            lambda: classify_results(
+                run_ai=run_ai, limit=args.classify_limit, seed=args.seed
+            ),
+        ),
         ("generate", lambda: generate_results(args.n, run_ai=run_ai, seed=args.seed)),
-        ("problems", lambda: problem_results(
-            args.per_subtopic, args.subtopics, run_ai=run_ai, seed=args.seed
-        )),
+        (
+            "problems",
+            lambda: problem_results(
+                args.per_subtopic, args.subtopics, run_ai=run_ai, seed=args.seed
+            ),
+        ),
     )
     evals: dict = {}
     for key, fn in order:

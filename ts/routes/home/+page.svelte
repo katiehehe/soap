@@ -6,10 +6,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { onMount } from "svelte";
     import { slide } from "svelte/transition";
 
-    import {
-        bridgeCommand,
-        bridgeCommandsAvailable,
-    } from "@tslib/bridgecommand";
+    import { bridgeCommand, bridgeCommandsAvailable } from "@tslib/bridgecommand";
 
     // The concept map, progress panels, and readiness screens are the existing
     // SvelteKit pages, reused as the tabs of the custom home shell (they still
@@ -80,13 +77,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         // A caller (e.g. the end-of-deck congrats screen's "Back to plan") can
         // request an initial tab via ?tab=… ; honour it if it's a real tab.
         const requested = new URLSearchParams(window.location.search).get("tab");
-        const known: Tab[] = [
-            "map",
-            "plan",
-            "cram",
-            "readiness",
-            "stats",
-        ];
+        const known: Tab[] = ["map", "plan", "cram", "readiness", "stats"];
         if (requested && (known as string[]).includes(requested)) {
             tab = requested as Tab;
         }
@@ -119,12 +110,17 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // tooltip instead of an inline description. aiDegraded also tints a small
     // marker so the fallback is still visible at a glance, not just on hover.
     $: aiDegraded = settings.aiEnabled && (!settings.hasKey || !settings.hasPackage);
-    $: aiTitle =
-        settings.aiEnabled && !settings.hasKey
-            ? "AI practice: adds model-written, self-verified problems. No API key; templated problems only."
-            : settings.aiEnabled && !settings.hasPackage
-              ? "AI practice: adds model-written, self-verified problems. openai package not installed; templated problems only."
-              : "AI practice: adds model-written, self-verified problems.";
+    function aiTitleFor(s: Settings): string {
+        const base = "AI practice: adds model-written, self-verified problems.";
+        if (s.aiEnabled && !s.hasKey) {
+            return base + " No API key; templated problems only.";
+        }
+        if (s.aiEnabled && !s.hasPackage) {
+            return base + " openai package not installed; templated problems only.";
+        }
+        return base;
+    }
+    $: aiTitle = aiTitleFor(settings);
 
     // Each tab carries a muted scholarly accent used as its active colour.
     const TABS: { id: Tab; label: string; accent: string }[] = [
@@ -143,12 +139,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let menuOpen = false;
     // Sync lives on the top bar as its own icon (see the header); the menu keeps
     // the rest of the secondary actions for the narrow layout.
-    const MENU: { label: string; kind: "add" | "browse" | "sync" | "settings" }[] =
-        [
-            { label: "Add card", kind: "add" },
-            { label: "Browse", kind: "browse" },
-            { label: "Settings", kind: "settings" },
-        ];
+    const MENU: { label: string; kind: "add" | "browse" | "sync" | "settings" }[] = [
+        { label: "Add card", kind: "add" },
+        { label: "Browse", kind: "browse" },
+        { label: "Settings", kind: "settings" },
+    ];
 
     // Desktop actions are routed to the native Anki flows through the mw.web
     // bridge handler installed by the speedrunHome state (qt/aqt/speedrun.py).
@@ -369,13 +364,17 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     <button
                         class="seg-opt"
                         class:on={settings.theme === "light"}
-                        on:click={() => setTheme(false)}>Light</button
+                        on:click={() => setTheme(false)}
                     >
+                        Light
+                    </button>
                     <button
                         class="seg-opt"
                         class:on={settings.theme === "dark"}
-                        on:click={() => setTheme(true)}>Dark</button
+                        on:click={() => setTheme(true)}
                     >
+                        Dark
+                    </button>
                 </div>
             </div>
 
@@ -416,9 +415,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <div class="setting" title={aiTitle}>
                 <span class="setting-label">AI practice</span>
                 {#if aiDegraded}
-                    <span class="warn-flag" title={aiTitle} aria-hidden="true"
-                        >⚠</span
-                    >
+                    <span class="warn-flag" title={aiTitle} aria-hidden="true">⚠</span>
                 {/if}
                 <button
                     class="switch"

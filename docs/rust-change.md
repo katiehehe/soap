@@ -81,7 +81,7 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   Overall-mastery use), measures the study history from the first graded review,
   and works out whether the observed clear-rate masters the rest before the exam
   (abstains from a projection below ~a week of history / nothing mastered yet).
-  A *mastery* pace, never a predicted score
+  A _mastery_ pace, never a predicted score
   (recommended/day, projected finish, on-track/behind). Pure arithmetic over
   measured counts + the stored exam date (`compute_pace`, unit-tested); it is a
   _coverage_ pace, never the readiness score. Read-only.
@@ -106,8 +106,8 @@ dashboard/study map can use them.
 different levels: Blocked -> the subtopic (leaf) deck, Within-unit -> the UNIT
 deck, Cross-unit -> the ROOT deck. But Anki studies a parent deck's ENTIRE
 subtree, so opening the unit/root deck used to gather every descendant card,
-including subtopics still in the Blocked tier; the tier reorder only *reordered*
-them, it did not *exclude* them, so studying cross-unit pulled in still-blocked
+including subtopics still in the Blocked tier; the tier reorder only _reordered_
+them, it did not _exclude_ them, so studying cross-unit pulled in still-blocked
 cards. Fix: a per-tier **scoped study** implemented in the engine
 (`speedrun_scope_queues_to_tier` in `rslib/src/speedrun/mastery.rs`, wired into
 `build_queues`). When the user opens a within-unit/cross-unit tier deck, Python

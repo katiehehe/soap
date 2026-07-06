@@ -303,7 +303,9 @@ def main() -> int:
         )
         print(f"\ncards added        : {added}")
         print(f"graded revlog rows : {reviews}")
-        print(f"practice tests     : {tests} x {test_size} = {tests * test_size} questions")
+        print(
+            f"practice tests     : {tests} x {test_size} = {tests * test_size} questions"
+        )
 
         # Memory is a SEPARATE signal, computed independently of the readiness
         # give-up rule, so it can show even when readiness abstains (the "new"

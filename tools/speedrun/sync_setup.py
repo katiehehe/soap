@@ -1,3 +1,5 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 """Seed the local sync server with a shared collection and print the login hkey.
 
 This is the desktop/server side of local phone<->desktop sync. It:
@@ -135,7 +137,9 @@ def main() -> int:
             f"seeded : {cards} cards / {notes} notes / {revlog} revlog  "
             f"(upload action={action})"
         )
-        print(f"verify : fresh client action={v_action}, notes={v_notes}, revlog={v_revlog}")
+        print(
+            f"verify : fresh client action={v_action}, notes={v_notes}, revlog={v_revlog}"
+        )
         print(f"HKEY={auth.hkey}")
         print(f"ENDPOINT={auth.endpoint or ENDPOINT}")
         print(f"USER={USER}")

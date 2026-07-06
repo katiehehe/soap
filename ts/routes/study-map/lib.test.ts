@@ -22,9 +22,9 @@ import {
     NODE_TOUCH,
     paceTone,
     perfProgress,
-    projectedFinishWeeks,
     prereqChain,
     prereqEdges,
+    projectedFinishWeeks,
     renderedCorner,
     renderedHalf,
     shrinkCircle,
@@ -206,16 +206,14 @@ function onSquircleBorder(
     const onFlatY = Math.abs(dy - half) < eps && dx <= half - cr + eps;
     const ex = dx - (half - cr);
     const ey = dy - (half - cr);
-    const onArc =
-        dx > half - cr - eps &&
-        dy > half - cr - eps &&
-        Math.abs(Math.hypot(ex, ey) - cr) < eps;
+    const onArc = dx > half - cr - eps
+        && dy > half - cr - eps
+        && Math.abs(Math.hypot(ex, ey) - cr) < eps;
     return onFlatX || onFlatY || onArc;
 }
 
 describe("two-track edges (dual-metric connectors)", () => {
-    const onBorder = (x: number, y: number, c: Circle): boolean =>
-        Math.abs(Math.hypot(x - c.x, y - c.y) - c.r) < 1e-6;
+    const onBorder = (x: number, y: number, c: Circle): boolean => Math.abs(Math.hypot(x - c.x, y - c.y) - c.r) < 1e-6;
 
     test("both tracks touch both bubbles (endpoints on each border)", () => {
         const a: Circle = { x: 0, y: 0, r: 20 };
@@ -249,10 +247,12 @@ describe("two-track edges (dual-metric connectors)", () => {
     test("holds for every real edge on the map (center→unit, unit→subtopic)", () => {
         const check = (a: Circle, b: Circle, label: string) => {
             const { memory, performance } = twoTrackEdges(a, b);
-            for (const [name, seg] of [
-                ["memory", memory],
-                ["performance", performance],
-            ] as const) {
+            for (
+                const [name, seg] of [
+                    ["memory", memory],
+                    ["performance", performance],
+                ] as const
+            ) {
                 expect(onBorder(seg.x1, seg.y1, a), `${label} ${name} on A`).toBe(true);
                 expect(onBorder(seg.x2, seg.y2, b), `${label} ${name} on B`).toBe(true);
             }
@@ -361,8 +361,7 @@ describe("hierarchical upward fill (child -> parent)", () => {
     test("every real map edge is drawn child->parent (subtopic->unit, unit->exam)", () => {
         // Mirrors +page.svelte: units feed the centre, subtopics feed their unit,
         // each rail pulled onto the visible (drawn) bubble border.
-        const onDrawnBorder = (x: number, y: number, c: Circle): boolean =>
-            near(Math.hypot(x - c.x, y - c.y), c.r);
+        const onDrawnBorder = (x: number, y: number, c: Circle): boolean => near(Math.hypot(x - c.x, y - c.y), c.r);
         const centre = shrinkCircle(layout.center, NODE_TOUCH);
         for (const u of layout.units) {
             const uc = shrinkCircle(u, NODE_TOUCH);
@@ -401,8 +400,7 @@ describe("hierarchical upward fill (child -> parent)", () => {
 // between the drawn bubble and the collision circle and reads as a floating gap.
 // These tests lock the corrected endpoints onto the VISIBLE border.
 describe("edges touch the visible (drawn) bubble border, no floating gap", () => {
-    const dist = (p: { x: number; y: number }, c: Circle): number =>
-        Math.hypot(p.x - c.x, p.y - c.y);
+    const dist = (p: { x: number; y: number }, c: Circle): number => Math.hypot(p.x - c.x, p.y - c.y);
     const onVisible = (p: { x: number; y: number }, c: Circle): boolean =>
         Math.abs(dist(p, c) - c.r * NODE_TOUCH) < 1e-6;
 
@@ -430,10 +428,12 @@ describe("edges touch the visible (drawn) bubble border, no floating gap", () =>
                 shrinkCircle(a, NODE_TOUCH),
                 shrinkCircle(b, NODE_TOUCH),
             );
-            for (const [name, seg] of [
-                ["memory", memory],
-                ["performance", performance],
-            ] as const) {
+            for (
+                const [name, seg] of [
+                    ["memory", memory],
+                    ["performance", performance],
+                ] as const
+            ) {
                 expect(
                     onVisible({ x: seg.x1, y: seg.y1 }, a),
                     `${label} ${name} start on A visible border`,
@@ -459,8 +459,7 @@ describe("edges touch the visible (drawn) bubble border, no floating gap", () =>
         const unitByTag = new Map<string, Circle>(
             layout.units.map((u) => [`unit::${u.id}`, u] as const),
         );
-        const nodeFor = (tag: string): Circle =>
-            (leafByTag.get(tag) ?? unitByTag.get(tag))!;
+        const nodeFor = (tag: string): Circle => (leafByTag.get(tag) ?? unitByTag.get(tag))!;
 
         const edges = prereqEdges(layout);
         expect(edges.length).toBeGreaterThan(0);
@@ -876,8 +875,7 @@ describe("mastery pace", () => {
 describe("Linear combos vertical nudge (memory rail clears its neighbour)", () => {
     const unit = layout.units.find((u) => u.id === "multivariate")!;
     const lc = unit.subs.find((s) => s.id === "linear_combinations")!;
-    const memRail = (leaf: Circle) =>
-        hierEdges(shrinkCircle(leaf, NODE_TOUCH), shrinkCircle(unit, NODE_TOUCH)).memory;
+    const memRail = (leaf: Circle) => hierEdges(shrinkCircle(leaf, NODE_TOUCH), shrinkCircle(unit, NODE_TOUCH)).memory;
 
     test("its memory rail stays outside every other multivariate bubble", () => {
         const rail = memRail(lc);

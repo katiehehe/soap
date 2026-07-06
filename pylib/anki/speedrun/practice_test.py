@@ -179,13 +179,25 @@ def _distractors(value: float, rng: random.Random, n: int) -> list[float]:
     is_prob = 0.0 <= value <= 1.0
     if is_prob:
         pool = [
-            1 - value, value / 2, min(1.0, value * 2), value + 0.1, value - 0.1,
-            value + 0.05, value - 0.05, min(1.0, value * 1.5),
+            1 - value,
+            value / 2,
+            min(1.0, value * 2),
+            value + 0.1,
+            value - 0.1,
+            value + 0.05,
+            value - 0.05,
+            min(1.0, value * 1.5),
         ]
     else:
         pool = [
-            value * 2, value / 2, value + 1, value - 1, value * 1.5,
-            value * 0.75, value + 2, abs(value) + 0.5,
+            value * 2,
+            value / 2,
+            value + 1,
+            value - 1,
+            value * 1.5,
+            value * 0.75,
+            value + 2,
+            abs(value) + 0.5,
         ]
     rng.shuffle(pool)
     # Deterministic small-offset padding (±0.01, ±0.02, …) guarantees enough
@@ -280,7 +292,9 @@ _LOST_SUPERSCRIPT_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]\d")
 # A closing paren glued to a (signed) digit ("(1+x)-4", "(0.6)2.5"): a lost
 # exponent on a parenthesised base. Requiring NO space keeps genuine option
 # markers "(A) 4" and roman-numeral lists "(i) 28%" (spaced) from matching.
-_LOST_PAREN_EXPONENT_RE = re.compile(r"\)[-−]?\d")  # dash-ok: intentional U+2212 in the exponent regex
+_LOST_PAREN_EXPONENT_RE = re.compile(
+    r"\)[-−]?\d"  # dash-ok: intentional U+2212 in the exponent regex
+)
 # A stray backslash command sitting outside any LaTeX span (e.g. a leftover
 # "\left"/"\frac"/"\cup" where the delimiters were lost).
 _STRAY_LATEX_CMD_RE = re.compile(r"\\[A-Za-z]+")
@@ -397,9 +411,7 @@ def assemble_test(
 
     if fallback and len(pool) < n:
         have = {it.id for it in pool}
-        pool = pool + [
-            it for it in fallback if it.id not in have and assemblable(it)
-        ]
+        pool = pool + [it for it in fallback if it.id not in have and assemblable(it)]
 
     by_unit: dict[str, list[SampleItem]] = {}
     for it in pool:

@@ -90,9 +90,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     <div>
         <dt>Last updated</dt>
         <dd>
-            {score
-                ? new Date(Number(score.updatedAt) * 1000).toLocaleString()
-                : "N/A"}
+            {score ? new Date(Number(score.updatedAt) * 1000).toLocaleString() : "N/A"}
         </dd>
     </div>
     <div>

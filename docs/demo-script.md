@@ -12,14 +12,14 @@ recording on the phone remains). Do **not** stage it. Record the real thing.
 
 ## The six required shots (§12) → where they are
 
-| #  | Required shot               | Beat below | Status today                                                                                                                                 |
-| :- | :-------------------------- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1  | A review session            | Beat 4     | ✅ built                                                                                                                                     |
-| 2  | Your Rust change in action  | Beat 2     | ✅ built                                                                                                                                     |
-| 3  | A card synced phone→desktop | Beat 7     | ✅ two-way sync built + tested (`make sync-test`: 20/20, conflict rule). On-device phone→desktop is a manual recording (same engine).        |
+| #  | Required shot               | Beat below | Status today                                                                                                                                                       |
+| :- | :-------------------------- | :--------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1  | A review session            | Beat 4     | ✅ built                                                                                                                                                           |
+| 2  | Your Rust change in action  | Beat 2     | ✅ built                                                                                                                                                           |
+| 3  | A card synced phone→desktop | Beat 7     | ✅ two-way sync built + tested (`make sync-test`: 20/20, conflict rule). On-device phone→desktop is a manual recording (same engine).                              |
 | 4  | Three scores with ranges    | Beat 3     | ✅ built (all three cards show a point AND a range: Memory 10th-90th FSRS band, Performance 95% Wilson band, Readiness Wilson band; honesty bundle; give-up-gated) |
-| 5  | Your AI features            | Beat 8     | ✅ built (off by default): source-traced classifier + generation, gold-eval vs baseline with a pre-set cutoff; app still scores with AI off. |
-| 6  | Your test results           | Beat 6     | ✅ built                                                                                                                                     |
+| 5  | Your AI features            | Beat 8     | ✅ built (off by default): source-traced classifier + generation, gold-eval vs baseline with a pre-set cutoff; app still scores with AI off.                       |
+| 6  | Your test results           | Beat 6     | ✅ built                                                                                                                                                           |
 
 ## What the app is (say this in Beat 1)
 

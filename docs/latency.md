@@ -30,14 +30,14 @@ top). This measures the sync protocol + DB overhead, not network latency.
 
 ## Against the §10 targets
 
-| Target (§10)              | Threshold               | Measured                                      | Verdict                 |
-| :------------------------ | :---------------------- | :-------------------------------------------- | :---------------------- |
-| Button press acknowledged | p95 < 50 ms             | answer card **0.30 ms** (backend)             | PASS (UI render on top) |
-| Next card after grading   | p95 < 100 ms            | **0.06 ms**                                   | PASS (huge margin)      |
-| Dashboard first load      | p95 < 1 s               | mastery **0.34 ms** + readiness **5.10 ms**   | PASS                    |
-| Dashboard refresh         | p95 < 500 ms, no freeze | same as above                                 | PASS                    |
-| Sync of a normal session  | < 5 s                   | **0.04 s** over loopback (RTT on top)         | PASS (loopback)         |
-| Memory on 50k cards       | under a stated limit    | **~200-350 MB** vs stated **1 GB** ceiling    | PASS (~3-5× headroom)   |
+| Target (§10)              | Threshold               | Measured                                    | Verdict                 |
+| :------------------------ | :---------------------- | :------------------------------------------ | :---------------------- |
+| Button press acknowledged | p95 < 50 ms             | answer card **0.30 ms** (backend)           | PASS (UI render on top) |
+| Next card after grading   | p95 < 100 ms            | **0.06 ms**                                 | PASS (huge margin)      |
+| Dashboard first load      | p95 < 1 s               | mastery **0.34 ms** + readiness **5.10 ms** | PASS                    |
+| Dashboard refresh         | p95 < 500 ms, no freeze | same as above                               | PASS                    |
+| Sync of a normal session  | < 5 s                   | **0.04 s** over loopback (RTT on top)       | PASS (loopback)         |
+| Memory on 50k cards       | under a stated limit    | **~200-350 MB** vs stated **1 GB** ceiling  | PASS (~3-5× headroom)   |
 
 Notes:
 

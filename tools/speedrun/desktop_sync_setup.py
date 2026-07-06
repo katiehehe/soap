@@ -1,3 +1,5 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 """Point the desktop at the local sync server and pull the shared collection.
 
 Run with the desktop app CLOSED. It:
@@ -17,9 +19,7 @@ import sys
 from pathlib import Path
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path[:0] = [
-    os.path.join(_REPO, p) for p in ("pylib", "out/pylib", "qt", "out/qt")
-]
+sys.path[:0] = [os.path.join(_REPO, p) for p in ("pylib", "out/pylib", "qt", "out/qt")]
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import anki.collection  # noqa: E402,F401

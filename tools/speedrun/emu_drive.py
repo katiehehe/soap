@@ -35,7 +35,7 @@ ADB = os.path.join(
 
 
 def adb(*args: str, binary: bool = False):
-    out = subprocess.run([ADB, *args], capture_output=True)
+    out = subprocess.run([ADB, *args], check=False, capture_output=True)
     if binary:
         return out.stdout
     return out.stdout.decode("utf-8", "replace")
@@ -90,7 +90,7 @@ def match(nodes: list[dict], pattern: str) -> list[dict]:
     return hits
 
 
-def main() -> int:
+def main() -> int:  # noqa: PLR0911
     if len(sys.argv) < 2:
         print(__doc__)
         return 2
@@ -154,7 +154,7 @@ def main() -> int:
     if cmd == "tap":
         # prefer a clickable match, else first match
         clickable = [n for n in hits if n["clickable"]]
-        chosen = (clickable or hits)
+        chosen = clickable or hits
         if not chosen:
             print(f"NOT FOUND: {pattern}", file=sys.stderr)
             return 1

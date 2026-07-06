@@ -1123,7 +1123,8 @@ pub(crate) fn order_new_cards(
             (String::new(), 0, String::new())
         }
     };
-    let mut keyed: Vec<(u8, (String, usize, String), usize, CardId)> = cards
+    type ReorderKey = (u8, (String, usize, String), usize, CardId);
+    let mut keyed: Vec<ReorderKey> = cards
         .iter()
         .enumerate()
         .map(|(i, (cid, tag))| {

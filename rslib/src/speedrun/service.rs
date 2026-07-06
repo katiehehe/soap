@@ -905,7 +905,9 @@ fn readiness_from_practice(questions: f64, correct: f64, coverage_pct: f64) -> R
 
 /// 95% Wilson score interval for a binomial proportion (z = 1.96), integer
 /// counts. Robust near 0/1 and for small n, unlike the plain normal
-/// approximation. Thin wrapper over the float form.
+/// approximation. Thin wrapper over the float form. Test-only now: the readiness
+/// band uses wilson_interval_f directly.
+#[cfg(test)]
 fn wilson_interval(correct: u32, total: u32) -> (f64, f64) {
     wilson_interval_f(correct as f64, total as f64)
 }

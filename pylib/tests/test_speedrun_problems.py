@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from typing import TYPE_CHECKING, cast
 
 import anki.collection  # noqa: F401
 from anki.collection import Collection
@@ -25,6 +26,8 @@ def _fresh_col() -> Collection:
     (``speedrun_generated_problems.json``, named next to the collection) is
     isolated per test, mirroring real profiles, which each have their own dir."""
     return Collection(os.path.join(tempfile.mkdtemp(), "col.anki2"))
+
+
 from anki.speedrun.problem_gen import (
     _ai_generate,
     _parse_num,
@@ -37,6 +40,9 @@ from anki.speedrun.problem_gen import (
     verify_problem,
 )
 from anki.speedrun.seed import build_deck
+
+if TYPE_CHECKING:
+    from anki.speedrun.ai import OpenAiClient
 
 
 def test_templated_problems_are_correct_by_construction():
@@ -184,7 +190,13 @@ def test_problem_gen_treats_injected_source_as_data_not_instructions():
         ]
     }
     stub = _StubAi(gen=legit)
-    out = _ai_generate(stub, "Discrete distributions", "Authored note 3", malicious, 2)
+    out = _ai_generate(
+        cast("OpenAiClient", stub),
+        "Discrete distributions",
+        "Authored note 3",
+        malicious,
+        2,
+    )
 
     assert len(stub.calls) == 1
     system, user = stub.calls[0]
@@ -197,7 +209,9 @@ def test_problem_gen_treats_injected_source_as_data_not_instructions():
     assert lo < mid < hi
     # and no emitted problem carries the injected payload
     assert out
-    assert all("SECRET" not in (p["question"] + p["answer"] + p["solution"]) for p in out)
+    assert all(
+        "SECRET" not in (p["question"] + p["answer"] + p["solution"]) for p in out
+    )
 
 
 def test_injected_answer_is_rejected_by_self_verification():
@@ -206,22 +220,29 @@ def test_injected_answer_is_rejected_by_self_verification():
     # independently; the honest answer will not match "SECRET", so the problem is
     # rejected and never reaches the quarantined pool.
     q = "For independent A and B, find P(A and B)."
-    assert verify_problem(_StubAi(solve={"answer": "0.25"}), q, "SECRET") is False
+    solver = cast("OpenAiClient", _StubAi(solve={"answer": "0.25"}))
+    assert verify_problem(solver, q, "SECRET") is False
     # the gate is not vacuous: a genuinely matching re-solve still verifies.
-    assert verify_problem(_StubAi(solve={"answer": "0.25"}), q, "0.25") is True
+    solver = cast("OpenAiClient", _StubAi(solve={"answer": "0.25"}))
+    assert verify_problem(solver, q, "0.25") is True
 
 
 def test_malformed_model_response_fails_closed():
     # (b) A non-JSON / decode-error reply (what OpenAiClient._chat_json raises when
     # the model returns non-JSON) must not crash the correctness gate: verify_problem
     # catches it and returns False (problem_gen ~164-167), so nothing verifies.
-    assert verify_problem(_StubAi(raise_on="solve"), "P(A)?", "0.5") is False
+    raising = cast("OpenAiClient", _StubAi(raise_on="solve"))
+    assert verify_problem(raising, "P(A)?", "0.5") is False
     # a non-dict reply also fails closed (no AttributeError leaks out).
-    assert verify_problem(_StubAi(solve="not a json object"), "P(A)?", "0.5") is False
+    non_dict = cast("OpenAiClient", _StubAi(solve="not a json object"))
+    assert verify_problem(non_dict, "P(A)?", "0.5") is False
     # a wrong-shaped (valid JSON, no usable fields) GENERATE reply yields NO problems
     # rather than an unverified/garbage one.
-    wrong_shape = _StubAi(gen={"unexpected": "shape"})
+    wrong_shape = cast("OpenAiClient", _StubAi(gen={"unexpected": "shape"}))
     assert _ai_generate(wrong_shape, "Variance", "Authored note", "Var(X).", 3) == []
     # a generate item missing required fields is dropped too (nothing emitted).
-    partial = _StubAi(gen={"problems": [{"question": "q with no answer/solution"}]})
+    partial = cast(
+        "OpenAiClient",
+        _StubAi(gen={"problems": [{"question": "q with no answer/solution"}]}),
+    )
     assert _ai_generate(partial, "Variance", "Authored note", "x.", 3) == []

@@ -15,6 +15,7 @@ import os
 import sys
 import tempfile
 import time
+from typing import Literal
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path[:0] = [os.path.join(_REPO, "pylib"), os.path.join(_REPO, "out", "pylib")]
@@ -48,7 +49,7 @@ def revlog(col: Collection) -> int:
     return col.db.scalar("select count() from revlog") or 0
 
 
-def answer(col: Collection, ids, ease: int = 3) -> None:
+def answer(col: Collection, ids, ease: Literal[1, 2, 3, 4] = 3) -> None:
     for cid in ids:
         card = col.get_card(cid)
         card.start_timer()

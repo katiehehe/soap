@@ -75,7 +75,7 @@ def _source_text(path: str) -> str:
     passages + names + key terms), or a raw text file."""
     lower = path.lower()
     if lower.endswith(".pdf"):
-        from pypdf import PdfReader
+        from pypdf import PdfReader  # type: ignore[import-not-found]
 
         reader = PdfReader(path)
         return "\n".join((p.extract_text() or "") for p in reader.pages)

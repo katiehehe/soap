@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from typing import Any
 
 from anki.speedrun.ai_eval import (
     SCHEMA_VERSION,
@@ -22,7 +23,7 @@ from anki.speedrun.ai_eval import (
 )
 
 # A per-eval record as produced offline (no key): baseline filled, AI pending.
-_PENDING_EVAL = {
+_PENDING_EVAL: dict[str, Any] = {
     "name": "Feature X",
     "baseline_vs": "keyword",
     "baseline": {"top1": 0.13, "wrong_rate_top1": 0.87},
@@ -32,7 +33,7 @@ _PENDING_EVAL = {
 }
 
 # A per-eval record as it would look after a keyed SUBSAMPLE (smoke) run.
-_RAN_EVAL = {
+_RAN_EVAL: dict[str, Any] = {
     "name": "Feature Y",
     "baseline_vs": "extraction",
     "baseline": {"correct_rate": 0.30, "wrong_rate": 0.70},

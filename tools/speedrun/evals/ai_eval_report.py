@@ -47,9 +47,9 @@ from anki.speedrun.ai_eval import (  # noqa: E402
     read_git_sha,
     write_report,
 )
-from classify_eval import collect_results as classify_results  # noqa: E402
-from generate_eval import collect_results as generate_results  # noqa: E402
-from problem_eval import collect_results as problem_results  # noqa: E402
+from classify_eval import collect_results as classify_results  # type: ignore[import-not-found]  # noqa: E402
+from generate_eval import collect_results as generate_results  # type: ignore[import-not-found]  # noqa: E402
+from problem_eval import collect_results as problem_results  # type: ignore[import-not-found]  # noqa: E402
 
 
 def _fmt_pct(x: float | None) -> str:

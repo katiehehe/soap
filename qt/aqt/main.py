@@ -176,6 +176,10 @@ class AnkiQt(QMainWindow):
     pm: ProfileManagerType
     web: MainWebView
     bottomWeb: BottomWebView
+    # Speedrun (SOA Exam P fork): initial tab for the custom home shell. Set
+    # before moveToState("speedrunHome") and consumed once by
+    # aqt.speedrun.show_home; None opens the home page on its default tab.
+    _speedrun_home_tab: str | None = None
 
     def __init__(
         self,

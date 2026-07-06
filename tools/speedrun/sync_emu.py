@@ -45,6 +45,7 @@ for _p in (os.path.join(_REPO, "pylib"), os.path.join(_REPO, "out", "pylib")):
 import anki.collection  # noqa: E402,F401
 from anki.cards import CardId  # noqa: E402
 from anki.collection import Collection  # noqa: E402
+from anki.decks import DeckId  # noqa: E402
 
 ENDPOINT = os.environ.get("SYNC_ENDPOINT", "http://127.0.0.1:27701/")
 USER = os.environ.get("SYNC_USER", "user")
@@ -107,7 +108,7 @@ def cmd_status(col: Collection) -> None:
     print(f"notes={nnotes} cards={ncards} revlog_rows={nrev}")
     print("decks (due today = new+lrn+rev):")
     for d in col.decks.all_names_and_ids(skip_empty_default=True):
-        tree = col.sched.deck_due_tree(d.id)
+        tree = col.sched.deck_due_tree(DeckId(d.id))
         if tree:
             print(
                 f"  [{d.id}] {d.name}: new={tree.new_count} lrn={tree.learn_count} rev={tree.review_count}"

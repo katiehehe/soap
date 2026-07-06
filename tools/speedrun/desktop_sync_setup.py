@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path[:0] = [
@@ -47,7 +48,7 @@ def _download(col: Collection, auth) -> str:
 def main() -> int:
     from aqt.profiles import ProfileManager
 
-    pm = ProfileManager(base=BASE)
+    pm = ProfileManager(base=Path(BASE))
     pm.setupMeta()
     names = pm.profiles()
     name = "User 1" if "User 1" in names else names[0]

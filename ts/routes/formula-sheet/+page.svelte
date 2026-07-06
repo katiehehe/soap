@@ -140,7 +140,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <div class="formula-sheet">
     <div class="sheet">
         <header class="sheet-head">
-            <p class="eyebrow">Reference</p>
             <h1>Formula sheet</h1>
 
             <div class="controls">
@@ -303,14 +302,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     /* Header ---------------------------------------------------------------- */
-    .eyebrow {
-        margin: 0 0 0.3rem;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--fg-subtle);
-    }
     h1 {
         margin: 0;
         font-family: var(--sr-font-heading);

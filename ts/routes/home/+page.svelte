@@ -866,11 +866,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         flex: 1 1 auto;
         overflow-y: auto;
     }
-    /* Anki's review graphs, embedded inline under the coverage stats. */
+    /* An opaque canvas under the embedded graphs so the shell's decorative
+       bubble backdrop cannot bleed through the grid gaps or sparse-data areas.
+       Matches the range box fill so the toolbar and surface read as one; the
+       white graph cards float on it. min-height keeps the surface covering the
+       viewport when there are few graphs. */
     .anki-graphs {
-        margin-top: 1.75rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--border);
+        min-height: 100%;
+        background: var(--canvas);
     }
     /* Narrow widths: collapse the individual Add / Browse / Settings icons into
        the "☰" menu (they'd otherwise crowd the bar), keep the brand + menu on the
@@ -883,17 +886,26 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         .mobile-menu-btn {
             display: inline-flex;
         }
+        .topbar {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
         .tabs {
             order: 3;
             width: 100%;
             margin: 0;
             justify-content: center;
-            /* Let the group wrap if a very narrow screen truly can't fit all
-               four, but with the short labels + the freed actions row they fit
-               on one line. */
-            flex-wrap: wrap;
+            /* All five tabs stay on one line; the tighter gap + tab padding
+               below fit the short labels on a phone instead of wrapping Stats
+               onto a second row. */
+            flex-wrap: nowrap;
+            gap: 0.3rem;
             height: auto;
-            row-gap: 0.3rem;
+        }
+        .tab {
+            padding: 0.5rem 0.55rem;
+            font-size: 0.8rem;
+            white-space: nowrap;
         }
     }
 

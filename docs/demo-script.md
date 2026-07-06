@@ -56,7 +56,7 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 Pre-flight checklist:
 
 - [ ] `git -C ~/dev/soap log -1 --format='%h %s'` handy (say the commit hash on camera).
-- [ ] Deck imported; the app opens on the **custom Home shell** with three tabs (**Concept map · Progress · Readiness**) plus an **"Anki stats"** button (Anki's own screens are restyled to match, and the stock Decks/Add/Browse/Stats toolbar links are removed so it never reads as plain Anki). The standalone **Tools → Exam readiness / Study map** dialogs still open too.
+- [ ] Deck imported; the app opens on the **custom Home shell** with five tabs (**Map · Plan · Cram · Metrics · Stats**) that stay on one line even on the phone: **Metrics** is the readiness dashboard and **Stats** embeds Anki's own review-history graphs (restyled to match), and the stock Decks/Add/Browse/Stats toolbar links are removed so it never reads as plain Anki. The standalone **Tools → Exam readiness / Study map** dialogs still open too.
 - [ ] Emulator booted to the AnkiDroid deck list (`adb shell getprop sys.boot_completed` → `1`).
 - [ ] A terminal open for the `./ninja` / `make` / `unzip` commands.
 - [ ] Window layout: app on the left, terminal on the right, emulator ready to bring forward.
@@ -86,7 +86,7 @@ a wrapper and not a JS reimplementation: a JS/Swift rewrite would cap the grade.
 
 ### Beat 3, Shot 4: three scores with ranges + the give-up rule (1:05-2:05)
 
-**Tools → Exam readiness (Speedrun).** Point out:
+**Home shell → Metrics tab** (also **Tools → Exam readiness (Speedrun)**). Point out:
 
 - Three **separate** signals side by side, each with its own status.
 - **Syllabus coverage = 0%** even right after importing the whole deck, because coverage counts only subtopics you've **actually practiced** (≥1 graded review), weighted by section, so importing a big deck can't fake "covered." It climbs as you study (you'll see this in Beat 4).
@@ -118,14 +118,14 @@ count, because the review loop is running on the real Rust scheduler.
 
 ### Beat 5: The study feature (learning science) (2:45-3:15)
 
-**Tools → Study map (Speedrun).** Exam P at the centre, the 3 units on a triangle,
-subtopics radiating out as **bubbles sized by exam weight**. Say: _"This is the
+**Home shell → Map tab** (also **Tools → Study map (Speedrun)**). Exam P at the centre, the 3 units (labelled **Unit 1 / 2 / 3**) on a triangle,
+subtopics radiating out as **bubbles sized by exam weight**. A compact colour legend now sits in a row **above** the map (**struggling / practicing / strong / not practiced / reviewed-but-not-practiced**), and the recommended next bubble carries an **amber glow**. Across the top strip: a compact **readiness banner** on the left with an **"Evidence / how this is computed"** expander to the full honesty bundle, and a **"PRACTICE NEXT (Performance)"** recommendation on the right. Say: _"This is the
 three-tier, mastery-gated scheduler made visible. Bubble size is the topic's exam
-weight; the colour fills grey → amber → green as a subtopic clears its gate (≥10
+weight; the colour shows measured mastery as a subtopic clears its gate (≥10
 problems, ≥80% accuracy, ≥90% retrievability) and moves from Blocked to
 within-unit to cross-unit interleaving. Size is importance, colour is measured
 mastery: never blended."_ Tap a subtopic (or a unit) for its mastery detail, and
-point out the "Study next" suggestion.
+follow the amber-glowing bubble and the **Practice next** recommendation for what to do. Memory recall stays a separate signal: it shows as the **blue memory track** on the map and (with its own range) inside the readiness bundle, not on this strip.
 
 Then name the ablation (in the terminal, optional): `make ablation`. Say: _"The
 within-unit tier is the feature I ablate. Three builds (Full, Ablated, Plain)

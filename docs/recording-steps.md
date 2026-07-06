@@ -63,7 +63,7 @@ Settings → Users & Groups → add a Standard user → log in there → mount t
 drag **Anki.app** to Applications → right-click **Open** (unsigned). Record:
 
 1. Launch on the clean account → it opens a collection (no toolchain present).
-2. Open the custom Home shell → **Concept map / Progress / Readiness** tabs work.
+2. Open the custom Home shell → the **Map / Plan / Cram / Metrics / Stats** tabs work (five tabs on one line).
 3. Say on camera: **"AI is off by default and it still produces all three
    scores"** (this is the hard requirement; `test_three_signals_compute_with_ai_off`).
 
@@ -80,7 +80,7 @@ adb install -r ~/dev/projects/speedrun/Anki-Android/.../AnkiDroid-play-arm64-v8a
 
 Record: install → open AnkiDroid (it launches straight into the Svelte **home
 shell**) → load the Exam P deck (import a `.colpkg` from desktop or sync) → run a
-short review session on **our** engine → tap the **Readiness** tab in the home
+short review session on **our** engine → tap the **Metrics** tab in the home
 shell to show the three signals (Memory / Performance / Readiness) with ranges +
 the give-up rule, computed on-device by the shared engine (the Svelte
 `readiness-dashboard` route → `computeReadiness` over AnkiDroid's post-bridge;

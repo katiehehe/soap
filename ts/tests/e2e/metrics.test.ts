@@ -100,12 +100,13 @@ test("the readiness explainer documents the three signals + the give-up rule", a
         .locator(".block")
         .filter({ hasText: "Data thresholds (give-up rule)" });
     await expect(giveUpBlock).toBeVisible();
-    await expect(giveUpBlock.getByText(/200 graded reviews/)).toBeVisible();
-    await expect(giveUpBlock.getByText(/50% weighted coverage/)).toBeVisible();
-    // "30 graded" and "practice questions" sit either side of a source line break,
-    // so assert each newline-free span rather than one string across the break.
-    await expect(giveUpBlock.getByText(/30 graded/)).toBeVisible();
-    await expect(giveUpBlock.getByText(/practice questions/)).toBeVisible();
+    // The three thresholds render inside one <b> whose reactive values and
+    // prettier's source line wrapping split them across text nodes and lines.
+    // toContainText's regex path does NOT normalize whitespace, so match with
+    // \s+ between words (a literal space misses a wrap between two words).
+    await expect(giveUpBlock).toContainText(/200\s+graded\s+reviews/);
+    await expect(giveUpBlock).toContainText(/50%\s+weighted\s+coverage/);
+    await expect(giveUpBlock).toContainText(/30\s+graded\s+practice\s+questions/);
 
     await page.screenshot({ path: "out/metrics.png", fullPage: true });
 });
@@ -132,9 +133,10 @@ test("a readiness card opens the how-it-works explainer inline (no separate tab)
     // The explainer opens in place on the readiness page (no navigation away),
     // and the clicked signal selects its tab: the Readiness panel is shown, the
     // Memory panel is hidden.
-    await expect(
-        page.getByRole("tab", { name: "Readiness" }),
-    ).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Readiness" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+    );
     await expect(
         page.getByRole("heading", {
             name: "Would you pass today, and how sure are we?",

@@ -269,31 +269,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         return best;
     })(subMap);
-    // Chips under the map: the one practice-next topic (performance) first, then
-    // review-due topics (memory). Distinct kinds → distinct styles.
-    $: highlightList = (() => {
-        const out: { tag: string; name: string; kind: "practice" | "review" }[] = [];
-        if (practiceNextTag) {
-            out.push({
-                tag: practiceNextTag,
-                name: NAME_BY_TAG.get(practiceNextTag) ?? practiceNextTag,
-                kind: "practice",
-            });
-        }
-        for (const t of dueTodayTags) {
-            if (t !== practiceNextTag) {
-                out.push({ tag: t, name: NAME_BY_TAG.get(t) ?? t, kind: "review" });
-            }
-        }
-        return out.slice(0, 6);
-    })();
-    // Split the highlight list into the ONE primary performance recommendation
-    // and the (subordinate) memory review list, so the panel can present them as
-    // two visibly different systems. Derived from the same highlightList → the
-    // WHAT is recommended is unchanged; this is a presentation split only. The
-    // review list stays empty when nothing is due (memory rec hidden).
-    $: practiceRec = highlightList.find((h) => h.kind === "practice") ?? null;
-    $: reviewRecs = highlightList.filter((h) => h.kind === "review");
+    // The single "practice next" recommendation shown in the focus strip: the one
+    // highest-priority performance topic. The memory / review-due list that used
+    // to sit beside it was removed as UI clutter; the memory signal still shows in
+    // the readiness bundle and as the blue memory track on the map.
+    $: practiceRec = practiceNextTag
+        ? {
+              tag: practiceNextTag,
+              name: NAME_BY_TAG.get(practiceNextTag) ?? practiceNextTag,
+          }
+        : null;
 
     // Due-aware study routing. The plan is already tier-ordered (blocked →
     // within-unit → cross-unit) AND filtered to decks with cards due now, so its
@@ -536,10 +521,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         selectedUnit = null;
         selectedRoot = false;
     }
-    // Review (MEMORY, the support track): open due cards for scheduled review.
-    function studySubtopic(tag: string): void {
-        bridgeCommand("speedrun-study:" + tag);
-    }
     // Review (MEMORY), unlimited cram: a no-reschedule cram deck on the desktop,
     // so you can drill flashcards from a subtopic / unit / everything any time
     // without touching the FSRS schedule or the daily limits. Memory is the
@@ -650,7 +631,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 </script>
 
-<div class="study-map">
+<div class="study-map" class:cram-view={variant === "cram"}>
     {#if showMap}
         <header>
             <h1>Study map</h1>
@@ -662,7 +643,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <div class="notice error">Couldn't load mastery: {loadError}</div>
     {/if}
 
-    {#if showMap && (readiness || highlightList.length > 0)}
+    {#if showMap && (readiness || practiceRec)}
         <div class="top-row">
             {#if readiness}
                 <section
@@ -773,88 +754,43 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </section>
             {/if}
 
-            {#if highlightList.length > 0}
+            {#if practiceRec}
+                {@const pr = practiceRec}
                 <section class="focus-strip" aria-label="What to do next">
                     <div class="rec-stack">
-                        <!-- PRIMARY: performance / practice. Loud amber, a trending-up
-                             marker, and one big solid call-to-action; performance is the
-                             spine, so this leads. It doubles as readiness's single best
-                             next action (the engine names the same topic). -->
-                        {#if practiceRec}
-                            {@const pr = practiceRec}
-                            <div class="rec rec-perf">
-                                <span class="rec-mark perf" aria-hidden="true">
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2.4"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    >
-                                        <polyline
-                                            points="23 6 13.5 15.5 8.5 10.5 1 18"
-                                        />
-                                        <polyline points="17 6 23 6 23 12" />
-                                    </svg>
+                        <!-- Performance / practice: one big amber call-to-action. It
+                             doubles as readiness's single best next action (the engine
+                             names the same topic). The memory / review-due list that
+                             used to sit below was removed as UI clutter; memory still
+                             shows in the readiness bundle and the map's memory track. -->
+                        <div class="rec rec-perf">
+                            <span class="rec-mark perf" aria-hidden="true">
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.4"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                                    <polyline points="17 6 23 6 23 12" />
+                                </svg>
+                            </span>
+                            <div class="rec-main">
+                                <span class="rec-kicker perf">
+                                    Practice next
+                                    <span class="rec-axis">performance</span>
                                 </span>
-                                <div class="rec-main">
-                                    <span class="rec-kicker perf">
-                                        Practice next
-                                        <span class="rec-axis">performance</span>
-                                    </span>
-                                    <button
-                                        class="rec-cta"
-                                        title="Practice next: do exam-style problems here to raise your performance"
-                                        on:click={() => practiceTopic(pr.tag)}
-                                    >
-                                        <span class="rec-topic">{pr.name}</span>
-                                    </button>
-                                </div>
+                                <button
+                                    class="rec-cta"
+                                    title="Practice next: do exam-style problems here to raise your performance"
+                                    on:click={() => practiceTopic(pr.tag)}
+                                >
+                                    <span class="rec-topic">{pr.name}</span>
+                                </button>
                             </div>
-                        {/if}
-
-                        <!-- SECONDARY: memory / review. A quiet, cool-periwinkle, dashed
-                             block with small ghost chips and a rotate/refresh marker. Only
-                             rendered when spaced-repetition cards are actually due, never
-                             an empty "nothing to review" state. -->
-                        {#if reviewRecs.length > 0}
-                            <div class="rec-divider">
-                                <span>then, if you have time</span>
-                            </div>
-                            <div class="rec rec-mem">
-                                <span class="rec-mark mem" aria-hidden="true">
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2.4"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    >
-                                        <polyline points="23 4 23 10 17 10" />
-                                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                                    </svg>
-                                </span>
-                                <div class="rec-main">
-                                    <span class="rec-kicker mem">
-                                        Review
-                                        <span class="rec-axis">memory · due now</span>
-                                    </span>
-                                    <div class="rec-chips">
-                                        {#each reviewRecs as r}
-                                            <button
-                                                class="rec-chip"
-                                                title="Review: spaced-repetition cards due now (memory)"
-                                                on:click={() => studySubtopic(r.tag)}
-                                            >
-                                                {r.name}
-                                            </button>
-                                        {/each}
-                                    </div>
-                                </div>
-                            </div>
-                        {/if}
+                        </div>
                     </div>
                 </section>
             {/if}
@@ -1266,6 +1202,28 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         Each line fills up the tree: subtopic → unit → Exam P.
                     </span>
                 </div>
+                <div class="map-key" aria-label="Bubble colour key">
+                    <span class="map-key-item">
+                        <span class="map-key-dot" style="color:{RED}">●</span>
+                        struggling
+                    </span>
+                    <span class="map-key-item">
+                        <span class="map-key-dot" style="color:{AMBER}">●</span>
+                        practicing
+                    </span>
+                    <span class="map-key-item">
+                        <span class="map-key-dot" style="color:{GREEN}">●</span>
+                        strong
+                    </span>
+                    <span class="map-key-item">
+                        <span class="map-key-dot" style="color:{GREY}">●</span>
+                        not practiced
+                    </span>
+                    <span class="map-key-item">
+                        <span class="map-key-dot" style="color:{MEMORY}">●</span>
+                        reviewed but not yet practiced
+                    </span>
+                </div>
                 <div
                     class="viewport"
                     bind:clientWidth={viewportWidth}
@@ -1495,28 +1453,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                 </button>
                             {/each}
                         {/each}
-                    </div>
-                    <div class="map-key" aria-label="Bubble colour key">
-                        <span class="map-key-item">
-                            <span class="map-key-dot" style="color:{RED}">●</span>
-                            struggling
-                        </span>
-                        <span class="map-key-item">
-                            <span class="map-key-dot" style="color:{AMBER}">●</span>
-                            practicing
-                        </span>
-                        <span class="map-key-item">
-                            <span class="map-key-dot" style="color:{GREEN}">●</span>
-                            strong
-                        </span>
-                        <span class="map-key-item">
-                            <span class="map-key-dot" style="color:{GREY}">●</span>
-                            not practiced
-                        </span>
-                        <span class="map-key-item">
-                            <span class="map-key-dot" style="color:{MEMORY}">●</span>
-                            reviewed but not yet practiced
-                        </span>
                     </div>
                 </div>
             </div>
@@ -1850,6 +1786,64 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         --perf-ink: #e6c17e;
         --mem-ink: #aab4ea;
     }
+
+    /* Cram tab only (variant="cram"): make Cram read as one stacked reference
+       surface with the Formula sheet that renders directly below it in the Home
+       Cram tab. It gets the SAME full-bleed soap-ring backdrop the formula sheet
+       uses, and the cram card is capped to the formula sheet's container width
+       (900px) and centred, so the two line up. Scoped to .cram-view, so the
+       radial map and the full /study-map view keep their own 1180px layout. */
+    .study-map.cram-view {
+        max-width: none;
+        margin: 0;
+        padding: 2rem 1.5rem 2.5rem;
+        isolation: isolate;
+        background:
+            radial-gradient(
+                120% 80% at 50% -12%,
+                var(--sr-accent-weak),
+                transparent 60%
+            ),
+            var(--canvas);
+    }
+    .study-map.cram-view::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-image:
+            radial-gradient(
+                circle at 30% 32%,
+                transparent 0 7px,
+                var(--sr-accent-weak) 8px 9px,
+                transparent 10px
+            ),
+            radial-gradient(
+                circle at 72% 60%,
+                transparent 0 11px,
+                var(--sr-accent-weak) 12px 13px,
+                transparent 14px
+            ),
+            radial-gradient(
+                circle at 52% 86%,
+                transparent 0 5px,
+                var(--sr-accent-weak) 6px 7px,
+                transparent 8px
+            );
+        background-size:
+            150px 150px,
+            220px 220px,
+            120px 120px;
+    }
+    /* The cram card = the formula sheet's centred content column: same max-width,
+       centred, lifted above the decorative ring layer. */
+    .study-map.cram-view .memory {
+        position: relative;
+        z-index: 1;
+        max-width: 900px;
+        margin: 0 auto;
+    }
     header {
         position: relative;
         z-index: 1;
@@ -1895,6 +1889,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .top-row {
         display: flex;
         flex-wrap: wrap;
+        /* Cards keep their natural height (top-aligned). In the abstain state
+           the readiness card's real content is shorter than the practice/review
+           card, and stretching it to match only left an empty dark panel of
+           dead space, so we let it size to its content (never padded with a
+           fake score). */
         align-items: flex-start;
         gap: 1.25rem;
         margin: 0 0 1.25rem;
@@ -2101,13 +2100,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .rec-mark.perf {
         color: var(--perf-ink);
     }
-    .rec-mark.mem {
-        color: var(--mem-ink);
-    }
 
-    /* "What to do next" panel: performance is the spine, so it LEADS as a big
-       amber call-to-action; memory is the support signal, so it sits below, in a
-       quieter, cool-periwinkle, dashed block. */
+    /* "What to do next" panel: a single big amber performance call-to-action. (The
+       memory / review-due list that used to sit below it was removed as UI clutter;
+       the memory signal still shows in the readiness bundle and the map's blue
+       memory track.) */
     .focus-strip {
         --panel-accent: var(--perf-line);
         --panel-shadow: var(--sr-tertiary);
@@ -2207,71 +2204,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-weight: 700;
         font-size: 1.02rem;
         line-height: 1.15;
-    }
-
-    /* Divider that spells out the hierarchy: performance first, memory after. */
-    .rec-divider {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        margin: 0.35rem 0.1rem;
-        font-size: 0.64rem;
-        font-weight: 700;
-        letter-spacing: 0.07em;
-        text-transform: uppercase;
-        color: var(--fg-subtle);
-    }
-    .rec-divider::before,
-    .rec-divider::after {
-        content: "";
-        flex: 1 1 auto;
-        height: 1px;
-        background: var(--border);
-    }
-
-    /* SECONDARY: memory / review (the quiet, subordinate one). The dashed
-       outline alone marks it as optional; no side stripe (top-only accents). */
-    .rec-mem {
-        border: 1px dashed var(--mem-line);
-        background: transparent;
-    }
-    .rec-mem .rec-mark {
-        font-size: 1.05rem;
-    }
-    .rec-kicker.mem {
-        font-size: 0.66rem;
-        color: var(--mem-ink);
-    }
-    .rec-kicker.mem .rec-axis {
-        color: var(--mem-ink);
-        background: color-mix(in srgb, var(--mem-line) 18%, transparent);
-    }
-    .rec-chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem;
-        margin-top: 0.45rem;
-    }
-    .rec-chip {
-        border: 1px solid var(--mem-line);
-        background: transparent;
-        color: var(--mem-ink);
-        font-family: var(--sr-font-body);
-        font-weight: 600;
-        font-size: 0.78rem;
-        padding: 0.28rem 0.7rem;
-        border-radius: var(--sr-radius-pill);
-        cursor: pointer;
-        transition:
-            background 0.18s ease,
-            color 0.18s ease;
-    }
-    .rec-chip:hover {
-        background: color-mix(in srgb, var(--mem-line) 18%, transparent);
-    }
-    .rec-chip:focus-visible {
-        outline: 2px solid var(--sr-focus);
-        outline-offset: 2px;
     }
 
     /* Overall mastery */
@@ -2742,28 +2674,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         pointer-events: none;
     }
 
-    /* In-map colour key: the bubble-colour legend, overlaid in a corner of the
-       diagram so each fill's meaning sits with the map it labels. Non-interactive
-       (pointer-events: none) so it never intercepts a bubble click, and tucked in
-       the top-right corner, next to the map. */
+    /* Bubble-colour key: what each fill colour means. Sits as a compact
+       horizontal band directly above the diagram (outside the bubble area, below
+       the two-line track legend), so its meaning stays next to the map and is
+       always visible, yet it can never overlap a bubble at any window width (the
+       reason it is no longer a corner overlay). */
     .map-key {
-        position: absolute;
-        right: 12px;
-        top: 12px;
-        z-index: 2;
         display: flex;
-        flex-direction: column;
-        gap: 0.3rem;
-        margin: 0;
-        padding: 0.5rem 0.65rem;
-        border: 1px solid var(--border);
-        border-radius: var(--sr-radius-sm);
-        background: color-mix(in srgb, var(--canvas-elevated) 90%, transparent);
-        box-shadow: var(--sr-shadow-sm);
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem 1rem;
+        margin: 0 0.15rem 0.6rem;
         font-size: 0.72rem;
         line-height: 1.2;
         color: var(--fg-subtle);
-        pointer-events: none;
     }
     .map-key-item {
         display: flex;

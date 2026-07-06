@@ -55,7 +55,7 @@ Every number below comes from a one-command, seeded, leakage-checked run, not a
 claim. Commands in [Makefile](./Makefile); details in [SPEC_CHECKLIST.md](./SPEC_CHECKLIST.md).
 
 - **Rust engine change**: `SpeedrunService` (7 RPCs) + two opt-in live-queue
-  reorders; 77 Rust tests + Python-calling tests; undo/no-corruption covered.
+  reorders; 89 Rust tests + Python-calling tests; undo/no-corruption covered.
 - **Study feature + ablation** (`make ablation`): the three-tier scheduler's
   **within-unit interleaving** tier, tested Full / Ablated / Plain at **equal
   study time**. Reports the pre-registered metric across an effect-size sweep
@@ -81,11 +81,12 @@ claim. Commands in [Makefile](./Makefile); details in [SPEC_CHECKLIST.md](./SPEC
 
 The graded Rust change lives in Anki's shared engine (`rslib/`, the `anki`
 crate), so it ships to both desktop and phone. `SpeedrunService`
-(`rslib/src/speedrun/`, `proto/anki/speedrun.proto`) adds five RPCs called from
+(`rslib/src/speedrun/`, `proto/anki/speedrun.proto`) adds seven RPCs called from
 Python: `SpeedrunPing`, `ComputeReadiness` (give-up rule), `GetMasteryState`
 (three-tier mastery gate + importance-weighted rollups + "what to study next"),
-`GetMasteryOrderedNewCards`, and `GetPointsAtStakeOrder` (due cards by topic
-weight × student weakness). Two opt-in, default-off live-queue reorders hook
+`GetMasteryOrderedNewCards`, `GetPointsAtStakeOrder` (due cards by topic
+weight × student weakness), `GetStudyPlan` (today's tiered deck plan), and
+`GetStudyPace` (mastery pace vs the exam date). Two opt-in, default-off live-queue reorders hook
 `build_queues` (`rslib/src/scheduler/queue/builder/mod.rs`): `speedrunMasteryScheduler`
 (new-card tier order) and `speedrunPointsAtStake` (review order), both read-only,
 so FSRS intervals stay valid and undo/integrity are untouched. Full rationale in

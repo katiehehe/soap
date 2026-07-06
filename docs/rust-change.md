@@ -86,7 +86,7 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   measured counts + the stored exam date (`compute_pace`, unit-tested); it is a
   _coverage_ pace, never the readiness score. Read-only.
 
-All seven RPCs are called from Python and covered by tests (77 Rust unit tests
+All seven RPCs are called from Python and covered by tests (89 Rust unit tests
 across `service.rs` + `mastery.rs`, plus a Python-calling test for every RPC).
 
 The tier order and the points-at-stake order are now wired into the **live**

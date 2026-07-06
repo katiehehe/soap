@@ -48,15 +48,29 @@ def _download(col: Collection, auth) -> str:
 def main() -> int:
     from aqt.profiles import ProfileManager
 
+    Path(BASE).mkdir(parents=True, exist_ok=True)
     pm = ProfileManager(base=Path(BASE))
     pm.setupMeta()
-    names = pm.profiles()
-    name = "User 1" if "User 1" in names else names[0]
+    # A fresh throwaway base has no profiles yet. Calling pm.profiles() here
+    # would auto-create one via ProfileManager._ensureProfile, which names it
+    # through the translation backend; that backend is not initialised in this
+    # headless script, so it raises. Create "User 1" directly instead.
+    existing = pm.db.list("select name from profiles where name != '_global'")
+    if not existing:
+        pm.create("User 1")
+        existing = pm.db.list("select name from profiles where name != '_global'")
+    name = "User 1" if "User 1" in existing else existing[0]
     pm.load(name)
+    # A headless base has no language chosen; the GUI's language setup reads
+    # meta["defaultLang"] on launch and crashes if it is None, so default it
+    # here (mirrors the demo launcher's seeded prefs).
+    if not pm.meta.get("defaultLang"):
+        pm.meta["defaultLang"] = "en_US"
     pm.set_custom_sync_url(ENDPOINT)
     pm.set_sync_username(USER)
 
     col_path = os.path.join(BASE, name, "collection.anki2")
+    os.makedirs(os.path.dirname(col_path), exist_ok=True)
     col = Collection(col_path)
     try:
         auth = col.sync_login(USER, PASS, ENDPOINT)

@@ -1,4 +1,4 @@
-# Overnight run — progress log
+# Overnight run: progress log
 
 Autonomous Phase 2 & 3 build (SOA Exam P Speedrun). Newest entries at the bottom.
 Scope C: importance-weighting + 3-level mastery transparency + polished concept map,
@@ -25,7 +25,7 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
 - Baseline `./ninja check` = GREEN in ~66s (rust_test, pytest pylib+aqt, ruff, mypy,
   clippy, minilints, format). Build is warm. Safe to start editing.
 
-### Phase 2.1 — subtopic importance weights (done)
+### Phase 2.1: subtopic importance weights (done)
 
 - Added editable per-subtopic `weight` to `exam_p_topics.json`; each unit's weights
   sum exactly to its published section midpoint (general 26.5, univariate 47,
@@ -36,7 +36,7 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
   matches the syllabus, and per-unit sums equal the official midpoints.
 - `./ninja check` green. Commit `bc31b4eef`.
 
-### Phase 2.2 — importance-weighted mastery rollup in the engine (done)
+### Phase 2.2: importance-weighted mastery rollup in the engine (done)
 
 - Proto: `MasteryRequest` gains optional `units` + `subtopic_weights` (new
   `SubtopicWeight`); `SubtopicMastery.weight`; `UnitMastery.weight` +
@@ -52,20 +52,20 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
 - Formatting: rslib via pinned nightly rustfmt, proto via clang-format, py via ruff.
 - `./ninja check` green (~60s). Commit `3c4ce45ef`.
 
-### Phase 2.3 — weighted "what to study next" ranking (done)
+### Phase 2.3: weighted "what to study next" ranking (done)
 
 - Proto: new `StudyPriority` message + `MasteryState.priorities`.
 - Rust: `study_priorities()` ranks non-cleared subtopics by weight x opportunity
   (not-started = 1.0, gathering = 0.8, judgeable in-progress = distance to the
   gate, cleared dropped), with an equal-weight fallback and deterministic ties
-  (+3 unit tests). Purely reorders measured state — never fabricates a score.
+  (+3 unit tests). Purely reorders measured state and never fabricates a score.
 - `get_mastery_state` returns the ranked priorities.
 - Python test: a fresh weighted deck yields 19 priorities, top = a univariate
   weight-9 subtopic, each with a human-readable reason.
 - `./ninja check` green (~112s; proto change triggered a fuller rebuild). Commit
   `834aa2714`.
 
-### Phase 2.4 — importance-sized bubble concept map + unit detail (done)
+### Phase 2.4: importance-sized bubble concept map + unit detail (done)
 
 - The study map is now a bubble concept map: every topic is a circle whose SIZE =
   its exam-importance weight (units by section weight, subtopics by their emphasis)
@@ -85,9 +85,9 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
   and the study-map Playwright e2e (screenshot `out/study-map.png`). Commit
   `ba5860e7b`.
 
-## Phase 3 — live queue + honest calibration
+## Phase 3: live queue + honest calibration
 
-### Phase 3.1 — opt-in three-tier mastery ordering in the live queue (done)
+### Phase 3.1: opt-in three-tier mastery ordering in the live queue (done)
 
 - The real scheduler change: when the config flag `speedrunMasteryScheduler` is
   on, `Collection::build_queues` reorders the gathered new cards by mastery tier
@@ -107,12 +107,12 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
   and `make crash-test` survived 20 mid-review SIGKILLs with zero corruption.
   Commit `368530302`.
 
-### Phase 3.2 — honest score calibration (memory calibrated; perf/readiness gated) (done)
+### Phase 3.2: honest score calibration (memory calibrated; perf/readiness gated) (done)
 
 - `pylib/anki/speedrun/calibration.py`: pure, deterministic calibration metrics
   (Brier, log loss, expected calibration error, reliability bins) + a
-  `calibration_report` with an insufficient-data gate — the honesty/give-up rule
-  applied to calibration. 8 known-value unit tests
+  `calibration_report` with an insufficient-data gate (the honesty/give-up rule
+  applied to calibration). 8 known-value unit tests
   (`test_speedrun_calibration.py`).
 - `tools/speedrun/evals/memory_calibration.py` + `make calibration`: the memory
   signal IS FSRS; this reports the engine's held-out (time-series split) log loss
@@ -122,7 +122,7 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
   shared give-up rule + reproducibility (seed, leakage scan, commands) + an
   explicit "what is NOT done yet" (no calibrated performance model, so readiness
   stays `NoScore`; nothing fabricated).
-- `compute_readiness` left unchanged: still returns `NoScore` — no number is
+- `compute_readiness` left unchanged: still returns `NoScore`, so no number is
   invented before the performance model exists.
 - `./ninja check` green. Commit `5a8880aaf`.
 
@@ -144,7 +144,7 @@ are code, no fabricated numbers, no AI, no sync. Commit per green feature; never
   eslint, svelte, prettier, dprint, minilints, vitest).
 - `make bench` on 50k cards: next-card p95 0.05ms, mastery query p95 0.12ms
   (weighted rollup + priorities added, still negligible), mastery-ordered new
-  cards p95 148ms, readiness p95 3.78ms — all within the speed targets.
+  cards p95 148ms, readiness p95 3.78ms, all within the speed targets.
 - `make crash-test`: 20/20 mid-review SIGKILLs, zero corruption.
 - Playwright e2e: 4/4 pass (readiness dashboard, study map, sanity x2).
 
@@ -176,7 +176,7 @@ AI features, and two-way sync.
 
 ## Follow-up: two more 7a Rust changes (requested)
 
-### Feature A — Points-at-stake review order (new RPC) (done)
+### Feature A: Points-at-stake review order (new RPC) (done)
 
 - New protobuf message (`PointsAtStakeCard` / `PointsAtStakeOrder`) + RPC
   `GetPointsAtStakeOrder`, called from Python. Orders due review-pipeline cards
@@ -190,7 +190,7 @@ AI features, and two-way sync.
   descending.
 - `./ninja check` green (27 speedrun Rust tests + Python).
 
-### Feature B — Topic-aware live review scheduling (done)
+### Feature B: Topic-aware live review scheduling (done)
 
 - Brings weak-topic due cards back **sooner** in the live review queue: behind an
   opt-in `speedrunPointsAtStake` flag (default off), `build_queues` reorders the
@@ -223,7 +223,7 @@ coverage abstains; weakness measured). Fixed the concrete findings:
   until scores are emitted. (`f14021de8`)
 - **Undo:** added a Python undo test with both live-queue flags on.
 - **README (brief 12 blocker):** replaced the stock-Anki README top with a
-  Speedrun section — exam stated up front, AGPL + Anki credit, build steps for
+  Speedrun section: exam stated up front, AGPL + Anki credit, build steps for
   both apps, architecture, the Rust-change note, and the files-touched pointer.
 - **Stale docs reconciled** with the built code (5 RPCs, live-queue flags,
   bubble map, calibration, 42-card deck): `docs/rust-change.md`,
@@ -235,7 +235,7 @@ coverage abstains; weakness measured). Fixed the concrete findings:
 
 ## Follow-up round 2: ablation variant + performance model (requested)
 
-### Study-feature ablation variant — build 2 (done, `75fa2e5f4`)
+### Study-feature ablation variant: build 2 (done, `75fa2e5f4`)
 
 - `order_new_cards` gained an `ablate_within_unit` parameter: Full (build 1) keeps
   Blocked -> within-unit (grouped by unit = the interleaving) -> cross-unit;
@@ -247,7 +247,7 @@ coverage abstains; weakness measured). Fixed the concrete findings:
   build-config smoke test; `docs/study-feature-ablation.md` updated. The RUN
   itself (equal study time, metric, nulls) remains a Sunday task.
 
-### Performance model pipeline — Step 2 (done, `4e65af0ff`)
+### Performance model pipeline: Step 2 (done, `4e65af0ff`)
 
 - `pylib/anki/speedrun/performance.py`: a self-contained, deterministic,
   calibrated logistic-regression model (no external ML deps) predicting P(correct)
@@ -265,7 +265,7 @@ coverage abstains; weakness measured). Fixed the concrete findings:
 
 ## Follow-up round 3: study-map front door + review tier banner (requested)
 
-Addresses the "make the tier visible; let the user start from subtopics" gap —
+Addresses the "make the tier visible; let the user start from subtopics" gap:
 the mastery scheduler was an invisible reorder of one pile. Commit `f96158f57`.
 
 - **Study map is now a front door:** a "Study this subtopic (blocked practice)"
@@ -299,7 +299,7 @@ the mastery scheduler was an invisible reorder of one pile. Commit `f96158f57`.
 
 ### Follow-up round 5: tier-aware study flow (`6646dee37`)
 
-Addresses "it's always blocked" — practice now progresses block -> within-unit ->
+Addresses "it's always blocked": practice now progresses block -> within-unit ->
 cross-unit instead of only recommending blocked.
 
 - Engine: `GetMasteryState` returns a `StudyRecommendation` (new `StudyMode` enum
@@ -316,21 +316,21 @@ cross-unit instead of only recommending blocked.
 - Full `./ninja check` green (incl. clippy MSRV); study-map e2e passes; screenshot
   shows "Study next: blocked practice · Discrete dist." advancing as gates clear.
 
-### Follow-up round 6: "Today's plan" — tiered daily deck list (`GetStudyPlan`)
+### Follow-up round 6: "Today's plan", a tiered daily deck list (`GetStudyPlan`)
 
-Addresses "I want each day to show multiple decks to review, by tier" — makes the
+Addresses "I want each day to show multiple decks to review, by tier": makes the
 scheduler tiers a visible _daily plan_, not just an invisible reorder.
 
 - Engine: new 6th RPC `GetStudyPlan`. Assigns each subtopic/unit a tier from the
   measured gate state, then attaches Anki's OWN deck-tree counts for today
-  (daily-limit capped — the same numbers the deck list shows) to the matching
+  (daily-limit capped: the same numbers the deck list shows) to the matching
   subtopic/unit/root deck. Only decks with something due today are returned,
   ordered blocked -> within-unit -> cross-unit (blocked by exam importance).
   Tiering is a pure, unit-tested `build_study_plan`; deck attribution uses card
   tags + the deck tree's own parent structure, so no display-name duplication.
   Read-only (only reads `deck_tree`), so nothing is rescheduled or fabricated.
   Counts respect the daily cap, which is why child decks can sum above the
-  parent's "20" — the plan surfaces exactly Anki's numbers, honestly.
+  parent's "20": the plan surfaces exactly Anki's numbers, honestly.
   +6 Rust tests (4 pure tier/filter/order + 2 end-to-end deck-count), +3 Python
   backend tests (blocked-on-fresh-deck, counts == seeded cards, actionable
   filter drops a finished subtopic).
@@ -347,7 +347,7 @@ scheduler tiers a visible _daily plan_, not just an invisible reorder.
 
 ### Follow-up round 7: exam pace + "study more" (GetStudyPace)
 
-Answers "what's the point of the quota / what if I need to study a lot?" — the
+Answers "what's the point of the quota / what if I need to study a lot?": the
 quota throttles new-card intake to protect future review load; these two levers
 let the user (A) go beyond it and (B) know if they're on track.
 
@@ -376,7 +376,7 @@ let the user (A) go beyond it and (B) know if they're on track.
 
 ### Follow-up round 8: blocked practice carries through REVIEWS (not just new)
 
-Answers "shouldn't reviews be blocked too, until mastery?" — yes, for the
+Answers "shouldn't reviews be blocked too, until mastery?": yes, for the
 pre-mastery phase. The mastery scheduler previously tier-ordered only the
 new-card stream; reviews were FSRS-timed (+ optional points-at-stake). Now, when
 `speedrunMasteryScheduler` is on, it ALSO tier-orders the due-review queue.
@@ -390,8 +390,8 @@ new-card stream; reviews were FSRS-timed (+ optional points-at-stake). Now, when
 - `build_queues`: added a third opt-in hook after points-at-stake, gated by
   `speedrunMasteryScheduler`. Ordering runs stakes-then-tier, so the tier is
   primary and points-at-stake breaks ties within a tier.
-- Pedagogy note: this matches the thesis — block for acquisition, interleave for
-  retention. Blocking is applied only while a subtopic is pre-mastery (Blocked
+- Pedagogy note: this matches the thesis that we block for acquisition, then
+  interleave for retention. Blocking is applied only while a subtopic is pre-mastery (Blocked
   pool); once it clears, its reviews interleave (within-unit → cross-unit).
   Timing is left to FSRS (we only reorder), so nothing over-studies or fights
   the scheduler.
@@ -400,40 +400,40 @@ new-card stream; reviews were FSRS-timed (+ optional points-at-stake). Now, when
 - Verified GREEN: `cargo test -p anki speedrun::` (53 tests),
   `check:format:rust`, `check:clippy`, `check:pytest:pylib`.
 
-### Autonomous session (2026-07-03 ~00:30 CT) — re-verify + sync + blockers
+### Autonomous session (2026-07-03 ~00:30 CT): re-verify + sync + blockers
 
 Ran every runnable proof against the already-built engine in `out/` (the
-working tree has in-flight Rust WIP that doesn't compile yet — see blockers).
+working tree has in-flight Rust WIP that doesn't compile yet, see blockers).
 All numbers below are reproducible via the named command.
 
-- **Two-way sync (7b)** — `make sync-test`: desktop 20 | phone 20, none
+- **Two-way sync (7b)** uses `make sync-test`: desktop 20 | phone 20, none
   lost/doubled; same-card conflict keeps both revlog rows + deterministic
   winner. **PASS.** (Fixed a regression first: `tools/speedrun/sync_test.py`
   imported `anki.cards` before `anki.collection`, tripping a circular import;
-  reordered to import `collection` first — the order the app itself uses.)
-- **Phone runs OUR engine** — the arm64-v8a APK
+  reordered to import `collection` first, matching the order the app itself uses.)
+- **Phone runs OUR engine**: the arm64-v8a APK
   (`Anki-Android/AnkiDroid/build/outputs/apk/play/debug/`) embeds
   `librsdroid.so` whose strings carry `anki/rslib/src/speedrun/service.rs`,
-  `.../mastery.rs`, and the compiled `anki.speedrun.rs` proto — i.e. the SOA-P
+  `.../mastery.rs`, and the compiled `anki.speedrun.rs` proto, i.e. the SOA-P
   speedrun engine, not just "an Anki engine."
-- **Paraphrase (7d)** — `make paraphrase`: recall 73.2% vs reworded 31.8% →
-  **+41.4% gap**; copycat control −0.7% (test correctly flags a memory-tracking
+- **Paraphrase (7d)** via `make paraphrase`: recall 73.2% vs reworded 31.8% →
+  **+41.4% gap**; copycat control -0.7% (test correctly flags a memory-tracking
   copy). Deterministic given `--students`/`--seed`.
-- **Ablation (§8)** — `make ablation`: with no assumed mechanism (disc_gain=0)
+- **Ablation (§8)** via `make ablation`: with no assumed mechanism (disc_gain=0)
   the three builds are identical (honest null); direction Full ≥ Ablated ≥ Plain
   holds for any assumed effect. Deterministic.
-- **Performance model** — `make performance`: acc 0.783, AUC 0.826, beats
+- **Performance model** via `make performance`: acc 0.783, AUC 0.826, beats
   majority baseline 0.692, calibrated (Brier 0.157, ECE 0.071).
   `ARGS=--persona`: acc 0.766, AUC 0.783, beats 0.724, ECE 0.023.
-- **Memory calibration** — `make calibration`: honestly abstains (0 graded
+- **Memory calibration** via `make calibration`: honestly abstains (0 graded
   reviews on file; needs ≥100). No number shown (give-up rule).
-- **Practice-test readiness** — `make practice-test`: P(pass) 57%, coverage
+- **Practice-test readiness** via `make practice-test`: P(pass) 57%, coverage
   100%, confidence 0.91, band + weakest-area next action (120 graded Qs, 61%).
-- **Crash (7g)** — `make crash-test`: survived 20× mid-review SIGKILL, SQLite
+- **Crash (7g)** via `make crash-test`: survived 20× mid-review SIGKILL, SQLite
   integrity clean every time. **PASS.**
-- **Speed (7h)** — `make bench` on 50k cards: next-card p95 0.11ms, mastery
+- **Speed (7h)** via `make bench` on 50k cards: next-card p95 0.11ms, mastery
   query p95 0.23ms, mastery-ordered new cards p95 174ms, readiness p95 9.25ms.
-- **Tests** — `pytest test_speedrun_{paraphrase,ablation}.py` 11 passed;
+- **Tests** via `pytest test_speedrun_{paraphrase,ablation}.py` 11 passed;
   `vitest routes/study-map` 22 passed.
 
 **Blockers left for Katie (need you / external):**
@@ -443,9 +443,9 @@ All numbers below are reproducible via the named command.
    `ReadinessResult`, but the `ReadinessResult { .. }` initializers in
    `rslib/src/speedrun/service.rs` (~lines 134, 685, 704) don't set it →
    `error[E0063]: missing field memory_recall`, so `cargo test`/`./ninja check`
-   fail. Left untouched — it's your active feature + the honesty-critical core.
+   fail. Left untouched, since it's your active feature + the honesty-critical core.
    Finish wiring `memory_recall` (or set it in those initializers) to re-green.
-2. **On-device phone↔desktop recording** — the only installed emulator image is
+2. **On-device phone↔desktop recording**: the only installed emulator image is
    `android-37.0`, which crashes at GPU init on every launch config tried
    (headed/headless, swiftshader). The bundled `cmdline-tools` are too old to
    fetch a stable image (SDK repo XML v4 > supported v3), so `sdkmanager` can't
@@ -453,10 +453,10 @@ All numbers below are reproducible via the named command.
    Android phone; else update `cmdline-tools;latest` then pull an API≤35 image.
    Sync + engine-sharing are already proven (above), so this is a recording, not
    a correctness gap.
-3. **AI side-by-side eval** — `OPENAI_API_KEY` in `.env` is invalid (`401
+3. **AI side-by-side eval**: `OPENAI_API_KEY` in `.env` is invalid (`401
    Incorrect API key`). `make ai-eval` runs the baselines but can't run the AI
    side until a valid key is set. NB: README/`docs/ai-results.md` cite measured
-   AI numbers (classifier 38%, generation 92%) — confirm those came from a
+   AI numbers (classifier 38%, generation 92%), so confirm those came from a
    valid-key run so the claim stays honest.
 
 Nothing was committed this session: the tree holds your WIP (incl. the broken

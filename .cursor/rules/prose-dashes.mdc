@@ -1,0 +1,34 @@
+---
+description: Never emit em/en dashes or filler prose; use hyphens, commas, colons. Backed by a hook and a commit gate.
+alwaysApply: true
+---
+
+# Prose and dashes (enforced automatically)
+
+Two gates back this rule: a `postToolUse` Cursor hook flags dashes the moment
+you write them, and a `pre-commit` gate (`prose-dash-gate`) fails any commit
+that contains them. Write clean the first time; do not lean on the gates.
+
+## Never emit these characters
+- U+2013 EN DASH, U+2014 EM DASH, U+2015 HORIZONTAL BAR: banned everywhere, in
+  prose, code, comments, commit messages, and generated card text.
+- U+2212 MINUS SIGN: banned in prose. Allowed only in real math or parser code
+  (this is an actuarial app), and only when that line carries a `dash-ok`
+  comment marker so the gate skips it.
+
+## Use instead
+- Range: a hyphen, for example "6-10".
+- Aside or interruption: a comma or parentheses.
+- A clause break that was doing a colon's job: a colon.
+
+## Cut filler
+- Drop these adjectives: comprehensive, robust, seamless, powerful,
+  cutting-edge, elegant.
+- Drop restatements of the request and after-the-fact summaries.
+- Keep a comment only if it explains non-obvious intent, an invariant, or a
+  gotcha. Delete comments that narrate what the code plainly does.
+
+## When a file is flagged
+Apply the `prose-cleanup` skill (`.cursor/skills/prose-cleanup/SKILL.md`): it
+rewrites the sentence instead of deleting the character, then confirms zero
+hits. Detection logic lives in `tools/speedrun/prose_dash_gate.py`.

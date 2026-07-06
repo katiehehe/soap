@@ -1,4 +1,4 @@
-# PRD — AI features (Friday) — SOA Exam P Speedrun
+# PRD: AI features (Friday), SOA Exam P Speedrun
 
 Draft spec for the AI layer. **Do not start until the Wednesday core is done.**
 AI is an _addition_ to a system that already works without it.
@@ -21,7 +21,7 @@ AI is an _addition_ to a system that already works without it.
 6. **Provider-agnostic + logged.** Model, prompt, source, and output are logged
    for every call so results are reproducible and auditable.
 
-## Feature 1 — Subtopic classifier (files a user question into the tree)
+## Feature 1: Subtopic classifier (files a user question into the tree)
 
 **Problem.** A student pastes their own question; we suggest which of the 19
 subtopics it belongs to so it can join the study map.
@@ -37,7 +37,7 @@ subtopics it belongs to so it can join the study map.
 - **Safety:** user questions stay in a **separate area** until the user accepts a
   suggestion; a low-confidence result files nothing and says so.
 
-## Feature 2 — Card generation from a named source
+## Feature 2: Card generation from a named source
 
 **Problem.** Generate extra practice cards for a weak subtopic.
 
@@ -52,7 +52,7 @@ subtopics it belongs to so it can join the study map.
   they never count toward mastery/coverage until a human approves them, and they
   carry `src::<source>`.
 
-## Feature 3 — Grounded "why this subtopic" explanation (stretch)
+## Feature 3: Grounded "why this subtopic" explanation (stretch)
 
 Short, cited explanation of _why_ a question maps to a subtopic, pulled from the
 syllabus outcome text. Same gate: cited, gold-checked, off-switchable.
@@ -72,7 +72,7 @@ unchanged.
   prints feature-vs-baseline numbers with a fixed seed (re-runnable).
 - Every call logs `{feature, model, prompt_hash, source, output}` to a local
   JSONL for audit.
-- The Rust engine is **not** involved in AI — it stays the deterministic,
+- The Rust engine is **not** involved in AI; it stays the deterministic,
   offline core.
 
 ## Milestones (Friday)

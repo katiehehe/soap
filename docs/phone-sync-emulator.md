@@ -2,7 +2,7 @@
 
 This is the on-device sync path for the demo (rubric shot 3: "a card synced
 phone→desktop"). Desktop and the AnkiDroid emulator sync through **Anki's own
-local sync server** running the **same Rust sync protocol** — no AnkiWeb account.
+local sync server** running the **same Rust sync protocol**, with no AnkiWeb account.
 It has been run end to end and **verified** (see "What was verified" below).
 
 ## The desktop Sync-button crash (fixed)
@@ -11,13 +11,13 @@ Clicking **Sync** on macOS crashed the whole app with a `Trace/BPT trap: 5`
 (arm64 pointer-authentication SIGTRAP). Root cause, from the crash report: sync
 starts → Anki shows a busy/hover cursor → `QGuiApplication::setOverrideCursor()`
 → `QImage::toCGImage()` → `CGImageCreate` traps. It is a Qt/macOS bug, not the
-engine (that is why `make sync-test` always passed — only the GUI cursor died).
+engine (that is why `make sync-test` always passed: only the GUI cursor died).
 
 There are two `setOverrideCursor(QCursor(...))` sites; both are now guarded on
 macOS:
 
-- `qt/aqt/progress.py` `_set_busy_cursor` — the busy/wait cursor (committed).
-- `qt/aqt/__init__.py` eventFilter — the hover **pointing-hand** cursor over
+- `qt/aqt/progress.py` `_set_busy_cursor`: the busy/wait cursor (committed).
+- `qt/aqt/__init__.py` eventFilter: the hover **pointing-hand** cursor over
   buttons (the one that fires when you hover/click Sync).
 
 After the guards, the desktop syncs (auto-sync on startup **and** the Sync
@@ -27,7 +27,7 @@ button) without crashing.
 
 Tapping **Sync** in the branded **home shell** (the Svelte `home` action row,
 `speedrun-nav:sync`) kicked the app straight to the Android launcher instead of
-syncing — no crash (crash buffer empty, no `FATAL`/`AndroidRuntime`), the task
+syncing, with no crash (crash buffer empty, no `FATAL`/`AndroidRuntime`), the task
 just closed. The **DeckPicker toolbar sync icon still worked**; only the
 home-shell button was broken, which is why it looked like a headless-login issue
 but wasn't.
@@ -44,7 +44,7 @@ empties → launcher. The engine was reached and authenticated fine (`hkey` OK,
 `server_usn` seen), so it was never an auth/config problem.
 
 Fix (one call site, least-invasive, no engine change): route the home Sync button
-through AnkiDroid's own **post-login** sync entry instead —
+through AnkiDroid's own **post-login** sync entry instead, using
 `DeckPicker.getIntent(ctx, autoSync = true)` (sets `INTENT_SYNC_FROM_LOGIN` →
 `syncOnResume` → `sync()`), with `CLEAR_TOP | SINGLE_TOP` to reuse the DeckPicker
 already under the shell. That path **never finishes the activity**, so the
@@ -61,7 +61,7 @@ schema is aligned and syncs are clean incremental (`NormalSyncRequired` →
 `NO_CHANGES`). Screenshot: `out/phone-sync-fixed-20260705-103811.png`,
 `out/phone-final-synced-deck.png`.
 
-## Phone device numbers (item 6) — real measurements on the `Speedrun_P` emulator
+## Phone device numbers (item 6): real measurements on the `Speedrun_P` emulator
 
 Measured via `adb -s emulator-5554` on the lean AVD (AOSP 34, **2 GB** guest, 4
 cores, host GPU) on an **8 GB M1 Air**, **debug build with LeakCanary**. These
@@ -71,31 +71,31 @@ not the app.
 - **Cold start → full Svelte home shell** (`am start -W` of `IntentHandler`;
   system `Displayed …SingleFragmentActivity`): quiesced true-cold runs
   **6.23 / 6.12 / 6.72 s** (median ~6.2 s); a warm-cache run hit **3.75 s**. This
-  is **above the <4 s target on this throttled emulator** — dominated by the
+  is **above the <4 s target on this throttled emulator**, dominated by the
   2 GB memory-pressured guest (host swaps), the debug+LeakCanary build, and that
   it times the whole WebView home shell + 4 engine RPCs, not a native list. A
   release build on real phone hardware would be materially faster (not measured
   here, so not claimed as a pass).
 - **Memory ceiling** (`dumpsys meminfo`, home shell settled): **TOTAL PSS
   ≈ 217 MB** (RSS 361 MB, SWAP 0; Code 34.5 MB reflects the unstripped debug
-  build). Comfortably within a mid-range phone's headroom — a 4 GB phone leaves
-  apps hundreds of MB before the low-memory killer engages; 217 MB is ~4–5 % of
+  build). Comfortably within a mid-range phone's headroom: a 4 GB phone leaves
+  apps hundreds of MB before the low-memory killer engages; 217 MB is ~4-5 % of
   RAM.
 - **Crash test** (mirror of desktop `make crash-test`, 20/20 zero-corruption):
   **~18 `am force-stop` kills interleaved with relaunch**, then pulled the
   collection (app stopped) and opened it with the real Anki engine →
   **`PRAGMA integrity_check = [['ok']]`, cards 186, notes 186, 24 decks intact**.
-  **PASS — zero corruption.** (Bare `sqlite3` can't run the check: Anki's custom
+  **PASS, zero corruption.** (Bare `sqlite3` can't run the check: Anki's custom
   `unicase` collation is only registered by the engine, so the check is run via
   `out/pyenv` Anki, not host `sqlite3`.)
 
-## Start the stack — run each in its OWN terminal
+## Start the stack: run each in its OWN terminal
 
 Use separate terminals so the long-running processes persist (the server,
 emulator, and desktop each stay in the foreground of their terminal).
 
 ```bash
-# 1. the local sync server (leave running) — binds 0.0.0.0:27701
+# 1. the local sync server (leave running); binds 0.0.0.0:27701
 make sync-server
 #    from the host  : http://127.0.0.1:27701/
 #    from the phone : http://10.0.2.2:27701/   (Android emulator host alias)
@@ -126,14 +126,46 @@ make sync-desktop         # point the desktop profile at the server + pull (app 
 - **Desktop** profile: `customSyncUrl`/`syncUser`/`syncKey`; collection backed up
   to `out/sync-backup/` before the shared deck is pulled.
 
+## Load a demo scenario onto the phone (new / intermediate / experienced)
+
+There are three reproducible mock users, each a real collection built by the
+engine from a seeded `synthetic demo persona` (give-up rule intact, the three
+signals never blended, no number faked). **The phone holds ONE collection at a
+time.** So you load one scenario onto the local server, sync the phone with
+**Sync -> keep AnkiWeb -> Replace**, look at it, then re-seed the server with the
+next scenario and sync again to swap. Each command builds its
+`out/demo-persona*.anki2` if missing, then force-uploads it so it REPLACES
+whatever the server was holding.
+
+With `make sync-server` running and the phone configured once
+(`make sync-phone-config`), pick a scenario on the host:
+
+```bash
+# intermediate: the borderline default (a real readiness range, clear weakest area)
+make sync-seed-persona
+
+# new: barely studied, so readiness HONESTLY abstains via the give-up rule
+make sync-seed-persona-new
+
+# experienced: well-prepared, so a high P(pass) with a tight range
+make sync-seed-persona-experienced
+```
+
+Then on the **phone**: tap **Sync** (top-right); the first time (and after every
+swap, because the server collection was replaced) keep the server copy
+(**AnkiWeb -> Replace**) so the phone downloads that scenario. Open **Exam
+readiness** to see that scenario's three signals. To view a different scenario,
+run another `sync-seed-persona*` target on the host and tap **Sync -> Replace**
+again.
+
 ## Demo it (review on phone → appears on desktop)
 
 1. On the **phone**: open **SOA Exam P**, grade a few cards, then tap the
-   **sync** icon (top-right). First time it asks which collection to keep — pick
+   **sync** icon (top-right). First time it asks which collection to keep, so pick
    the server copy ("AnkiWeb" → Replace) so both sides share one deck; after that
    it is a normal one-tap sync.
 2. On the **desktop**: click **Sync** (crash-free now). It downloads the reviews.
-3. Open **Readiness** on the desktop — **Graded reviews** goes up by exactly the
+3. Open **Readiness** on the desktop: **Graded reviews** goes up by exactly the
    number you did on the phone.
 
 ## What was verified (real, not staged)
@@ -160,20 +192,22 @@ ls out/sync-backup/            # collection-<stamp>.anki2, prefs21-<stamp>.db
 
 ## Tools
 
-- `tools/speedrun/sync_server.sh` — start the local server (`make sync-server`).
-- `tools/speedrun/sync_setup.py` — seed the server + print the hkey (`make sync-seed`).
-- `tools/speedrun/sync_hkey.py` — print an hkey for the server (login only).
-- `tools/speedrun/phone_sync_config.sh` — write the sync prefs into AnkiDroid
+- `tools/speedrun/sync_server.sh`: start the local server (`make sync-server`).
+- `tools/speedrun/sync_setup.py`: seed the server + print the hkey (`make sync-seed`;
+  `make sync-seed-persona[-new|-experienced]` push a scored scenario collection
+  via `--from-collection`, force-replacing whatever the server holds).
+- `tools/speedrun/sync_hkey.py`: print an hkey for the server (login only).
+- `tools/speedrun/phone_sync_config.sh`: write the sync prefs into AnkiDroid
   (`make sync-phone-config`).
-- `tools/speedrun/desktop_sync_setup.py` — point the desktop at the server + pull
+- `tools/speedrun/desktop_sync_setup.py`: point the desktop at the server + pull
   (`make sync-desktop`).
-- `tools/speedrun/sync_probe.py` — download to a throwaway client and print
+- `tools/speedrun/sync_probe.py`: download to a throwaway client and print
   note/card/revlog counts (used to prove the phone's reviews reached the server).
 
 ## Note on running the emulator here vs. in your terminal
 
 When the emulator is launched as a background job by the assistant's tooling it
-gets killed after ~2 minutes (an environment limit, not a sync problem — the
+gets killed after ~2 minutes (an environment limit, not a sync problem; the
 sync server process is unaffected and stays up). Launched from your own terminal
 with `make phone` it persists normally. The sync itself was verified during a
 window when the emulator was up (see "What was verified").

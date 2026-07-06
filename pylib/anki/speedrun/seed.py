@@ -34,7 +34,7 @@ ROOT_DECK = "SOA Exam P"
 SEEDED_KEY = "speedrunSeeded"
 
 # Every seeded study-deck card is a stock **Basic** front/back flashcard that the
-# student self-grades (Again/Hard/Good/Easy) — we trust the learner to be honest.
+# student self-grades (Again/Hard/Good/Easy); we trust the learner to be honest.
 # Computational cards simply show the concise answer plus the worked solution on
 # the Back (see ``basic_back``); we no longer force a typed ``{{type:Answer}}``
 # numeric entry, which didn't do the worked answers justice. The "SOA Short
@@ -715,76 +715,77 @@ SEED_CARDS: list[SeedCard] = [
         "univariate",
         "continuous_dists",
         "easy",
-        "For X ~ Uniform(a, b), give the pdf f(x).",
-        "f(x) = 1 / (b - a) for a <= x <= b, and 0 otherwise.",
+        r"For \(X \sim \text{Uniform}(a, b)\), give the pdf \(f(x)\).",
+        r"\(f(x) = \dfrac{1}{b - a}\) for \(a \le x \le b\), and \(0\) otherwise.",
     ),
     SeedCard(
         "univariate",
         "continuous_dists",
         "medium",
-        "For X ~ Exponential(rate lambda), give the pdf.",
-        "f(x) = lambda e^(-lambda x), for x >= 0.",
+        r"For \(X \sim \text{Exponential}(\text{rate } \lambda)\), give the pdf.",
+        r"\(f(x) = \lambda e^{-\lambda x}\), for \(x \ge 0\).",
     ),
     SeedCard(
         "univariate",
         "continuous_dists",
         "medium",
-        "For X ~ Exponential(rate lambda), give the cdf.",
-        "F(x) = 1 - e^(-lambda x), for x >= 0.",
+        r"For \(X \sim \text{Exponential}(\text{rate } \lambda)\), give the cdf.",
+        r"\(F(x) = 1 - e^{-\lambda x}\), for \(x \ge 0\).",
     ),
     SeedCard(
         "univariate",
         "continuous_dists",
         "easy",
-        "For X ~ Normal(mu, sigma^2), give E[X].",
-        "E[X] = mu.",
+        r"For \(X \sim \text{Normal}(\mu, \sigma^2)\), give \(E[X]\).",
+        r"\(E[X] = \mu\).",
     ),
     SeedCard(
         "univariate",
         "continuous_dists",
         "easy",
-        "For X ~ Normal(mu, sigma^2), give Var(X).",
-        "Var(X) = sigma^2.",
+        r"For \(X \sim \text{Normal}(\mu, \sigma^2)\), give \(\mathrm{Var}(X)\).",
+        r"\(\mathrm{Var}(X) = \sigma^2\).",
     ),
     SeedCard(
         "univariate",
         "continuous_dists",
         "easy",
-        "For X ~ Normal(mu, sigma^2), how do you standardize X?",
-        "Z = (X - mu) / sigma ~ Normal(0, 1).",
+        r"For \(X \sim \text{Normal}(\mu, \sigma^2)\), how do you standardize \(X\)?",
+        r"\(Z = \dfrac{X - \mu}{\sigma} \sim \text{Normal}(0, 1)\).",
     ),
     SeedCard(
         "univariate",
         "continuous_dists",
         "medium",
-        "For X ~ Gamma(shape alpha, scale theta), give E[X].",
-        "E[X] = alpha theta.",
+        r"For \(X \sim \text{Gamma}(\text{shape } \alpha, \text{scale } \theta)\), give \(E[X]\).",
+        r"\(E[X] = \alpha\theta\).",
     ),
     SeedCard(
         "univariate",
         "continuous_dists",
         "medium",
-        "For X ~ Gamma(shape alpha, scale theta), give Var(X).",
-        "Var(X) = alpha theta^2. "
-        "(Exponential with mean theta is Gamma(1, theta).)",
+        r"For \(X \sim \text{Gamma}(\text{shape } \alpha, \text{scale } \theta)\), give \(\mathrm{Var}(X)\).",
+        r"\(\mathrm{Var}(X) = \alpha\theta^2\). "
+        r"(Exponential with mean \(\theta\) is \(\text{Gamma}(1, \theta)\).)",
     ),
     # --- Univariate: insurance / coverage modifications ---
     SeedCard(
         "univariate",
         "insurance_apps",
         "medium",
-        "For loss X with ordinary deductible d, give the expected payment per "
-        "loss E[(X - d)_+].",
-        "E[(X - d)_+] = integral from d to infinity of S(x) dx = "
-        "integral from d to infinity of [1 - F(x)] dx.",
+        r"For loss \(X\) with ordinary deductible \(d\), give the expected payment per "
+        r"loss \(E[(X - d)_+]\).",
+        r"\(E[(X - d)_+] = \displaystyle\int_d^{\infty} S(x)\,dx = "
+        r"\int_d^{\infty} [1 - F(x)]\,dx\).",
     ),
     SeedCard(
         "univariate",
         "insurance_apps",
         "hard",
-        "Relate the expected payment PER PAYMENT to the expected payment PER LOSS "
-        "for a deductible d.",
-        "E[payment | payment > 0] = E[(X - d)_+] / P(X > d) = E[(X - d)_+] / S(d).",
+        r"Relate the expected payment PER PAYMENT to the expected payment PER LOSS "
+        r"for a deductible \(d\).",
+        r"\(E[\text{payment} \mid \text{payment} > 0] = \dfrac{E[(X - d)_+]}{P(X > d)} "
+        r"= \dfrac{E[(X - d)_+]}{S(d)}\).",
     ),
     # --- Multivariate: joint behaviour, conditioning, moments ---
     SeedCard(
@@ -792,101 +793,101 @@ SEED_CARDS: list[SeedCard] = [
         "joint_distributions",
         "easy",
         "Give the normalization condition for a joint pmf and a joint pdf.",
-        "Discrete: sum over all (x, y) of p(x, y) = 1. "
-        "Continuous: double integral of f(x, y) = 1.",
+        r"Discrete: \(\sum_{x}\sum_{y} p(x, y) = 1\). "
+        r"Continuous: \(\displaystyle\iint f(x, y)\,dx\,dy = 1\).",
     ),
     SeedCard(
         "multivariate",
         "joint_moments",
         "medium",
-        "If X and Y are independent, give E[XY].",
-        "E[XY] = E[X] E[Y] (holds whenever X and Y are independent).",
+        r"If \(X\) and \(Y\) are independent, give \(E[XY]\).",
+        r"\(E[XY] = E[X]\,E[Y]\) (holds whenever \(X\) and \(Y\) are independent).",
     ),
     SeedCard(
         "multivariate",
         "joint_moments",
         "hard",
         "State the law of total variance.",
-        "Var(X) = E[ Var(X | Y) ] + Var( E[X | Y] ).",
+        r"\(\mathrm{Var}(X) = E\big[\mathrm{Var}(X \mid Y)\big] + \mathrm{Var}\big(E[X \mid Y]\big)\).",
     ),
     SeedCard(
         "multivariate",
         "covariance_correlation",
         "easy",
-        "What is Cov(X, X)?",
-        "Cov(X, X) = Var(X).",
+        r"What is \(\mathrm{Cov}(X, X)\)?",
+        r"\(\mathrm{Cov}(X, X) = \mathrm{Var}(X)\).",
     ),
     SeedCard(
         "multivariate",
         "covariance_correlation",
         "medium",
-        "Give the bilinearity rule Cov(aX + b, cY + d).",
-        "Cov(aX + b, cY + d) = a c Cov(X, Y) (added constants drop out).",
+        r"Give the bilinearity rule \(\mathrm{Cov}(aX + b, cY + d)\).",
+        r"\(\mathrm{Cov}(aX + b, cY + d) = ac\,\mathrm{Cov}(X, Y)\) (added constants drop out).",
     ),
     SeedCard(
         "multivariate",
         "covariance_correlation",
         "easy",
-        "What is the range of the correlation coefficient rho?",
-        "-1 <= rho <= 1.",
+        r"What is the range of the correlation coefficient \(\rho\)?",
+        r"\(-1 \le \rho \le 1\).",
     ),
     SeedCard(
         "multivariate",
         "covariance_correlation",
         "medium",
-        "Give Var(X + Y) including covariance.",
-        "Var(X + Y) = Var(X) + Var(Y) + 2 Cov(X, Y).",
+        r"Give \(\mathrm{Var}(X + Y)\) including covariance.",
+        r"\(\mathrm{Var}(X + Y) = \mathrm{Var}(X) + \mathrm{Var}(Y) + 2\,\mathrm{Cov}(X, Y)\).",
     ),
     SeedCard(
         "multivariate",
         "order_statistics",
         "hard",
-        "For independent X_i ~ Exponential(rate lambda_i), what is the "
-        "distribution of the minimum?",
-        "min(X_i) ~ Exponential with rate = sum of the lambda_i.",
+        r"For independent \(X_i \sim \text{Exponential}(\text{rate } \lambda_i)\), what is the "
+        r"distribution of the minimum?",
+        r"\(\min_i X_i \sim \text{Exponential}\) with rate \(\sum_i \lambda_i\).",
     ),
     # --- Multivariate: linear combinations & sums of independents ---
     SeedCard(
         "multivariate",
         "linear_combinations",
         "easy",
-        "Give E[aX + bY].",
-        "E[aX + bY] = a E[X] + b E[Y] (always, independent or not).",
+        r"Give \(E[aX + bY]\).",
+        r"\(E[aX + bY] = a\,E[X] + b\,E[Y]\) (always, independent or not).",
     ),
     SeedCard(
         "multivariate",
         "linear_combinations",
         "medium",
-        "Give Var(X - Y) including covariance.",
-        "Var(X - Y) = Var(X) + Var(Y) - 2 Cov(X, Y).",
+        r"Give \(\mathrm{Var}(X - Y)\) including covariance.",
+        r"\(\mathrm{Var}(X - Y) = \mathrm{Var}(X) + \mathrm{Var}(Y) - 2\,\mathrm{Cov}(X, Y)\).",
     ),
     SeedCard(
         "multivariate",
         "linear_combinations",
         "medium",
         "The sum of independent normals is what distribution?",
-        "Normal: X + Y ~ Normal(mu_X + mu_Y, sigma_X^2 + sigma_Y^2).",
+        r"Normal: \(X + Y \sim \text{Normal}(\mu_X + \mu_Y,\ \sigma_X^2 + \sigma_Y^2)\).",
     ),
     SeedCard(
         "multivariate",
         "linear_combinations",
         "medium",
         "The sum of independent Poissons is what distribution?",
-        "Poisson: X + Y ~ Poisson(lambda_X + lambda_Y).",
+        r"Poisson: \(X + Y \sim \text{Poisson}(\lambda_X + \lambda_Y)\).",
     ),
     SeedCard(
         "multivariate",
         "linear_combinations",
         "hard",
-        "For INDEPENDENT X and Y, give the MGF of the sum X + Y.",
-        "M_(X+Y)(t) = M_X(t) M_Y(t) (MGF of a sum of independents is the product).",
+        r"For INDEPENDENT \(X\) and \(Y\), give the MGF of the sum \(X + Y\).",
+        r"\(M_{X+Y}(t) = M_X(t)\,M_Y(t)\) (MGF of a sum of independents is the product).",
     ),
     SeedCard(
         "multivariate",
         "marginal_conditional",
         "easy",
-        "For a discrete joint pmf p(x, y), give the marginal pmf p_X(x).",
-        "p_X(x) = sum over y of p(x, y).",
+        r"For a discrete joint pmf \(p(x, y)\), give the marginal pmf \(p_X(x)\).",
+        r"\(p_X(x) = \sum_y p(x, y)\).",
     ),
     SeedCard(
         "multivariate",
@@ -894,15 +895,15 @@ SEED_CARDS: list[SeedCard] = [
         "medium",
         "When X and Y are independent, how does the conditional relate to the "
         "marginal?",
-        "f_(Y|X)(y | x) = f_Y(y): the conditional equals the marginal, so X "
-        "carries no information about Y.",
+        r"\(f_{Y \mid X}(y \mid x) = f_Y(y)\): the conditional equals the marginal, so "
+        r"\(X\) carries no information about \(Y\).",
     ),
     SeedCard(
         "multivariate",
         "clt",
         "medium",
-        "State the CLT for the SUM S_n = X_1 + ... + X_n of n iid variables.",
-        "For large n, S_n is approximately Normal(n mu, n sigma^2).",
+        r"State the CLT for the SUM \(S_n = X_1 + \dots + X_n\) of \(n\) iid variables.",
+        r"For large \(n\), \(S_n\) is approximately \(\text{Normal}(n\mu,\ n\sigma^2)\).",
     ),
     SeedCard(
         "multivariate",
@@ -910,13 +911,13 @@ SEED_CARDS: list[SeedCard] = [
         "medium",
         "When approximating a discrete sum (e.g. a Binomial count) by the normal, "
         "what adjustment improves accuracy?",
-        "The continuity correction: shift the boundary by 0.5, e.g. "
-        "P(X <= k) ≈ P(Z <= (k + 0.5 - mu)/sigma).",
+        r"The continuity correction: shift the boundary by \(0.5\), e.g. "
+        r"\(P(X \le k) \approx P\!\left(Z \le \dfrac{k + 0.5 - \mu}{\sigma}\right)\).",
     ),
 ]
 
 
-# Comprehensive "memorize-facts" deck: the formulas Exam P expects you to KNOW
+# The "memorize-facts" deck: the formulas Exam P expects you to KNOW
 # cold (the distribution table, the moment/variance identities, the multivariate
 # rules). Appended so the starter deck above stays a gentle on-ramp while these
 # fill the recall gaps. All are flashcards (recall); math is LaTeX, which Anki
@@ -1411,7 +1412,7 @@ SEED_CARDS.extend(
 
 
 # Card styling for the typed short-answer notetype. NOTE: the seeded study deck
-# no longer uses this — every seeded card is a Basic flip card now. It is kept
+# no longer uses this; every seeded card is a Basic flip card now. It is kept
 # only for the AI-generated *quarantine* cards (``anki.speedrun.ai``), which stay
 # exam-style/typed until a human reviews them. Readable left-aligned layout, an
 # accent "Solution" block for the worked derivation, and comfortable sizing for
@@ -1454,7 +1455,7 @@ def ensure_short_answer_notetype(col: Collection) -> Any:
     labelled **Solution** block (the worked derivation, MathJax-rendered).
     Idempotent.
 
-    The seeded study deck no longer uses this — ``build_deck`` files every card
+    The seeded study deck no longer uses this; ``build_deck`` files every card
     as a Basic flip card. It remains ONLY for the AI-generated *quarantine* deck
     (``anki.speedrun.ai.add_generated_cards``), whose exam-style items stay typed
     until a human approves them."""
@@ -1519,7 +1520,7 @@ def build_deck(col: Collection, root: str = ROOT_DECK) -> int:
     (Again/Hard/Good/Easy). Computational ("numeric") cards show the concise
     answer plus the worked solution on the Back (``basic_back``); memorization
     cards use the plain definition/fact as the Back. No typed ``{{type:Answer}}``
-    entry — we trust the learner to grade honestly.
+    entry; we trust the learner to grade honestly.
     """
     topics = load_topics()
     basic = col.models.by_name("Basic")
@@ -1565,7 +1566,7 @@ def build_deck(col: Collection, root: str = ROOT_DECK) -> int:
     col.set_config("speedrunMasteryScheduler", True)
     # Performance-first app: the guided sequence is ADVISORY (recommended next
     # topic + arrows on the map), never a hard gate. Turn the gate OFF so no
-    # subtopic's new cards are ever withheld — the learner can practice anything,
+    # subtopic's new cards are ever withheld; the learner can practice anything,
     # any time. (The DAG is still used to recommend an order; it just no longer
     # locks.) Kept as config, not a Rust default change, so upstream Anki + the
     # ablation harness are untouched.
@@ -1587,7 +1588,7 @@ def seed_if_missing(col: Collection) -> bool:
     if col.get_config(SEEDED_KEY, False):
         return False
     if col.decks.id_for_name(ROOT_DECK) is not None:
-        # Already present (e.g. imported) — just record it so we don't rebuild.
+        # Already present (e.g. imported); just record it so we don't rebuild.
         col.set_config(SEEDED_KEY, True)
         return False
     build_deck(col)
@@ -1601,17 +1602,17 @@ def convert_seeded_short_answer_to_basic(col: Collection) -> int:
 
     A collection seeded before this change still holds the old typed cards (the
     seed runs once, guarded by ``SEEDED_KEY``, so it never rebuilds). This is the
-    idempotent, reproducible fix — run it once via
+    idempotent, reproducible fix; run it once via
     ``tools/speedrun/convert_short_answer_to_basic.py`` with Anki CLOSED.
 
     Safety / scope:
-      * SCOPED to seeded curriculum cards only — matched by the ``difficulty::``
+      * SCOPED to seeded curriculum cards only, matched by the ``difficulty::``
         tag every seeded card carries. The AI-generated *quarantine* cards share
         the same notetype but never carry a ``difficulty::`` tag, so they are left
         exactly as-is (the performance/AI track is untouched).
       * Uses Anki's own ``models.change`` note-type conversion, mapping the single
         card template 1:1 (``{0: 0}``), so each card KEEPS its FSRS scheduling and
-        review history and undo still works — the collection is never corrupted.
+        review history and undo still works; the collection is never corrupted.
       * Idempotent: once converted there are no matching notes left, so a second
         run is a no-op (and does not touch the schema).
 

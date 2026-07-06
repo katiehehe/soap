@@ -13,8 +13,8 @@
 # Env overrides: AVD, ANDROID_HOME, APK, EMU_MEM, EMU_CORES, EMU_GPU.
 set -euo pipefail
 
-# Speedrun_P: lean AVD (AOSP Android 34, no Play Store) sized for an 8 GB Mac —
-# 2 GB guest + Metal host GPU. The old heavyweight "Medium_Phone" (Android 37 +
+# Speedrun_P: lean AVD (AOSP Android 34, no Play Store) sized for an 8 GB Mac,
+# using a 2 GB guest + Metal host GPU. The old heavyweight "Medium_Phone" (Android 37 +
 # Play Store + 16 KB) forces a 4 GB guest and software rendering on this host, so
 # it is no longer the default; use `AVD=Medium_Phone make phone` to fall back.
 AVD="${AVD:-Speedrun_P}"

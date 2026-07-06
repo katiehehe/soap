@@ -10,8 +10,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { subtopicTag, TAXONOMY } from "../study-map/lib";
 
     // Add a flashcard to the single-exam deck. Every card must be CATEGORIZED into
-    // one of the 19 syllabus subtopics — picked manually or suggested by the
-    // classifier — so it files into the right SOA Exam P subdeck and counts toward
+    // one of the 19 syllabus subtopics, picked manually or suggested by the
+    // classifier, so it files into the right SOA Exam P subdeck and counts toward
     // coverage/mastery. There are no loose/uncategorized cards and no ad-hoc decks.
 
     interface Suggestion {
@@ -92,11 +92,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <div class="add">
     <section class="card">
         <h1>Add a card</h1>
-        <p class="lead">
-            Cards live in the <b>SOA Exam P</b>
-            deck only, so every card is filed under a syllabus subtopic. Pick one, or
-            let the classifier suggest it from your question.
-        </p>
 
         <label class="field">
             <span class="flabel">Front (question)</span>
@@ -156,7 +151,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         {#if error}
             <p class="msg error">{error}</p>
         {:else if savedMsg}
-            <p class="msg ok">{savedMsg} Add another, or go back.</p>
+            <p class="msg ok">{savedMsg}</p>
         {/if}
 
         <div class="actions">
@@ -189,12 +184,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 1.5rem;
         letter-spacing: -0.01em;
         margin: 0 0 0.4rem;
-    }
-    .lead {
-        font-size: 0.95rem;
-        line-height: 1.55;
-        color: var(--fg-subtle);
-        margin: 0 0 1.3rem;
     }
     .field {
         display: block;

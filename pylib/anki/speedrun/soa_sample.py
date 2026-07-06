@@ -47,7 +47,7 @@ _REAL_DATA_PATH = (
 # exponents/fractions/piecewise), so these restore clean \( \)/\[ \] LaTeX that
 # MathJax renders. Kept SEPARATE from items.json so the extraction pipeline
 # (regen.py) stays reproducible, and gitignored (derived from the copyrighted
-# SOA questions). Never AI-generated — hand-authored, so no held-out leakage.
+# SOA questions). Never AI-generated; hand-authored, so no held-out leakage.
 _LATEX_OVERRIDES_PATH = _REAL_DATA_PATH.parent / "latex_overrides.json"
 
 
@@ -56,7 +56,7 @@ class SampleItem:
     """One held-out, exam-style item.
 
     ``source`` names where the item came from (e.g. ``"original-speedrun"`` or
-    ``"soa-sample-2026"``) so every downstream use can trace it — required by the
+    ``"soa-sample-2026"``) so every downstream use can trace it, as required by the
     AI-traceability rule.
     """
 
@@ -161,6 +161,18 @@ def load_corpus(path: str | None = None) -> SampleCorpus:
 def load_sample_items(path: str | None = None) -> list[SampleItem]:
     """Just the held-out items (see ``load_corpus`` for provenance)."""
     return load_corpus(path).items
+
+
+def load_fallback_items() -> list[SampleItem]:
+    """Only the committed, no-copyright FALLBACK corpus items, never the real
+    SOA set, whatever is on disk.
+
+    Its math is already clean ``\\( \\)``/``\\[ \\]`` LaTeX, so the practice-test
+    assembler uses it as a clean top-up: if the preferred corpus yields too few
+    well-formatted items to fill a test, these fill the shortfall rather than
+    letting a badly-formatted item through (see
+    ``practice_test.assemble_test``)."""
+    return load_corpus(str(_FALLBACK_PATH)).items
 
 
 def gold_items(path: str | None = None) -> list[dict[str, str]]:

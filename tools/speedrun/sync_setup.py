@@ -21,6 +21,12 @@ Run the server first, then either:
     make seed-persona
     PYTHONPATH=pylib:out/pylib out/pyenv/bin/python \
         tools/speedrun/sync_setup.py --from-collection out/demo-persona.anki2
+
+Any of the three mock-user scenarios can be pushed the same way (the Makefile
+wraps them as ``make sync-seed-persona`` / ``sync-seed-persona-new`` /
+``sync-seed-persona-experienced``). The phone holds one collection at a time, so
+re-run a different target and re-sync the phone to swap scenarios; each upload
+force-replaces whatever the server was holding.
 """
 
 from __future__ import annotations

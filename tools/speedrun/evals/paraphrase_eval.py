@@ -153,7 +153,7 @@ def main() -> int:
     cohort = synthetic_cohort(args.students, seed=args.seed)
 
     print("=" * 74)
-    print("PARAPHRASE TEST (7d) — does Performance measure more than Memory?")
+    print("PARAPHRASE TEST (7d): does Performance measure more than Memory?")
     print(f"{len(cards)} cards x 2 reworded questions each; graded by a SYNTHETIC")
     print(f"cohort of {args.students} students (seed {args.seed}). Not a real student.")
     print("=" * 74)
@@ -161,33 +161,33 @@ def main() -> int:
     # 1) Distinctness gate: rewordings must not be near-copies of the card prompt.
     flagged = reworded_distinctness(cards)
     if flagged:
-        print("\nDISTINCTNESS: FAILED — these rewordings are too close to the card")
+        print("\nDISTINCTNESS: FAILED, these rewordings are too close to the card")
         print("prompt (performance would just be a re-read of memory):")
         for cid, overlap in flagged:
             print(f"    {cid}: word-overlap {overlap:.0%}")
         return 1
     print(
-        f"\nDistinctness gate: CLEAN — all {2 * len(cards)} rewordings differ enough "
+        f"\nDistinctness gate: CLEAN. All {2 * len(cards)} rewordings differ enough "
         "from their card prompt."
     )
 
     # 2) Main run: memory recall vs reworded performance.
     main_result = simulate(cards, cohort, _memory_recall, _transfer_perf, args.seed)
-    _print_result("MAIN — memory model vs performance model:", main_result)
+    _print_result("MAIN: memory model vs performance model:", main_result)
     _print_per_subtopic(main_result)
 
     # 3) Control: reuse the PERFORMANCE model for the recall side too. A copycat
     #    performance model shows ~0 gap; the verdict must flip to COPYING.
     control = simulate(cards, cohort, _transfer_perf, _transfer_perf, args.seed)
     _print_result(
-        "CONTROL (null) — performance model on BOTH sides (should read COPYING):",
+        "CONTROL (null): performance model on BOTH sides (should read COPYING):",
         control,
     )
 
     print("\n" + "-" * 74)
     if main_result.copying:
         print(
-            "RESULT: no meaningful gap — performance is tracking memory. The bridge "
+            "RESULT: no meaningful gap. Performance is tracking memory, so the bridge "
             "is NOT demonstrated on this data."
         )
     elif control.copying:
@@ -199,7 +199,7 @@ def main() -> int:
         )
     else:
         print(
-            "RESULT: main gap present but the control did not collapse — inspect the "
+            "RESULT: main gap present but the control did not collapse, so inspect the "
             "fixture."
         )
     print("Reproducible: deterministic given --students and --seed.")

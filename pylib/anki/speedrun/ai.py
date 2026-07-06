@@ -58,7 +58,7 @@ AI_DECK = "SOA Exam P::AI (unreviewed)"
 
 
 def ai_enabled(col: Collection) -> bool:
-    """Whether AI features are on. Default False — the app must score with AI off."""
+    """Whether AI features are on. Default False; the app must score with AI off."""
     return bool(col.get_config(AI_ENABLED_KEY, False))
 
 
@@ -243,17 +243,38 @@ class OpenAiClient(LlmClient):
         return out
 
 
-def available_provider() -> str | None:
-    """The real provider available in this environment, or None.
+def openai_key_present() -> bool:
+    """Whether an OpenAI API key is configured in the environment. The desktop app
+    loads it from a repo-root ``.env`` at startup (``load_dotenv_if_present``);
+    Anki itself only reads ``os.environ``, never ``.env``."""
+    return bool(os.environ.get("OPENAI_API_KEY"))
 
-    Returns ``"openai"`` when a key is present and the ``openai`` package can be
-    imported; otherwise None (so eval harnesses skip the AI side honestly and the
-    app falls back to the deterministic stub / baseline)."""
-    if not os.environ.get("OPENAI_API_KEY"):
-        return None
+
+def openai_package_available() -> bool:
+    """Whether the optional ``openai`` package can be imported. It is an OPTIONAL
+    dependency (not in the base app deps): with it missing the app still scores
+    and practices from the templated bank, so this is CHECKED, not assumed, before
+    the real provider is used. Kept separate from ``openai_key_present`` so callers
+    can tell a missing package apart from a missing key."""
     try:
         import openai  # type: ignore[import-not-found] # noqa: F401
     except Exception:  # noqa: BLE001
+        return False
+    return True
+
+
+def available_provider() -> str | None:
+    """The real provider available in this environment, or None.
+
+    Returns ``"openai"`` only when BOTH a key is present AND the ``openai`` package
+    can be imported; otherwise None (so eval harnesses skip the AI side honestly and
+    the app falls back to the deterministic stub / baseline). The two preconditions
+    are exposed separately via ``openai_key_present`` / ``openai_package_available``
+    so the UI can report WHICH one is missing instead of conflating a missing
+    package with a missing key."""
+    if not openai_key_present():
+        return None
+    if not openai_package_available():
         return None
     return "openai"
 
@@ -276,7 +297,7 @@ def get_client(col: Collection) -> LlmClient:
 
 
 def subtopic_labels(topics: dict[str, Any] | None = None) -> list[tuple[str, str]]:
-    """(tag, human name) for every syllabus subtopic — the classifier's allowed
+    """(tag, human name) for every syllabus subtopic: the classifier's allowed
     labels and its only "index" (the syllabus outcome text). Gold items never
     appear here, so there is no leakage."""
     topics = topics or load_topics()
@@ -293,7 +314,7 @@ def classify_subtopic_core(
 ) -> list[tuple[str, str, str]]:
     """Rank subtopics for a question with the given provider (no collection, so
     the dev eval can measure the model directly). Returns ``(tag, score, source)``
-    where ``source`` is the syllabus outcome text the match is grounded in —
+    where ``source`` is the syllabus outcome text the match is grounded in;
     every AI output traces to a named source."""
     labels = subtopic_labels()
     label_by_tag = dict(labels)

@@ -8,7 +8,7 @@ import { SIGNAL } from "../speedrun-ui/colors";
 // must fit inside the canvas, every edge must touch the borders of the two
 // bubbles it connects, and a bubble's radius must grow with its exam-importance
 // weight (size = importance; the fill colour, added in the component, = measured
-// mastery — the two are never conflated).
+// mastery, the two are never conflated).
 
 export interface SubtopicDef {
     id: string;
@@ -25,6 +25,16 @@ export interface SubtopicDef {
     // fan spacing. Used sparingly to stop a boundary spoke from clipping an inner
     // sibling (e.g. the unit→Bayes line passing under Conditional prob.).
     angleNudge?: number;
+    // Optional horizontal nudge in units of the node's own half-width (its
+    // radius). A node's rendered box is 2·radius wide, so one half-width is its
+    // radius; xShiftHalfWidths: -1 slides the node left by exactly half its width.
+    xShiftHalfWidths?: number;
+    // Optional vertical nudge, same half-width unit as xShiftHalfWidths but on the
+    // y axis (negative = up). Used to lift one node off a sibling so its Memory
+    // rail to the unit stops passing under that sibling. Applied before the layout
+    // re-measures bounds, so the canvas still fits and the no-overlap invariant
+    // holds.
+    yShiftHalfWidths?: number;
 }
 export interface UnitDef {
     id: string;
@@ -111,6 +121,7 @@ export const TAXONOMY: UnitDef[] = [
                 name: "Insurance apps",
                 weight: 7.0,
                 prereqs: ["continuous_dists"],
+                xShiftHalfWidths: -1,
             },
         ],
     },
@@ -153,6 +164,9 @@ export const TAXONOMY: UnitDef[] = [
                 name: "Linear combos",
                 weight: 3.75,
                 prereqs: ["covariance_correlation"],
+                // Lift one half-width up so its Memory rail to the unit clears the
+                // neighbouring Order statistics bubble instead of passing under it.
+                yShiftHalfWidths: -1,
             },
             {
                 id: "clt",
@@ -174,7 +188,7 @@ export const UNIT_PREREQS: Record<string, string[]> = {
 
 // A calmer, cohesive palette (traffic-light meaning, softened).
 // Measured-mastery signal colours. These stay SEMANTIC (fixed meaning), sourced
-// from the shared honesty palette — never rotated through the decorative accents.
+// from the shared honesty palette, never rotated through the decorative accents.
 export const COLORS = {
     grey: SIGNAL.pending, // not started
     amber: SIGNAL.progress, // in progress
@@ -195,12 +209,12 @@ export function unitWeight(u: UnitDef): number {
 //   1. TIER (structural importance): the whole exam (centre) is the biggest node,
 //      a unit/section is medium, a single subtopic is smallest. The three radius
 //      RANGES below don't overlap (centre > every unit > every subtopic), so the
-//      hierarchy always reads at a glance — verified by lib.test.ts.
+//      hierarchy always reads at a glance, verified by lib.test.ts.
 //   2. WEIGHT (exam importance) WITHIN a tier: a heavier unit is a bigger bubble
 //      than a lighter unit, and likewise for subtopics, so "size = importance"
 //      still holds inside each tier.
 // Radii stay capped well below the spacing between bubble centres (see the radial
-// constants) so no two bubbles overlap — also verified by lib.test.ts.
+// constants) so no two bubbles overlap, also verified by lib.test.ts.
 export const CENTER_R = 82;
 const UNIT_R_MIN = 60;
 const UNIT_R_MAX = 70;
@@ -236,7 +250,7 @@ export function unitRadius(weight: number): number {
 // Radial layout constants. Two rings (near/far) per unit halve the number of
 // bubbles competing for angular space; the generous radii leave room for the
 // largest bubbles without overlap (verified by lib.test.ts). Kept compact so
-// the whole diagram fits a normal window at ~1:1 scale — the map is never shrunk
+// the whole diagram fits a normal window at ~1:1 scale, the map is never shrunk
 // so far that its labels turn tiny (the reason for the tightened radii here).
 const R_UNIT = 198;
 const R_IN = 348;
@@ -290,6 +304,7 @@ export function computeLayout(): Layout {
         const subs: LeafNode[] = u.subtopics.map((s, j) => {
             const angle = (base + (j - (n - 1) / 2) * STEP_DEG + (s.angleNudge ?? 0)) * DEG;
             const r = j % 2 === 0 ? R_IN : R_OUT;
+            const rad = subRadius(s.weight);
             return {
                 id: s.id,
                 name: s.name,
@@ -297,9 +312,9 @@ export function computeLayout(): Layout {
                 unitId: u.id,
                 weight: s.weight,
                 prereqs: s.prereqs.map((p) => subtopicTag(u.id, p)),
-                x: r * Math.cos(angle),
-                y: r * Math.sin(angle),
-                r: subRadius(s.weight),
+                x: r * Math.cos(angle) + (s.xShiftHalfWidths ?? 0) * rad,
+                y: r * Math.sin(angle) + (s.yShiftHalfWidths ?? 0) * rad,
+                r: rad,
             };
         });
         const w = unitWeight(u);
@@ -373,8 +388,8 @@ export function borderPoint(c: Circle, tx: number, ty: number): Point {
 // Visible vs. collision radius
 //
 // A bubble's layout radius `r` is its COLLISION radius (used for spacing so no
-// two bubbles overlap). The bubble is *rendered* smaller — `transform: scale()`
-// in +page.svelte insets it — so its VISIBLE border sits at NODE_TOUCH·r. Every
+// two bubbles overlap). The bubble is *rendered* smaller, `transform: scale()`
+// in +page.svelte insets it, so its VISIBLE border sits at NODE_TOUCH·r. Every
 // connector endpoint AND the SVG bubble-mask must aim at NODE_TOUCH·r, not the
 // full r: aim at the full r and the line stops in the empty ring between the
 // drawn bubble (NODE_TOUCH·r) and the collision circle (r), reading as a gap /
@@ -410,10 +425,99 @@ export function edgeBetween(a: Circle, b: Circle): EdgeGeom {
 }
 
 // ---------------------------------------------------------------------------
+// Rendered rounded-square ("squircle") border
+//
+// A bubble is DRAWN as a rounded SQUARE (CSS `border-radius`), inset to
+// NODE_TOUCH·r, NOT as the inscribed NODE_TOUCH·r circle. An arrowhead whose tip
+// is aimed at that inscribed circle lands INSIDE the squircle on any non-axis
+// approach, so the bubble-mask clips the tip and the arrow's back floats short of
+// the drawn edge. `squircleBorderPoint` returns the point where the ray from a
+// bubble's centre toward a target crosses the bubble's ACTUAL drawn border, on
+// the flat sides and around the rounded corners alike, so arrowheads sit exactly
+// on the bubble with no gap and nothing tucked under it.
+// ---------------------------------------------------------------------------
+
+/** CSS `border-radius` on .bubble / .leaf, as a fraction of the node box.
+ * MUST match the `border-radius: 34%` in +page.svelte. */
+export const BUBBLE_RADIUS_FRACTION = 0.34;
+
+/** Rendered half-width (px) of a bubble with collision radius `r`: its box is
+ * 2·r, drawn at `scale(NODE_TOUCH)`, so the drawn edge sits at NODE_TOUCH·r. */
+export function renderedHalf(r: number): number {
+    return r * NODE_TOUCH;
+}
+
+/** Rendered corner radius (px) of a bubble: `border-radius` is a fraction of the
+ * rendered WIDTH (2·half), clamped to a semicircle (half) so 50% would be a
+ * circle. Mirrors the CSS box exactly. */
+export function renderedCorner(r: number): number {
+    const half = renderedHalf(r);
+    return Math.min(half, BUBBLE_RADIUS_FRACTION * 2 * half);
+}
+
+/** Whether (px,py) is inside `c`'s rendered rounded square (absolute coords). */
+function insideSquircle(c: Circle, px: number, py: number): boolean {
+    const half = renderedHalf(c.r);
+    const cr = renderedCorner(c.r);
+    const dx = Math.abs(px - c.x);
+    const dy = Math.abs(py - c.y);
+    if (dx > half || dy > half) {
+        return false; // outside the bounding box
+    }
+    if (dx <= half - cr || dy <= half - cr) {
+        return true; // within a flat band (not a rounded corner)
+    }
+    const ex = dx - (half - cr);
+    const ey = dy - (half - cr);
+    return ex * ex + ey * ey <= cr * cr; // inside the corner arc
+}
+
+/** Point where the ray from `c`'s centre toward (tx,ty) crosses `c`'s RENDERED
+ * rounded-square ("squircle") border. Mirrors the CSS (`border-radius` at
+ * `scale(NODE_TOUCH)`), so a connector/arrowhead aimed here lands on the drawn
+ * bubble edge (flat sides AND rounded corners), never floating short of a corner
+ * nor poking under it. Bisection keeps it exact for any corner radius (a circle,
+ * when BUBBLE_RADIUS_FRACTION → 0.5, included). Returns the centre if the target
+ * coincides with it. */
+export function squircleBorderPoint(c: Circle, tx: number, ty: number): Point {
+    let dx = tx - c.x;
+    let dy = ty - c.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist === 0) {
+        return { x: c.x, y: c.y };
+    }
+    dx /= dist;
+    dy /= dist;
+    // The border lies between the half-width (flat sides) and the bounding-box
+    // diagonal (√2·half); bracket that range and bisect to the crossing.
+    let lo = 0;
+    let hi = renderedHalf(c.r) * Math.SQRT2 + 1;
+    for (let i = 0; i < 40; i++) {
+        const mid = (lo + hi) / 2;
+        if (insideSquircle(c, c.x + dx * mid, c.y + dy * mid)) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    const t = (lo + hi) / 2;
+    return { x: c.x + dx * t, y: c.y + dy * t };
+}
+
+/** An edge whose ends land on A's and B's rendered squircle borders, aimed
+ * centre-to-centre, the squircle analogue of `edgeBetween`, for arrows whose
+ * heads must sit exactly on the drawn (rounded-rect) bubble edge. */
+export function squircleEdgeBetween(a: Circle, b: Circle): EdgeGeom {
+    const start = squircleBorderPoint(a, b.x, b.y);
+    const end = squircleBorderPoint(b, a.x, a.y);
+    return { x1: start.x, y1: start.y, x2: end.x, y2: end.y };
+}
+
+// ---------------------------------------------------------------------------
 // Two-track edges (the dual-metric connectors)
 //
 // Between two connected bubbles the map draws TWO parallel lines, one per
-// signal — Memory and Performance — because there are two independent metrics
+// signal (Memory and Performance) because there are two independent metrics
 // and they must never blend into one line. Each track is a chord offset from
 // the centre line by ±TRACK_OFFSET, so the two rails sit side by side and never
 // overlap, while both endpoints still land exactly on the two bubble borders
@@ -421,7 +525,7 @@ export function edgeBetween(a: Circle, b: Circle): EdgeGeom {
 // ---------------------------------------------------------------------------
 
 /** Perpendicular half-separation (px) between the Memory and Performance rails
- * along an edge — the two tracks are 2·TRACK_OFFSET apart, so they read as two
+ * along an edge: the two tracks are 2·TRACK_OFFSET apart, so they read as two
  * clearly distinct, side-by-side lines (not a near-coincident pair) yet both
  * still touch the bubbles they connect. Stays well under the clamp in
  * `twoTrackEdges` (0.6·r of the smallest bubble ≈ 25px), so the chords remain
@@ -457,7 +561,7 @@ export function twoTrackEdges(
     const d = Math.min(offset, a.r * 0.6, b.r * 0.6);
     const segFor = (s: number): EdgeGeom => {
         // Axial distance from each centre to where the offset chord crosses that
-        // circle's border: sqrt(r² − s²). With the ±s perpendicular shift the
+        // circle's border: sqrt(r² - s²). With the ±s perpendicular shift the
         // endpoint is exactly r from the centre, so it lands on the border.
         const aAxis = Math.sqrt(Math.max(0, a.r * a.r - s * s));
         const bAxis = Math.sqrt(Math.max(0, b.r * b.r - s * s));
@@ -476,19 +580,19 @@ export function twoTrackEdges(
 //
 // The map is a hierarchy: subtopic leaves feed their unit, units feed the
 // central "Exam P" node. The fill on each pair of rails must read as flowing UP
-// that hierarchy — it originates at the CHILD end (the smaller/outer bubble) and
-// grows toward the PARENT — so a student sees each child's mastery feeding into
+// that hierarchy, it originates at the CHILD end (the smaller/outer bubble) and
+// grows toward the PARENT, so a student sees each child's mastery feeding into
 // its parent (subtopic → unit, unit → exam). `hierEdges` fixes the orientation
 // (CHILD is `a`, so both rails' (x1,y1) land on the child's border); `fillSegment`
 // then grows the coloured fill from that child end. Memory keeps the +offset
-// rail and Performance the −offset rail, so each signal sits on a consistent
+// rail and Performance the -offset rail, so each signal sits on a consistent
 // side of every edge.
 // ---------------------------------------------------------------------------
 
 /** Two parallel rails for a hierarchy edge, oriented CHILD → PARENT: every rail's
  * (x1,y1) lands on the CHILD's border and (x2,y2) on the PARENT's border, so a
  * fill grown from (x1,y1) flows UP from the child toward the parent (subtopic →
- * unit, unit → exam). Memory is the +offset rail, Performance the −offset rail,
+ * unit, unit → exam). Memory is the +offset rail, Performance the -offset rail,
  * so each signal keeps a consistent side on every edge. A thin, intent-revealing
  * wrapper over the (symmetric) `twoTrackEdges`; the argument ORDER is the
  * contract, so callers can't accidentally draw the fill flowing the wrong way. */
@@ -503,7 +607,7 @@ export function hierEdges(
 /** The filled sub-segment of a rail: it starts at the rail's CHILD end (x1,y1)
  * and extends a fraction `progress` (0..1) toward the parent end. Because a
  * hierarchy rail is oriented child → parent (see `hierEdges`), the fill always
- * grows UP from the child — the visual "this child is feeding its parent". At
+ * grows UP from the child: the visual "this child is feeding its parent". At
  * progress 0 the segment collapses to the child endpoint (nothing drawn); at 1 it
  * spans the whole rail. `progress` is clamped to [0,1] so bad inputs can't
  * overshoot the parent bubble. */
@@ -534,12 +638,11 @@ export interface PrereqEdge {
 
 /** All prerequisite arrows for the map: subtopic -> subtopic (within a unit)
  * and unit -> unit (the cross-unit order). Each runs border-to-border so it
- * visually touches both bubbles; the arrowhead sits at the dependent end.
- * `nodeScale` shrinks both endpoints toward the VISIBLE bubble border (pass
- * NODE_TOUCH), so the arrowhead lands on the drawn bubble, not the larger
- * collision circle; the default 1 keeps the full-radius geometry. */
-export function prereqEdges(layout: Layout, nodeScale = 1): PrereqEdge[] {
-    const scale = (c: Circle) => shrinkCircle(c, nodeScale);
+ * visually touches both bubbles, with the arrowhead at the dependent end. The
+ * endpoints land on the RENDERED squircle border (`squircleBorderPoint`), not the
+ * inscribed NODE_TOUCH·r circle, so the arrowhead's tip sits exactly on the drawn
+ * bubble edge, no gap floating short of it, nothing tucked under a corner. */
+export function prereqEdges(layout: Layout): PrereqEdge[] {
     const leafByTag = new Map<string, LeafNode>();
     for (const u of layout.units) {
         for (const s of u.subs) {
@@ -555,7 +658,7 @@ export function prereqEdges(layout: Layout, nodeScale = 1): PrereqEdge[] {
                     edges.push({
                         from: p,
                         to: s.tag,
-                        geom: edgeBetween(scale(from), scale(s)),
+                        geom: squircleEdgeBetween(from, s),
                         kind: "subtopic",
                     });
                 }
@@ -570,7 +673,7 @@ export function prereqEdges(layout: Layout, nodeScale = 1): PrereqEdge[] {
                 edges.push({
                     from: `unit::${p}`,
                     to: `unit::${u.id}`,
-                    geom: edgeBetween(scale(from), scale(u)),
+                    geom: squircleEdgeBetween(from, u),
                     kind: "unit",
                 });
             }
@@ -609,8 +712,8 @@ function subtopicPrereqMap(): Map<string, string[]> {
     return m;
 }
 
-/** Transitive prerequisites (ancestors — do these first) and dependents
- * (descendants — these unlock afterwards) of a subtopic tag, for highlighting a
+/** Transitive prerequisites (ancestors, do these first) and dependents
+ * (descendants, these unlock afterwards) of a subtopic tag, for highlighting a
  * selected bubble's chain on the map. Within-unit (subtopic prereqs live inside
  * a unit); cross-unit order is shown by the unit arrows. */
 export function prereqChain(tag: string): {
@@ -690,7 +793,7 @@ export function leafProgress(m?: SubtopicEvidence | null): number {
         case "mastered":
             return 1;
         case "gathering":
-            // Only how much evidence exists yet — capped at 0.4 so thin data
+            // Only how much evidence exists yet, capped at 0.4 so thin data
             // can never look close to mastered.
             return 0.4 * Math.min(1, m!.reviews / MIN_PROBLEMS);
         case "in_progress": {
@@ -725,8 +828,8 @@ export function hasEnoughEvidence(m?: SubtopicEvidence | null): boolean {
 // ---------------------------------------------------------------------------
 // Performance-first status (the spine of this app)
 //
-// The bubble COLOUR reflects PERFORMANCE — how well the learner solves this
-// topic's exam-style problems — mirroring the Rust thresholds
+// The bubble COLOUR reflects PERFORMANCE, how well the learner solves this
+// topic's exam-style problems, mirroring the Rust thresholds
 // (MIN_PERF_QUESTIONS / MIN_PERF_ACCURACY in rslib/src/speedrun/mastery.rs).
 // Memory (spaced repetition) is a SUPPORT signal: it only tints a bubble when
 // there is no performance evidence yet, and always in a distinct (periwinkle)
@@ -792,7 +895,7 @@ export function perfColor(p?: PerfEvidence | null): string {
     }
 }
 
-/** Fill fraction (0..1) for a subtopic's PERFORMANCE track — how far practice
+/** Fill fraction (0..1) for a subtopic's PERFORMANCE track: how far practice
  * has carried this topic toward the mastery bar. Uncapped by time: it reflects
  * accumulated practice, independent of the FSRS/spaced schedule that drives the
  * Memory track. Kept honest with the same discipline as `leafProgress`: below
@@ -807,7 +910,7 @@ export function perfProgress(p?: PerfEvidence | null): number {
         case "strong":
             return 1;
         case "thin":
-            // Only how much evidence exists yet — capped at 0.4, same floor the
+            // Only how much evidence exists yet, capped at 0.4, same floor the
             // memory track uses for "gathering data".
             return 0.4 * Math.min(1, p!.perfQuestions / MIN_PERF_QUESTIONS);
         case "weak":
@@ -931,7 +1034,7 @@ export function groupPlanByTier<T extends TieredItem>(items: T[]): PlanGroup<T>[
 // The engine (GetStudyPace) reports how many syllabus subtopics have cleared
 // their mastery gate and how fast they are clearing (observed over the study
 // history), so we can say whether the student is mastering the syllabus fast
-// enough for exam day — NOT just whether they have SEEN every card. paceTone is
+// enough for exam day, NOT just whether they have SEEN every card. paceTone is
 // the pure decision (no date / date passed / not enough history yet / on track
 // / behind) so it can be unit-tested; the component turns it into colour + copy.
 // ---------------------------------------------------------------------------

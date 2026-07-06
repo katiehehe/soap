@@ -110,7 +110,7 @@ impl crate::services::SpeedrunService for Collection {
         let coverage_pct = self.weighted_coverage(&input.expected_subtopics, &unit_weights)?;
 
         // The Memory signal (with a range) is computed INDEPENDENTLY of the
-        // readiness give-up rule — memory can be shown as soon as there are
+        // readiness give-up rule: memory can be shown as soon as there are
         // reviews, even while readiness abstains. It is attached to every return
         // path below.
         let stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
@@ -127,8 +127,8 @@ impl crate::services::SpeedrunService for Collection {
             // Review + coverage gates are met. A readiness NUMBER additionally
             // needs graded practice-test evidence (P(pass) is estimated from real
             // graded exam-style results, never invented). Below the
-            // practice-question threshold we still return NoScore — the honesty
-            // rule, not a UI hint.
+            // practice-question threshold we still return NoScore. That is the
+            // honesty rule, not a UI hint.
             let practice: PracticeStats = self.get_config_default(PRACTICE_STATS_KEY);
             if practice.questions < MIN_PRACTICE_QUESTIONS {
                 no_practice_evidence_no_score(graded_reviews, coverage_pct, practice.questions)
@@ -195,7 +195,7 @@ impl crate::services::SpeedrunService for Collection {
         // absent weights stay 0, so the weighted rollup falls back to a plain
         // count) AND its practice-test PERFORMANCE from config. Performance is a
         // SEPARATE signal (shown with its own range) that is AND-ed with the
-        // memory gate to decide FULL mastery — never averaged into it.
+        // memory gate to decide FULL mastery, but never averaged into it.
         let sub_weights: HashMap<String, f64> = input
             .subtopic_weights
             .iter()
@@ -433,8 +433,8 @@ impl crate::services::SpeedrunService for Collection {
     /// measured gate state (blocked -> within-unit -> cross-unit), then
     /// attaches Anki's own deck-tree counts for today (daily-limit capped,
     /// the same numbers the deck list shows) to the matching deck. Only
-    /// decks with something due today are returned. Read-only reporting —
-    /// it never reschedules or fabricates a score; the tiering itself is
+    /// decks with something due today are returned. Read-only reporting: it
+    /// never reschedules or fabricates a score; the tiering itself is
     /// the pure, unit-tested `build_study_plan`.
     fn get_study_plan(&mut self, input: MasteryRequest) -> error::Result<StudyPlan> {
         let mut stats = self.speedrun_subtopic_stats(&input.expected_subtopics)?;
@@ -618,29 +618,74 @@ fn study_mode_to_proto(
 }
 
 impl Collection {
-    /// The single best next action for a readiness score: the weakest
-    /// reviewed-but-uncleared subtopic by MEASURED revlog accuracy, so the
-    /// honesty bundle always names one concrete, evidence-grounded step. Falls
-    /// back to the top study priority (e.g. a not-started subtopic) when
-    /// nothing has been reviewed, or a generic prompt when everything is
-    /// cleared.
+    /// The single best next action for a readiness score. This MIRRORS the study
+    /// map's "Practice next" heuristic, so the readiness banner's "Do next" and
+    /// the map always name the SAME topic: selection is by PERFORMANCE
+    /// (practice-test evidence) times exam WEIGHT, not memory/revlog accuracy.
+    ///
+    /// Over every expected syllabus subtopic, using its exam-importance weight:
+    /// skip any subtopic that is already performance-mastered (the map's
+    /// "strong"), let `acc` be its practice-test accuracy (a NEVER-practiced
+    /// topic counts as fully weak, `acc = 0`), score it `weight * (1 - acc)`, and
+    /// take the maximum. Weights come from the same config Python writes from the
+    /// topic map (`speedrun_subtopic_weights_config`, treated as equal/1.0 when a
+    /// weight is missing) and performance from the same config the mastery query
+    /// reads (`speedrun_performance_config`), so both surfaces score identical
+    /// data. Iterating `expected` in request (taxonomy) order with a strict `>`
+    /// keeps the tie-break (first topic wins) identical to the frontend.
+    ///
+    /// Always evidence-grounded: it only ever names a real syllabus subtopic, and
+    /// distinguishes a never-practiced pick ("not practiced yet") from a measured
+    /// one ("N% correct so far") so it never dresses up a missing measurement as
+    /// 0%. Falls back to the top study priority when every subtopic is already
+    /// performance-mastered, so the action string is never empty.
     fn readiness_next_action(&mut self, expected: &[String]) -> error::Result<String> {
         let stats = self.speedrun_subtopic_stats(expected)?;
-        let weakest = stats
-            .iter()
-            .filter(|s| s.reviews > 0 && !s.gate_cleared())
-            .min_by(|a, b| {
-                a.accuracy()
-                    .partial_cmp(&b.accuracy())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-        if let Some(s) = weakest {
+        let perf = self.speedrun_performance_config();
+        let weights = self.speedrun_subtopic_weights_config();
+
+        let mut best_tag: Option<String> = None;
+        let mut best_questions: u32 = 0;
+        let mut best_accuracy: f64 = 0.0;
+        let mut best_score = -1.0_f64;
+        for s in &stats {
+            let tag = s.tag();
+            let p = perf.get(&tag).copied().unwrap_or_default();
+            // Skip performance-mastered subtopics (the map's "strong"): more
+            // practice there buys the least readiness.
+            if p.mastered() {
+                continue;
+            }
+            // Missing weight -> equal/1.0, matching how the map handles it.
+            let weight = weights.get(&tag).copied().unwrap_or(1.0);
+            // A never-practiced topic counts as fully weak (acc = 0), so a
+            // high-weight topic you have not touched is itself a strong pick.
+            let acc = if p.questions > 0 { p.accuracy() } else { 0.0 };
+            let score = weight * (1.0 - acc);
+            // Strict `>`, so ties keep the FIRST (request/taxonomy-order)
+            // subtopic, exactly as the frontend's `score > bestScore` does.
+            if score > best_score {
+                best_score = score;
+                best_tag = Some(tag);
+                best_questions = p.questions;
+                best_accuracy = p.accuracy();
+            }
+        }
+
+        if let Some(tag) = best_tag {
+            // A never-practiced top-weight topic has no measured accuracy, so
+            // "0% correct" would mislead: say it is unpracticed instead.
+            let detail = if best_questions == 0 {
+                "not practiced yet".to_string()
+            } else {
+                format!("{:.0}% correct so far", best_accuracy * 100.0)
+            };
             return Ok(format!(
-                "Focus your weakest area next: {} ({:.0}% correct so far), then re-test.",
-                s.tag(),
-                s.accuracy() * 100.0
+                "Focus your weakest area next: {tag} ({detail}), then re-test."
             ));
         }
+        // Every subtopic is performance-mastered (or nothing expected): keep the
+        // action non-empty with the existing top study priority / generic prompt.
         Ok(match study_priorities(&stats).first() {
             Some(p) => format!("Study {} next, then re-test to narrow the range.", p.tag),
             None => "Keep taking full practice tests to narrow the range.".to_string(),
@@ -659,7 +704,7 @@ impl Collection {
     }
 
     /// Unix seconds of the FIRST graded review (revlog.id is epoch millis), i.e.
-    /// when studying began — used to measure the study history for the mastery
+    /// when studying began, used to measure the study history for the mastery
     /// pace. `None` when there are no graded reviews yet (min() over an empty set
     /// is NULL). Read-only.
     fn first_graded_review_secs(&self) -> error::Result<Option<i64>> {
@@ -825,7 +870,7 @@ struct ReadinessBand {
 /// over the counts (deterministic, unit-tested): the projected 0-10 band is
 /// 10 x the Wilson 95% interval on the proportion correct, P(pass) is the
 /// normal-approx probability the true proportion clears the pass mark, and
-/// confidence rises with a tighter band and more coverage. Never fabricated —
+/// confidence rises with a tighter band and more coverage. Never fabricated;
 /// it only summarises real graded results.
 ///
 /// `questions`/`correct` are f64 so the caller can pass REPRESENTATIVENESS-
@@ -886,7 +931,7 @@ fn wilson_interval_f(correct: f64, total: f64) -> (f64, f64) {
 }
 
 /// Standard normal CDF via an erf approximation (Abramowitz & Stegun 7.1.26,
-/// max abs error ~1.5e-7) — no external deps.
+/// max abs error ~1.5e-7), with no external deps.
 fn normal_cdf(z: f64) -> f64 {
     0.5 * (1.0 + erf(z / std::f64::consts::SQRT_2))
 }
@@ -918,6 +963,8 @@ mod tests {
     use crate::collection::Collection;
     use crate::prelude::*;
     use crate::services::SpeedrunService;
+    use crate::speedrun::mastery::PERFORMANCE_KEY;
+    use crate::speedrun::mastery::SUBTOPIC_WEIGHTS_KEY;
     use crate::tests::NoteAdder;
 
     #[test]
@@ -1366,7 +1413,7 @@ mod tests {
     fn study_pace_gathers_before_projecting_when_nothing_mastered() {
         // Reviews exist (a study history) but nothing has cleared its mastery
         // gate yet, so we show the needed rate but abstain from a projection /
-        // verdict — the give-up rule applied to the pace.
+        // verdict, which is the give-up rule applied to the pace.
         let mut col = Collection::new();
         add_reviewed_note(&mut col, &["subtopic::general::a"], 5);
         let now = crate::timestamp::TimestampSecs::now().0;
@@ -1381,5 +1428,142 @@ mod tests {
         assert!(!pace.on_track);
         // The rate needed to finish in time is still shown (2 left over ~14 wk).
         assert!(pace.recommended_per_week > 0.0);
+    }
+
+    // ---- readiness_next_action: performance x exam-weight selection ----
+    //
+    // The banner's "Do next" MIRRORS the study map's "Practice next": pick the
+    // subtopic maximising exam-weight x (1 - performance accuracy), skipping any
+    // that is already performance-mastered, with a never-practiced topic counting
+    // as fully weak (acc = 0). These helpers write the SAME config the map reads
+    // (performance + subtopic weights), so the two surfaces score identical data.
+
+    fn set_perf(col: &mut Collection, entries: &[(&str, u32, u32)]) {
+        let mut map = serde_json::Map::new();
+        for (tag, q, c) in entries {
+            map.insert(
+                (*tag).to_string(),
+                serde_json::json!({ "questions": q, "correct": c }),
+            );
+        }
+        col.set_config_json(PERFORMANCE_KEY, &serde_json::Value::Object(map), false)
+            .unwrap();
+    }
+
+    fn set_weights(col: &mut Collection, entries: &[(&str, f64)]) {
+        let mut map = serde_json::Map::new();
+        for (tag, w) in entries {
+            map.insert((*tag).to_string(), serde_json::json!(w));
+        }
+        col.set_config_json(SUBTOPIC_WEIGHTS_KEY, &serde_json::Value::Object(map), false)
+            .unwrap();
+    }
+
+    /// Pure Rust twin of the frontend `practiceNextTag` (study-map +page.svelte):
+    /// same skip-if-performance-mastered, same acc=0 for a never-practiced topic,
+    /// same `weight * (1 - acc)` score, same strict-`>` first-in-order tie-break.
+    /// Lets a test assert the engine names the SAME topic the map would, on
+    /// identical data.
+    fn map_practice_next(
+        expected: &[&str],
+        weights: &[(&str, f64)],
+        perf: &[(&str, u32, u32)],
+    ) -> String {
+        let w: std::collections::HashMap<&str, f64> = weights.iter().copied().collect();
+        let p: std::collections::HashMap<&str, (u32, u32)> =
+            perf.iter().map(|(t, q, c)| (*t, (*q, *c))).collect();
+        let mut best = String::new();
+        let mut best_score = -1.0_f64;
+        for tag in expected {
+            let (q, c) = p.get(tag).copied().unwrap_or((0, 0));
+            let acc = if q > 0 { c as f64 / q as f64 } else { 0.0 };
+            if q >= 5 && acc >= 0.80 {
+                continue; // performance-mastered ("strong") -> skip
+            }
+            let weight = w.get(tag).copied().unwrap_or(1.0);
+            let score = weight * (1.0 - acc);
+            if score > best_score {
+                best_score = score;
+                best = (*tag).to_string();
+            }
+        }
+        best
+    }
+
+    #[test]
+    fn next_action_selects_by_performance_times_exam_weight() {
+        // c has the max weight x (1 - acc); b has the highest RAW weight but is
+        // performance-mastered, so it is skipped, not chosen. This is the map's
+        // logic, not memory/revlog accuracy.
+        let mut col = Collection::new();
+        let a = "subtopic::general::a";
+        let b = "subtopic::univariate::b";
+        let c = "subtopic::multivariate::c";
+        set_weights(&mut col, &[(a, 1.0), (b, 10.0), (c, 5.0)]);
+        set_perf(&mut col, &[(a, 10, 5), (b, 10, 9), (c, 10, 6)]); // 0.5 / 0.9 / 0.6
+        let expected = vec![a.to_string(), b.to_string(), c.to_string()];
+        let msg = col.readiness_next_action(&expected).unwrap();
+        assert!(msg.contains(c), "should pick c (weight 5 x 0.4 = 2.0): {msg}");
+        assert!(!msg.contains(b), "mastered b must be skipped: {msg}");
+        assert!(msg.contains("60% correct so far"), "measured detail: {msg}");
+        // The engine names the SAME topic the map's practiceNextTag would.
+        assert!(msg.contains(&map_practice_next(
+            &[a, b, c],
+            &[(a, 1.0), (b, 10.0), (c, 5.0)],
+            &[(a, 10, 5), (b, 10, 9), (c, 10, 6)],
+        )));
+    }
+
+    #[test]
+    fn next_action_never_practiced_top_weight_uses_honest_wording() {
+        // A high-weight, never-practiced topic (acc = 0) outscores a practiced
+        // but lower-weight one, and is reported as "not practiced yet", never as
+        // a fabricated "0% correct".
+        let mut col = Collection::new();
+        let a = "subtopic::general::a";
+        let b = "subtopic::univariate::b";
+        set_weights(&mut col, &[(a, 1.0), (b, 10.0)]);
+        set_perf(&mut col, &[(a, 10, 5)]); // b has no practice-test evidence
+        let expected = vec![a.to_string(), b.to_string()];
+        let msg = col.readiness_next_action(&expected).unwrap();
+        assert!(msg.contains(b), "high-weight never-practiced b wins: {msg}");
+        assert!(msg.contains("not practiced yet"), "honest wording: {msg}");
+        assert!(!msg.contains("correct"), "no fabricated 0%: {msg}");
+        assert_eq!(
+            map_practice_next(&[a, b], &[(a, 1.0), (b, 10.0)], &[(a, 10, 5)]),
+            b
+        );
+    }
+
+    #[test]
+    fn next_action_tie_breaks_to_first_in_request_order() {
+        // Two equal-weight, never-practiced topics tie; the strict `>` keeps the
+        // FIRST in request (taxonomy) order, exactly like the frontend, so the
+        // banner and map never disagree on a tie.
+        let mut col = Collection::new();
+        let first = "subtopic::univariate::discrete_dists";
+        let second = "subtopic::univariate::continuous_dists";
+        set_weights(&mut col, &[(first, 9.0), (second, 9.0)]);
+        let expected = vec![first.to_string(), second.to_string()];
+        let msg = col.readiness_next_action(&expected).unwrap();
+        assert!(
+            msg.contains(first) && !msg.contains(second),
+            "first-in-order wins the tie: {msg}"
+        );
+    }
+
+    #[test]
+    fn next_action_falls_back_when_all_performance_mastered() {
+        // No eligible (not-strong) subtopic -> fall back to a non-empty study
+        // priority, so the honesty bundle's action is never empty.
+        let mut col = Collection::new();
+        let a = "subtopic::general::a";
+        let b = "subtopic::univariate::b";
+        set_weights(&mut col, &[(a, 1.0), (b, 2.0)]);
+        set_perf(&mut col, &[(a, 10, 10), (b, 10, 10)]); // both mastered
+        let expected = vec![a.to_string(), b.to_string()];
+        let msg = col.readiness_next_action(&expected).unwrap();
+        assert!(!msg.is_empty(), "fallback must never be empty");
+        assert!(msg.starts_with("Study "), "top-priority fallback: {msg}");
     }
 }

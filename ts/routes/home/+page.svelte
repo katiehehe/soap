@@ -14,8 +14,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // The concept map, progress panels, and readiness screens are the existing
     // SvelteKit pages, reused as the tabs of the custom home shell (they still
     // work as standalone routes too). Anki's own review-history graphs are
-    // embedded INLINE in the Stats tab (below our coverage stats), so Anki never
-    // feels like a separate app — no pop-out stats window.
+    // embedded inline in the Stats tab, so Anki never feels like a separate app.
     import Graphs from "../graphs/+page.svelte";
     import AddCard from "../add-card/+page.svelte";
     import ConceptMap from "../study-map/+page.svelte";
@@ -26,13 +25,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import type { TestScope } from "../study-map/lib";
 
     // Task-focused tabs: the map, the daily plan, the Memory and Readiness
-    // scores, formulas, and coverage stats. "How it works" is folded into a
-    // collapsible panel on the Readiness page rather than a separate tab.
-    // Performance practice has no tab — it's launched from the map.
+    // scores, and formulas. "How it works" is folded into a collapsible panel
+    // on the Readiness page rather than a separate tab. Performance practice
+    // has no tab; it's launched from the map.
     type Tab = "map" | "plan" | "cram" | "readiness" | "stats";
     let tab: Tab = "map";
     // Practice-test mode is a focused overlay entered from a bubble's "Practice"
-    // action — a subtopic, a unit, or the whole exam via the centre "Exam P"
+    // action: a subtopic, a unit, or the whole exam via the centre "Exam P"
     // bubble; it takes over the content area and returns to the map when done.
     // The map is the single entry point for practice (there is no Practice tab).
     let testActive = false;
@@ -42,7 +41,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         testActive = true;
     }
     // Adding a card is a categorized overlay (front/back + a required subtopic),
-    // not Anki's stock Add dialog — every card is filed under the syllabus.
+    // not Anki's stock Add dialog; every card is filed under the syllabus.
     let addActive = false;
 
     // App settings shown in the collapsible settings strip: the light/dark theme,
@@ -54,6 +53,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         guided: boolean;
         aiEnabled: boolean;
         hasKey: boolean;
+        hasPackage: boolean;
     }
     let settings: Settings = {
         theme: "light",
@@ -61,6 +61,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         guided: false,
         aiEnabled: false,
         hasKey: false,
+        hasPackage: false,
     };
     let settingsOpen = false;
     // Bumping this re-mounts the concept map so a scheduler change takes effect at
@@ -68,7 +69,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let mapKey = 0;
 
     // Guarded bridge call: the Anki webview provides window.bridgeCommand, but a
-    // plain browser (tests, standalone preview) does not — so never throw there.
+    // plain browser (tests, standalone preview) does not, so never throw there.
     function send(cmd: string, cb?: (v: unknown) => void): void {
         if (bridgeCommandsAvailable()) {
             bridgeCommand(cmd, cb);
@@ -113,26 +114,56 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         send("speedrun-set-ai-enabled:" + (on ? "1" : "0"));
     }
 
+    // The settings strip is one compact row on desktop, so each toggle's help
+    // text (and the AI "templated only" degraded state) lives in a `title`
+    // tooltip instead of an inline description. aiDegraded also tints a small
+    // marker so the fallback is still visible at a glance, not just on hover.
+    $: aiDegraded = settings.aiEnabled && (!settings.hasKey || !settings.hasPackage);
+    $: aiTitle =
+        settings.aiEnabled && !settings.hasKey
+            ? "AI practice: adds model-written, self-verified problems. No API key; templated problems only."
+            : settings.aiEnabled && !settings.hasPackage
+              ? "AI practice: adds model-written, self-verified problems. openai package not installed; templated problems only."
+              : "AI practice: adds model-written, self-verified problems.";
+
     // Each tab carries a muted scholarly accent used as its active colour.
     const TABS: { id: Tab; label: string; accent: string }[] = [
         { id: "map", label: "Map", accent: "var(--sr-accent)" },
         { id: "plan", label: "Plan", accent: "var(--sr-secondary)" },
         { id: "cram", label: "Cram", accent: "var(--sr-tertiary)" },
-        { id: "readiness", label: "Readiness", accent: "var(--sr-quinary)" },
+        { id: "readiness", label: "Metrics", accent: "var(--sr-quinary)" },
         { id: "stats", label: "Stats", accent: "var(--sr-accent-2)" },
     ];
 
-    // Secondary toolbar actions.
-    const ACTIONS: { where: string; label: string; title: string }[] = [
-        { where: "add", label: "Add", title: "Add a card" },
-        { where: "browse", label: "Browse", title: "Browse cards" },
-        { where: "sync", label: "Sync", title: "Sync" },
-    ];
+    // Secondary toolbar actions. On desktop each is its own labelled icon button
+    // (Add / Browse / Settings, next to Sync). On narrow/phone widths they
+    // collapse into a top-right "☰" menu so the tab row stays on one line
+    // (previously they wrapped the top bar onto three rows). The menu items and
+    // the desktop icon buttons share the exact same handlers (onMenu / nav).
+    let menuOpen = false;
+    // Sync lives on the top bar as its own icon (see the header); the menu keeps
+    // the rest of the secondary actions for the narrow layout.
+    const MENU: { label: string; kind: "add" | "browse" | "sync" | "settings" }[] =
+        [
+            { label: "Add card", kind: "add" },
+            { label: "Browse", kind: "browse" },
+            { label: "Settings", kind: "settings" },
+        ];
 
     // Desktop actions are routed to the native Anki flows through the mw.web
     // bridge handler installed by the speedrunHome state (qt/aqt/speedrun.py).
     function nav(where: string): void {
         bridgeCommand("speedrun-nav:" + where);
+    }
+    function onMenu(kind: string): void {
+        menuOpen = false;
+        if (kind === "add") {
+            addActive = true;
+        } else if (kind === "settings") {
+            settingsOpen = !settingsOpen;
+        } else {
+            nav(kind);
+        }
     }
 </script>
 
@@ -156,6 +187,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     on:click={() => {
                         tab = t.id;
                         testActive = false;
+                        addActive = false;
                     }}
                 >
                     {t.label}
@@ -164,35 +196,175 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </nav>
 
         <div class="actions">
-            {#each ACTIONS as a}
-                <button
-                    class="chip"
-                    title={a.title}
-                    on:click={() =>
-                        a.where === "add" ? (addActive = true) : nav(a.where)}
-                >
-                    {a.label}
-                </button>
-            {/each}
+            <!-- Desktop: each secondary action is its own labelled icon button
+                 (Add / Browse / Settings), matching the Sync icon's style. On
+                 narrow widths these hide and collapse into the "☰" menu below. -->
             <button
-                class="chip settings-btn"
+                class="icon-btn desktop-action"
+                title="Add"
+                aria-label="Add"
+                on:click={() => onMenu("add")}
+            >
+                <svg
+                    width="19"
+                    height="19"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                >
+                    <path
+                        d="M12 5v14M5 12h14"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            </button>
+            <button
+                class="icon-btn desktop-action"
+                title="Browse"
+                aria-label="Browse"
+                on:click={() => onMenu("browse")}
+            >
+                <svg
+                    width="19"
+                    height="19"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                >
+                    <circle
+                        cx="11"
+                        cy="11"
+                        r="7"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    />
+                    <path
+                        d="M21 21l-4.35-4.35"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            </button>
+            <button
+                class="icon-btn desktop-action"
                 class:active={settingsOpen}
                 title="Settings"
-                aria-expanded={settingsOpen}
-                on:click={() => (settingsOpen = !settingsOpen)}
+                aria-label="Settings"
+                aria-pressed={settingsOpen}
+                on:click={() => onMenu("settings")}
             >
-                Settings
+                <svg
+                    width="19"
+                    height="19"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                >
+                    <circle
+                        cx="12"
+                        cy="12"
+                        r="3"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    />
+                    <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
             </button>
+
+            <button
+                class="icon-btn"
+                title="Sync"
+                aria-label="Sync"
+                on:click={() => nav("sync")}
+            >
+                <svg
+                    width="19"
+                    height="19"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                >
+                    <path
+                        d="M23 4v6h-6M1 20v-6h6"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                    <path
+                        d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            </button>
+
+            <!-- Narrow/mobile only: the "☰" collapses Add / Browse / Settings to
+                 save horizontal space. Hidden on desktop (see .mobile-menu-btn). -->
+            <button
+                class="menu-btn mobile-menu-btn"
+                class:active={menuOpen}
+                title="Menu"
+                aria-label="Menu"
+                aria-haspopup="true"
+                aria-expanded={menuOpen}
+                on:click={() => (menuOpen = !menuOpen)}
+            >
+                <svg
+                    width="18"
+                    height="14"
+                    viewBox="0 0 18 14"
+                    fill="none"
+                    aria-hidden="true"
+                >
+                    <path
+                        d="M1 1h16M1 7h16M1 13h16"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                    />
+                </svg>
+            </button>
+
+            {#if menuOpen}
+                <button
+                    class="menu-backdrop"
+                    aria-label="Close menu"
+                    on:click={() => (menuOpen = false)}
+                ></button>
+                <div class="menu" role="menu" transition:slide={{ duration: 140 }}>
+                    {#each MENU as m}
+                        <button
+                            class="menu-item"
+                            class:on={m.kind === "settings" && settingsOpen}
+                            role="menuitem"
+                            on:click={() => onMenu(m.kind)}
+                        >
+                            {m.label}
+                        </button>
+                    {/each}
+                </div>
+            {/if}
         </div>
     </header>
 
     {#if settingsOpen}
         <div class="settings-strip" transition:slide={{ duration: 160 }}>
             <div class="setting">
-                <div class="setting-text">
-                    <span class="setting-label">Theme</span>
-                    <span class="setting-desc">Light or dark academia</span>
-                </div>
+                <span class="setting-label">Theme</span>
                 <div class="seg" role="group" aria-label="Theme">
                     <button
                         class="seg-opt"
@@ -207,14 +379,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </div>
             </div>
 
-            <div class="setting">
-                <div class="setting-text">
-                    <span class="setting-label">Tiered mastery scheduling</span>
-                    <span class="setting-desc">
-                        Block → interleave, with a mastery gate. Off = plain review
-                        order (the ablation).
-                    </span>
-                </div>
+            <div
+                class="setting"
+                title="Tiered mastery scheduling: block → interleave, with a mastery gate. Off = plain review order (the ablation)."
+            >
+                <span class="setting-label">Tiered scheduling</span>
                 <button
                     class="switch"
                     class:on={settings.masteryScheduler}
@@ -227,14 +396,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </button>
             </div>
 
-            <div class="setting">
-                <div class="setting-text">
-                    <span class="setting-label">Guided path</span>
-                    <span class="setting-desc">
-                        Walk the syllabus in order; holds a topic until its
-                        prerequisites are practiced. Off = free choice.
-                    </span>
-                </div>
+            <div
+                class="setting"
+                title="Guided path: walk the syllabus in order; holds a topic until its prerequisites are practiced. Off = free choice."
+            >
+                <span class="setting-label">Guided path</span>
                 <button
                     class="switch"
                     class:on={settings.guided}
@@ -247,16 +413,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </button>
             </div>
 
-            <div class="setting">
-                <div class="setting-text">
-                    <span class="setting-label">AI practice</span>
-                    <span class="setting-desc">
-                        Adds model-written, self-verified problems.
-                        {#if settings.aiEnabled && !settings.hasKey}
-                            <span class="warn">no API key — templated only</span>
-                        {/if}
-                    </span>
-                </div>
+            <div class="setting" title={aiTitle}>
+                <span class="setting-label">AI practice</span>
+                {#if aiDegraded}
+                    <span class="warn-flag" title={aiTitle} aria-hidden="true"
+                        >⚠</span
+                    >
+                {/if}
                 <button
                     class="switch"
                     class:on={settings.aiEnabled}
@@ -278,20 +441,31 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <PracticeTest scope={testScope} on:done={() => (testActive = false)} />
         {:else if tab === "map"}
             {#key mapKey}
-                <ConceptMap variant="map" on:practicetest={onPracticeTest} />
+                <ConceptMap
+                    variant="map"
+                    masteryScheduler={settings.masteryScheduler}
+                    on:practicetest={onPracticeTest}
+                />
             {/key}
         {:else if tab === "plan"}
             {#key mapKey}
-                <ConceptMap variant="plan" on:practicetest={onPracticeTest} />
+                <ConceptMap
+                    variant="plan"
+                    masteryScheduler={settings.masteryScheduler}
+                    on:practicetest={onPracticeTest}
+                />
             {/key}
         {:else if tab === "cram"}
             {#key mapKey}
-                <ConceptMap variant="cram" on:practicetest={onPracticeTest} />
+                <ConceptMap
+                    variant="cram"
+                    masteryScheduler={settings.masteryScheduler}
+                    on:practicetest={onPracticeTest}
+                />
             {/key}
             <FormulaSheet />
         {:else if tab === "stats"}
             <div class="anki-graphs">
-                <h2 class="graphs-title">Review history (Anki stats)</h2>
                 <Graphs />
             </div>
         {:else}
@@ -325,40 +499,43 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             var(--canvas);
         font-family: var(--sr-font-body);
     }
-    /* Faint scatter of soap suds — a soft bubble texture, easy on the eyes. */
+    /* Faint drifting soap bubbles: thin rings (not filled dots) tinted to the
+       theme accent, so they're pale blue in light mode and teal in dark. Very
+       subtle, so body text stays perfectly readable. */
     .app::before {
         content: "";
         position: absolute;
         inset: 0;
         background-image:
             radial-gradient(
-                circle at 25% 25%,
-                rgba(70, 199, 209, 0.06) 0 6px,
-                transparent 7px
-            ),
-            radial-gradient(
-                circle at 72% 62%,
-                rgba(70, 199, 209, 0.05) 0 9px,
+                circle at 30% 32%,
+                transparent 0 7px,
+                var(--sr-accent-weak) 8px 9px,
                 transparent 10px
             ),
             radial-gradient(
-                circle at 50% 88%,
-                rgba(70, 199, 209, 0.045) 0 4px,
-                transparent 5px
+                circle at 72% 60%,
+                transparent 0 11px,
+                var(--sr-accent-weak) 12px 13px,
+                transparent 14px
+            ),
+            radial-gradient(
+                circle at 52% 86%,
+                transparent 0 5px,
+                var(--sr-accent-weak) 6px 7px,
+                transparent 8px
             );
         background-size:
-            140px 140px,
-            200px 200px,
-            110px 110px;
+            150px 150px,
+            220px 220px,
+            120px 120px;
         pointer-events: none;
         z-index: 0;
     }
 
-    /* Top bar — seamless. It shares the app's own background (canvas + the faint
-       accent wash) with no fill, border, or shadow of its own, so the top of the
-       app is ONLY the background colour / purple — never a grey seam. The content
-       scrolls inside .content (its own box), so nothing ever slides under this
-       bar; a solid fill would only create the seam we are removing. */
+    /* Top bar, a distinct surface so it's obvious where the bar ends: an
+       elevated fill (a touch different from the content canvas) plus a hairline
+       bottom border and a soft shadow. */
     .topbar {
         position: sticky;
         top: 0;
@@ -369,9 +546,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         flex-wrap: wrap;
         gap: 0.75rem 1rem;
         padding: 0.7rem 1.5rem;
-        background: transparent;
-        border-bottom: none;
-        box-shadow: none;
+        background: var(--canvas-elevated);
+        border-bottom: 1px solid var(--border);
+        box-shadow: var(--sr-shadow-sm);
     }
     .brand {
         display: flex;
@@ -424,14 +601,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         /* No container fill/border/pill: the tabs sit directly on the top bar.
            The selected view is shown per-tab (accent pill), not by this box. */
         /* Fixed row height so a tab's hover scale (a transform) overflows
-           visually without ever resizing the row — the bar can't shift. */
+           visually without ever resizing the row; the bar can't shift. */
         box-sizing: border-box;
         height: 2.85rem;
     }
     .tab {
-        /* Reserve a transparent border so the global button:hover (which adds a
-           1px border) can't resize the tab and shift its neighbours. */
-        border: 1px solid transparent;
+        /* A visible hairline outline so each tab clearly reads as a button (the
+           old transparent border was invisible, especially on mobile). */
+        border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
         background: transparent;
         font-family: var(--sr-font-body);
         font-weight: 700;
@@ -441,7 +618,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-radius: var(--sr-radius-pill);
         cursor: pointer;
         transform-origin: center;
-        /* Hover only scales the button — a transform changes its painted size, not
+        /* Hover only scales the button: a transform changes its painted size, not
            the bar's layout, so the top bar never shifts up/down. */
         transition:
             transform 0.15s ease,
@@ -450,7 +627,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .tab:hover {
         color: var(--fg);
-        border-color: transparent;
+        border-color: color-mix(in srgb, var(--fg) 34%, transparent);
         transform: scale(1.05);
     }
     .tab:active {
@@ -458,11 +635,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .tab.active {
         color: var(--tab-accent);
-        /* With no container behind the group, the active view reads as its own
-           accent-tinted pill (soft fill + faint ring) on the bare top bar. The
-           ring reuses the reserved transparent border, so nothing shifts. */
-        background: color-mix(in srgb, var(--tab-accent) 14%, transparent);
-        border-color: color-mix(in srgb, var(--tab-accent) 32%, transparent);
+        /* The active view reads as an accent-tinted pill with a clear accent ring. */
+        background: color-mix(in srgb, var(--tab-accent) 16%, transparent);
+        border-color: color-mix(in srgb, var(--tab-accent) 55%, transparent);
     }
     .tab:focus-visible {
         outline: 2px solid var(--sr-focus);
@@ -470,24 +645,27 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     .actions {
+        position: relative;
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
         gap: 0.45rem;
         /* Equal-width flank, right-aligned, so the tabs stay centered. */
         flex: 1 1 0;
         min-width: 0;
         justify-content: flex-end;
     }
-    .chip {
-        border: 1px solid var(--border);
+    /* Top-bar icon buttons: the Add / Browse / Settings / Sync symbols + the
+       "☰" menu button. One shared style so the row reads as a cohesive set. */
+    .menu-btn,
+    .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent);
         background: var(--canvas-elevated);
         color: var(--fg);
-        font-family: var(--sr-font-body);
-        font-weight: 600;
-        font-size: 0.8rem;
-        padding: 0 0.95rem;
-        min-height: 40px;
         border-radius: var(--sr-radius-sm);
         cursor: pointer;
         transition:
@@ -495,22 +673,88 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             color 0.2s ease,
             background 0.2s ease;
     }
-    .chip:hover {
+    /* The "☰" is a narrow-width fallback only; on desktop the individual icon
+       buttons replace it. (Declared after the base rule so it wins on ties.) */
+    .mobile-menu-btn {
+        display: none;
+    }
+    .menu-btn:hover,
+    .menu-btn.active,
+    .icon-btn:hover,
+    .icon-btn.active {
         border-color: var(--sr-accent);
         color: var(--sr-accent);
         background: var(--sr-accent-weak);
     }
-    .chip:focus-visible {
+    .menu-btn:focus-visible,
+    .icon-btn:focus-visible {
         outline: 2px solid var(--sr-focus);
         outline-offset: 2px;
     }
-    .settings-btn.active {
-        border-color: var(--sr-accent);
+    /* Invisible full-screen catcher so a click anywhere closes the menu. The
+       global `button:not(.btn, .btn-close)` base style (ts/lib/sass/base.scss)
+       gives every bare <button> an OPAQUE background and outranks this class, so
+       without the !important the backdrop would render opaque and blank the whole
+       page whenever the menu is open (on desktop AND the phone webview). */
+    .menu-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+        margin: 0;
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        background: transparent !important;
+        box-shadow: none;
+        cursor: default;
+        -webkit-appearance: none;
+        appearance: none;
+    }
+    /* The dropdown of secondary actions (Add / Browse / Sync / Settings). */
+    .menu {
+        position: absolute;
+        top: calc(100% + 0.4rem);
+        right: 0;
+        z-index: 60;
+        display: flex;
+        flex-direction: column;
+        min-width: 12rem;
+        padding: 0.35rem;
+        background: var(--canvas-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--sr-radius);
+        box-shadow: var(--sr-shadow-lg);
+    }
+    .menu-item {
+        text-align: left;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--fg);
+        font-family: var(--sr-font-body);
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 0.6rem 0.8rem;
+        border-radius: var(--sr-radius-sm);
+        cursor: pointer;
+        transition:
+            background 0.15s ease,
+            color 0.15s ease;
+    }
+    .menu-item:hover,
+    .menu-item.on {
         color: var(--sr-accent);
         background: var(--sr-accent-weak);
     }
+    .menu-item:focus-visible {
+        outline: 2px solid var(--sr-focus);
+        outline-offset: 2px;
+    }
 
-    /* Settings strip — a quiet row of app preferences under the top bar. */
+    /* Settings strip: a quiet row of app preferences under the top bar. On
+       desktop the theme control + all three toggles sit on ONE line: each
+       toggle's help text lives in a `title` tooltip (not inline), and the gaps
+       are tight, so nothing wraps to a second row. On narrow widths flex-wrap
+       lets them stack (the media query below allows the phone layout). */
     .settings-strip {
         position: relative;
         z-index: 40;
@@ -518,8 +762,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 0.9rem 2.25rem;
-        padding: 1rem 1.5rem;
+        gap: 0.55rem 1rem;
+        padding: 0.75rem 1.25rem;
         background: var(--canvas-elevated);
         border-bottom: 1px solid var(--border);
         box-shadow: var(--sr-shadow-sm);
@@ -527,28 +771,23 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .setting {
         display: flex;
         align-items: center;
-        gap: 0.9rem;
-    }
-    .setting-text {
-        display: flex;
-        flex-direction: column;
-        gap: 0.12rem;
-        max-width: 20rem;
+        gap: 0.5rem;
     }
     .setting-label {
         font-family: var(--sr-font-body);
         font-weight: 700;
         font-size: 0.85rem;
         color: var(--fg);
+        /* Keep each label on its own line so the row stays a single line. */
+        white-space: nowrap;
     }
-    .setting-desc {
-        font-size: 0.72rem;
-        color: var(--fg-subtle);
-        line-height: 1.3;
-    }
-    .warn {
+    /* Compact "AI is degraded to templated-only" marker; the full reason is in
+       the setting's title tooltip (kept accessible there, not inline). */
+    .warn-flag {
         color: var(--sr-tertiary);
-        font-weight: 600;
+        font-size: 0.9rem;
+        line-height: 1;
+        cursor: help;
     }
 
     /* Segmented control (theme). Transparent 1px border reserves space so the
@@ -636,45 +875,52 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         padding-top: 1.5rem;
         border-top: 1px solid var(--border);
     }
-    .graphs-title {
-        font-family: var(--sr-font-heading);
-        font-weight: 800;
-        font-size: 1.2rem;
-        margin: 0 1.25rem 0.75rem;
-        color: var(--fg);
-    }
-
-    /* Narrow widths: stack the toolbar (brand / tabs / actions each on their own
-       row) so the action buttons wrap in-viewport instead of overflowing. */
+    /* Narrow widths: collapse the individual Add / Browse / Settings icons into
+       the "☰" menu (they'd otherwise crowd the bar), keep the brand + menu on the
+       first row, and drop the tab group onto its own second row (order: 3), so
+       the top bar is at most two lines instead of three. */
     @media (max-width: 720px) {
+        .desktop-action {
+            display: none;
+        }
+        .mobile-menu-btn {
+            display: inline-flex;
+        }
         .tabs {
+            order: 3;
             width: 100%;
             margin: 0;
             justify-content: center;
-            /* All tabs must stay reachable on a phone: let the group wrap to as
-               many rows as it needs (auto height) instead of overflowing its
-               width and clipping "Map"/"Plan" or spilling the last tabs. */
+            /* Let the group wrap if a very narrow screen truly can't fit all
+               four, but with the short labels + the freed actions row they fit
+               on one line. */
             flex-wrap: wrap;
             height: auto;
             row-gap: 0.3rem;
         }
-        .actions {
-            width: 100%;
-            justify-content: center;
-        }
     }
 
-    /* Touch devices (the phone WebView) — meet the ≥44px touch-target minimum
+    /* Touch devices (the phone WebView): meet the ≥44px touch-target minimum
        from the design system. Scoped to coarse pointers so the desktop mouse
        layout (tighter top bar) is unchanged. */
     @media (pointer: coarse) {
         .tab,
-        .chip,
-        .settings-btn {
+        .menu-btn,
+        .icon-btn {
             min-height: 44px;
+            min-width: 44px;
+        }
+        /* Only .tab needs the flex centering here; the icon/menu buttons already
+           get it from their base rule. Re-declaring display on .menu-btn would
+           override the desktop `.mobile-menu-btn { display: none }` on a
+           coarse-pointer wide screen and show the "☰" alongside the icons. */
+        .tab {
             display: inline-flex;
             align-items: center;
             justify-content: center;
+        }
+        .menu-item {
+            min-height: 44px;
         }
     }
 </style>

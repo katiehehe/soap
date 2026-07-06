@@ -68,7 +68,7 @@ def score_card(front: str, back: str, key_terms: list[str]) -> str:
     """correct / wrong / bad_teaching for a generated card grounded in a source.
 
     - bad_teaching: structurally poor (trivial, empty, or answer restates the
-      prompt) — it would mis-teach regardless of content.
+      prompt), so it would mis-teach regardless of content.
     - correct: structurally sound AND grounded (the answer contains a source key
       term, i.e. it actually conveys the source fact).
     - wrong: structurally sound but not grounded in the source's key facts.
@@ -128,7 +128,7 @@ def collect_results(n: int = _FULL_N, run_ai: bool = True, seed: int = 0) -> dic
 
     The extraction baseline is always computed offline at the FULL rubric size
     (50 cards); the AI cell is populated only when a provider/key is configured
-    AND ``run_ai`` is True, else ``None`` with a ``pending`` verdict — no AI
+    AND ``run_ai`` is True, else ``None`` with a ``pending`` verdict. No AI
     number is ever fabricated here. Pass ``run_ai=False`` to force the
     offline/baseline-only record.
 
@@ -199,7 +199,7 @@ def collect_results(n: int = _FULL_N, run_ai: bool = True, seed: int = 0) -> dic
         )
 
     return {
-        "name": "Feature 2 — card generation from a named source",
+        "name": "Feature 2: card generation from a named source",
         "make_target": "make ai-eval",
         "baseline_vs": "template/extraction (stub)",
         "dataset": {

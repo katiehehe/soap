@@ -70,8 +70,8 @@ implemented in `rslib/src/speedrun/`) so the diff against upstream Anki stays sm
   is a pure, unit-tested function (`build_study_plan`). This makes the scheduler
   tiers visible as a _daily plan_ rather than an invisible reorder. A parent-tier
   row (within-/cross-unit) **sums only its in-pool subtopics'** own (leaf) deck
-  counts — via `sum_subtopic_counts` gated by the SAME `pool_eligible_for_tier`
-  predicate the live strict queue uses — so the plan number **equals exactly what
+  counts, via `sum_subtopic_counts` gated by the SAME `pool_eligible_for_tier`
+  predicate the live strict queue uses, so the plan number **equals exactly what
   strict-study serves** (a unit of 6 within-unit + 6 blocked shows 6, not the
   unit deck's rolled-up 12). Only the Speedrun plan's own count fields are
   derived this way; Anki's core `deck_tree` and the stock Decks-page counts are
@@ -103,7 +103,7 @@ built exactly as upstream. The orders are also exposed as RPCs so the
 dashboard/study map can use them.
 
 **Strict tiers (the tiers no longer leak).** The three tiers map to decks at
-different levels — Blocked -> the subtopic (leaf) deck, Within-unit -> the UNIT
+different levels: Blocked -> the subtopic (leaf) deck, Within-unit -> the UNIT
 deck, Cross-unit -> the ROOT deck. But Anki studies a parent deck's ENTIRE
 subtree, so opening the unit/root deck used to gather every descendant card,
 including subtopics still in the Blocked tier; the tier reorder only *reordered*
@@ -112,14 +112,14 @@ cards. Fix: a per-tier **scoped study** implemented in the engine
 (`speedrun_scope_queues_to_tier` in `rslib/src/speedrun/mastery.rs`, wired into
 `build_queues`). When the user opens a within-unit/cross-unit tier deck, Python
 records a transient `speedrunActiveTierScope` config (`{deck_id, tier}`, keyed to
-that deck), and the queue builder — after gathering — retains in the new + review
+that deck), and the queue builder, after gathering, retains in the new + review
 queues ONLY the cards whose subtopic is actually in that tier's mastery pool
 (`compute_pools` decides eligibility: within-unit study serves only WithinUnit
 subtopics; cross-unit study serves only CrossUnit subtopics). A still-Blocked
 subtopic is eligible for neither, so it can never be served from a parent deck.
 The scope is keyed to the deck it was set for (a stale value never affects a
 different deck), a no-op when absent, and DROPS out-of-tier gathered cards only
-(cards with no syllabus subtopic are untouched) — read-only, so FSRS intervals,
+(cards with no syllabus subtopic are untouched); read-only, so FSRS intervals,
 undo, and integrity are all untouched, and plain Anki / the scheduler-off build
 are unaffected. "Study more today" and unlimited practice deliberately clear the
 scope (they are not tier-restricted). This keeps the mastery DECISION in Rust

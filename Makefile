@@ -11,7 +11,7 @@ ARGS ?=
 -include .env
 export
 
-.PHONY: bench crash-test calibration performance seed-persona practice-test classify ai-eval ai-report sync-test paraphrase ablation demo leakage-scan leakage-scan-sources problems phone phone-install phone-rebuild phone-rebuild-dry sync-server sync-seed sync-seed-persona sync-desktop sync-phone-config sync-twoway
+.PHONY: bench crash-test calibration performance seed-persona seed-persona-new seed-persona-experienced practice-test classify ai-eval ai-report sync-test paraphrase ablation demo demo-new demo-experienced leakage-scan leakage-scan-sources problems phone phone-install phone-rebuild phone-rebuild-dry sync-server sync-seed sync-seed-persona sync-seed-persona-new sync-seed-persona-experienced sync-desktop sync-phone-config sync-twoway
 
 # Boot the phone emulator (Speedrun_P, a lean AOSP-34 AVD) and open AnkiDroid — our shared-engine
 # fork. `make phone` just boots + opens; `make phone-install` also reinstalls the
@@ -52,6 +52,20 @@ sync-seed-persona:
 	test -f out/demo-persona.anki2 || $(MAKE) seed-persona
 	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/sync_setup.py --from-collection out/demo-persona.anki2 $(ARGS)
 
+# Same, for the other two mock-user scenarios (builds the collection first if
+# missing). Each force-uploads so it REPLACES whatever the server holds. The
+# phone carries ONE collection at a time, so load one scenario here, sync the
+# phone (Sync -> keep AnkiWeb -> Replace), view it, then run the other target and
+# re-sync to swap. "new" makes readiness abstain via the give-up rule;
+# "experienced" shows a high P(pass) with a tight range.
+sync-seed-persona-new:
+	test -f out/demo-persona-new.anki2 || $(MAKE) seed-persona-new
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/sync_setup.py --from-collection out/demo-persona-new.anki2 $(ARGS)
+
+sync-seed-persona-experienced:
+	test -f out/demo-persona-experienced.anki2 || $(MAKE) seed-persona-experienced
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/sync_setup.py --from-collection out/demo-persona-experienced.anki2 $(ARGS)
+
 # Point the DESKTOP profile at the local server and pull the shared collection
 # (run with the desktop app closed; backs the collection up first).
 sync-desktop:
@@ -90,9 +104,20 @@ performance:
 	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/evals/performance_eval.py $(ARGS)
 
 # Build a DEMO collection driven by the seeded synthetic persona (real engine,
-# synthetic history). Writes out/demo-persona.anki2; open it in the app.
+# synthetic history). Writes out/demo-persona.anki2 (the intermediate default);
+# open it in the app.
 seed-persona:
 	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/seed_persona.py $(ARGS)
+
+# Build the other two mock-user scenarios (real engine, synthetic history). "new"
+# barely studied, so readiness abstains via the give-up rule; "experienced" is
+# well-prepared, so readiness is high with a tight range. Written to
+# out/demo-persona-new.anki2 and out/demo-persona-experienced.anki2.
+seed-persona-new:
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/seed_persona.py --scenario new $(ARGS)
+
+seed-persona-experienced:
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/seed_persona.py --scenario experienced $(ARGS)
 
 # Launch the desktop app straight into the populated demo persona (no manual
 # studying, real collection untouched): every dashboard, the three signals with
@@ -100,6 +125,15 @@ seed-persona:
 # with `./ninja pylib qt`.
 demo:
 	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/open_demo.py $(ARGS)
+
+# Same launcher for the other scenarios (auto-builds the collection if missing):
+# demo-new opens the honest ABSTAIN state; demo-experienced opens a high, tight
+# readiness range. Each uses its own throwaway base so they never clobber demo.
+demo-new:
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/open_demo.py --scenario new $(ARGS)
+
+demo-experienced:
+	PYTHONPATH=$(PYPATH) $(PYENV) tools/speedrun/open_demo.py --scenario experienced $(ARGS)
 
 # Assemble + grade a section-weighted practice test for the demo persona and
 # print the readiness band it produces (honesty-gated).

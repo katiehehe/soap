@@ -176,8 +176,8 @@ understand every change you submit. If you cannot explain what your changes
 do and how they interact with the rest of the system, your PR will be closed.
 
 Please review AI-generated code carefully before submitting. PRs that appear
-to have been submitted without human review — e.g., irrelevant code, duplicate
-logic, or comments that don't match the implementation — may be closed without
+to have been submitted without human review (e.g., irrelevant code, duplicate
+logic, or comments that don't match the implementation) may be closed without
 further discussion.
 
 ## License

@@ -1,7 +1,7 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-"""Seeded synthetic *demo persona* — the honest way to "come up with reasonable
+"""Seeded synthetic *demo persona*, the honest way to "come up with reasonable
 data" without breaking the anti-fabrication rule.
 
 The rubric's automatic-fail is *dressing up a guess as a measurement*. This module
@@ -53,7 +53,7 @@ def _sigmoid(z: float) -> float:
 class Persona:
     """A synthetic student: a latent skill in [0, 1] per syllabus subtopic.
 
-    Not a real person and not a measurement — a reproducible fixture. ``label``
+    Not a real person and not a measurement, but a reproducible fixture. ``label``
     is carried through to every artifact so nothing looks like real data.
     """
 
@@ -73,7 +73,7 @@ def default_persona(seed: int = DEFAULT_SEED) -> Persona:
     rng = random.Random(seed)
     # Per-unit skill centres; each subtopic jitters around its unit's centre.
     # A believable BORDERLINE profile: strong general, solid univariate, weak
-    # multivariate — enough to demo a real range + a non-trivial P(pass), with a
+    # multivariate: enough to demo a real range + a non-trivial P(pass), with a
     # clear weakest area. It is a fixture, not a target; the numbers are whatever
     # this profile honestly yields.
     unit_center = {"general": 0.90, "univariate": 0.80, "multivariate": 0.62}
@@ -84,6 +84,40 @@ def default_persona(seed: int = DEFAULT_SEED) -> Persona:
         val = center + rng.uniform(-0.12, 0.12)
         skill[tag] = round(min(0.97, max(0.05, val)), 3)
     return Persona(name="Demo Student (synthetic)", seed=seed, skill=skill)
+
+
+def new_persona(seed: int = DEFAULT_SEED) -> Persona:
+    """A brand-new student who has barely started: modest skill, weakest on the
+    later units. Paired (in the demo) with only a few subtopics touched and no
+    practice tests, so the readiness give-up rule ABSTAINS honestly (coverage and
+    review counts stay far below the gates). The handful of studied subtopics
+    still yield a real partial Memory value. Deterministic given the seed."""
+    rng = random.Random(f"new|{seed}")
+    unit_center = {"general": 0.62, "univariate": 0.45, "multivariate": 0.38}
+    skill: dict[str, float] = {}
+    for tag in expected_subtopic_tags():
+        unit = tag.split("::")[1]
+        center = unit_center.get(unit, 0.5)
+        val = center + rng.uniform(-0.1, 0.1)
+        skill[tag] = round(min(0.97, max(0.05, val)), 3)
+    return Persona(name="New Student (synthetic)", seed=seed, skill=skill)
+
+
+def experienced_persona(seed: int = DEFAULT_SEED) -> Persona:
+    """A well-prepared student near exam-ready: high skill across all three
+    units. Paired with many reviews and several practice tests, so the engine
+    reports a high P(pass) with a tight range and near-complete coverage. Still a
+    synthetic fixture whose numbers are measured by the real pipeline, never set
+    directly. Deterministic given the seed."""
+    rng = random.Random(f"experienced|{seed}")
+    unit_center = {"general": 0.96, "univariate": 0.93, "multivariate": 0.90}
+    skill: dict[str, float] = {}
+    for tag in expected_subtopic_tags():
+        unit = tag.split("::")[1]
+        center = unit_center.get(unit, 0.9)
+        val = center + rng.uniform(-0.05, 0.05)
+        skill[tag] = round(min(0.97, max(0.05, val)), 3)
+    return Persona(name="Experienced Student (synthetic)", seed=seed, skill=skill)
 
 
 def synthetic_cohort(n: int, seed: int = 0) -> list[Persona]:
@@ -113,8 +147,8 @@ def p_correct(
     """Probability this persona answers a NEW exam-style question right.
 
     A fixed, documented logistic relationship in (skill, difficulty, coverage,
-    response_time) — the SAME functional form as the performance model's fixture
-    — so a correct performance model recovers a calibrated, better-than-baseline
+    response_time), the SAME functional form as the performance model's fixture,
+    so a correct performance model recovers a calibrated, better-than-baseline
     fit on persona data. It is a generative fixture, never a claim about a real
     student.
     """
@@ -137,7 +171,7 @@ def response_time_for(persona: Persona, subtopic: str, difficulty: str) -> float
 
 
 def recall_prob(persona: Persona, subtopic: str) -> float:
-    """Probability the persona RECALLS a studied card for this subtopic — the
+    """Probability the persona RECALLS a studied card for this subtopic, the
     MEMORY signal (same pass model as ``review_grades``). It is deliberately
     higher than ``p_correct`` (transfer performance) for the same skill, so a
     correct pipeline sees memory and performance diverge (the paraphrase test,

@@ -8,13 +8,13 @@ alwaysApply: false
 
 Three scores, three separate models, three separate displays. NEVER merge them:
 - **Memory** = probability of recalling a taught fact. Comes from Anki's FSRS. Do not reinvent it.
-- **Performance** = probability of getting a *new, exam-style* question right (including unseen ones). Predicted from topic mastery, question difficulty, response time, and coverage. It MUST diverge from memory where the student has "familiarity without transfer" (Spiky POV 2) — if performance just tracks memory, the bridge was never built (see the paraphrase test in `testing-evals`).
-- **Readiness (SOA P)** = P(pass) with a confidence band + a projected 0–10 band + % of syllabus covered.
+- **Performance** = probability of getting a *new, exam-style* question right (including unseen ones). Predicted from topic mastery, question difficulty, response time, and coverage. It MUST diverge from memory where the student has "familiarity without transfer" (Spiky POV 2): if performance just tracks memory, the bridge was never built (see the paraphrase test in `testing-evals`).
+- **Readiness (SOA P)** = P(pass) with a confidence band + a projected 0-10 band + % of syllabus covered.
 
 Every readiness display MUST carry all of: point estimate, likely range, % of exam covered, a "how sure" indicator, last-updated time, the main reasons behind it, and the give-up threshold. Model this in the type system so a bare number literally cannot be returned:
 
 - Represent a score as a struct/object with required fields: `point`, `low`, `high`, `coverage_pct`, `confidence`, `updated_at`, `reasons[]`, `next_best_action`. A missing field is a compile/validation error, not a silent default.
-- **Give-up rule (assertion + test):** below the stated threshold (e.g. ≥ 200 graded reviews AND ≥ 50% coverage) the function returns an explicit `NoScore { reason }`, and the UI shows the reason — never a number. Write a unit test that asserts `NoScore` under-threshold.
+- **Give-up rule (assertion + test):** below the stated threshold (e.g. ≥ 200 graded reviews AND ≥ 50% coverage) the function returns an explicit `NoScore { reason }`, and the UI shows the reason, never a number. Write a unit test that asserts `NoScore` under-threshold.
 - A deck that skips a whole high-weight section MUST NOT read "ready." Coverage gates readiness.
 
 NEVER fabricate a number to fill a gap, smooth a chart, or look confident. "We calibrated memory but cannot yet prove the projected score" scores higher than a polished number with nothing behind it.

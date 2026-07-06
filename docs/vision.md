@@ -1,4 +1,4 @@
-# Product vision — SOA Exam P study app (owner: Katie He)
+# Product vision: SOA Exam P study app (owner: Katie He)
 
 This is the north star for the app. Not everything here is built yet; this file
 records the intended design so we can build toward it deliberately. Where a piece
@@ -33,15 +33,15 @@ subtopics      subtopics        subtopics        <- syllabus outcomes
 
 Cards move up three piles as the student improves. This is Spiky POV 1 and the
 required Rust engine change. **[mastery model + ordering: built in Rust; live
-queue integration: built behind a default-off `speedrunMasteryScheduler` flag —
-`build_queues` reorders new cards by tier when it is on]**
+queue integration: built behind a default-off `speedrunMasteryScheduler` flag
+that makes `build_queues` reorder new cards by tier when it is on]**
 
-1. **Subtopic pile (Blocked)** — a small deck per subtopic, practiced in
+1. **Subtopic pile (Blocked)**: a small deck per subtopic, practiced in
    isolation until its **mastery gate** clears (enough graded problems, high
    accuracy, strong FSRS retrievability).
-2. **Unit pile (Within-unit)** — once a subtopic clears, its cards join a larger
+2. **Unit pile (Within-unit)**: once a subtopic clears, its cards join a larger
    per-unit pile that **interleaves** the confusable sub-types within that unit.
-3. **Overall pile (Cross-unit)** — once the whole unit is mastered (and, later,
+3. **Overall pile (Cross-unit)**: once the whole unit is mastered (and, later,
    once _performance_ on exam-style questions is good enough), its cards join the
    overall deck that interleaves **across units** for spacing.
 
@@ -53,10 +53,10 @@ The gate thresholds live in `rslib/src/speedrun/mastery.rs` (a subtopic clears a
 
 ## The three signals (never blended)
 
-1. **Memory** — can the student recall the fact right now? (FSRS.) **[built]**
-2. **Performance** — can they solve a _new, exam-style_ question that uses the
+1. **Memory**: can the student recall the fact right now? (FSRS.) **[built]**
+2. **Performance**: can they solve a _new, exam-style_ question that uses the
    fact? **[planned]**
-3. **Readiness** — what would they score today, with a range and confidence?
+3. **Readiness**: what would they score today, with a range and confidence?
    **[readiness give-up rule: built; calibrated number: planned]**
 
 ## Readiness from practice tests **[planned]**
@@ -87,7 +87,7 @@ counts:
 
 ## What exists today (so we build on it, not around it)
 
-- Rust engine: `SpeedrunService` — `speedrun_ping`, `compute_readiness` (give-up
+- Rust engine `SpeedrunService` exposes `speedrun_ping`, `compute_readiness` (give-up
   rule as a Rust assertion), `get_mastery_state` (mastery gate + importance-
   weighted rollups + "what to study next"), `get_mastery_ordered_new_cards`, and
   `get_points_at_stake_order` (due cards by topic weight × student weakness).
@@ -107,7 +107,7 @@ counts:
    **[done]** - a "Study this subtopic (blocked practice)" button on the study map
    opens that subtopic's deck via a webview->Python bridge, and a review-time
    banner shows the current card's tier (Blocked / Within-unit / Cross-unit).
-2. ~~Live queue: use the tier order in the actual scheduler~~ **[done]** — the
+2. ~~Live queue: use the tier order in the actual scheduler~~ **[done]**. The
    `speedrunMasteryScheduler` flag makes `build_queues` serve new cards in tier
    order (Blocked -> WithinUnit -> CrossUnit); default off.
 3. Practice-test mode + readiness calibration from held-out practice scores.

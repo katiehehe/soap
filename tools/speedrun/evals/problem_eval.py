@@ -6,8 +6,8 @@
 
     out/pyenv/bin/python tools/speedrun/evals/problem_eval.py [--per-subtopic 2] [--subtopics 0]
 
-- Baseline: the deterministic TEMPLATED generator (``problem_gen.templated_problems``)
-  — correct BY CONSTRUCTION, but narrow (covers only the subtopics with a formula
+- Baseline: the deterministic TEMPLATED generator (``problem_gen.templated_problems``),
+  correct BY CONSTRUCTION, but narrow (covers only the subtopics with a formula
   template). This is the simpler method the AI must beat, and the offline fallback.
 - AI: problems generated from the NAMED sources (``gen_sources.json``); each is
   kept only if an INDEPENDENT re-solve matches its stated answer
@@ -60,8 +60,8 @@ def collect_results(
     """Machine-readable record for the committed AI-eval artifact (ai_eval.json).
 
     The templated baseline (correct by construction) coverage is always computed
-    offline over ALL 19 subtopics; the AI cell — verified-rate, wrong-rate,
-    coverage, leakage — is populated only when a provider/key is configured AND
+    offline over ALL 19 subtopics; the AI cell (verified-rate, wrong-rate,
+    coverage, leakage) is populated only when a provider/key is configured AND
     ``run_ai`` is True, else ``None`` with a ``pending`` verdict. No AI number is
     ever fabricated here. Pass ``run_ai=False`` to force the offline record.
 
@@ -131,7 +131,7 @@ def collect_results(
         )
 
     return {
-        "name": "Feature 2 (Phase 2) — exam-style problem generation",
+        "name": "Feature 2 (Phase 2): exam-style problem generation",
         "make_target": "make problems",
         "baseline_vs": "templated (correct by construction)",
         "dataset": {

@@ -9,12 +9,12 @@ This is the single command behind the "AI beats a simpler baseline" claim. It
 runs the classifier, card-generation, and problem-generation evals side by side
 and writes ``tools/speedrun/evals/results/ai_eval.json`` capturing, for each:
 dataset descriptor, the pre-registered cutoffs, the offline BASELINE metrics
-(accuracy + wrong-answer rate), and the AI metrics — plus a timestamp, git SHA,
+(accuracy + wrong-answer rate), and the AI metrics, plus a timestamp, git SHA,
 and an ``ai_ran`` flag.
 
 Honesty: the baseline/offline cells are reproducible with no key and always
 fill; the AI cells populate ONLY when ``OPENAI_API_KEY`` is set. With no key the
-AI cells are ``null`` with a ``pending`` verdict — never fabricated.
+AI cells are ``null`` with a ``pending`` verdict: never fabricated.
 
 Usage:
     # Offline: writes baseline + offline cells; AI cells stay pending.
@@ -102,8 +102,8 @@ def main() -> int:
         "--no-ai",
         action="store_true",
         help="force the offline/baseline-only artifact (AI cells stay pending) "
-        "even if a key is configured — no API calls. Handy to regenerate the "
-        "committed baseline artifact without cost.",
+        "even if a key is configured, so no API calls happen. Handy to regenerate "
+        "the committed baseline artifact without cost.",
     )
     args = parser.parse_args()
 
@@ -112,7 +112,7 @@ def main() -> int:
     subsample = run_ai and (args.classify_limit or args.subtopics or args.n < 50)
     print(
         "Running the three AI evals for the committed artifact.\n"
-        f"AI provider: {provider or 'NONE (offline) — AI cells will be pending'}"
+        f"AI provider: {provider or 'NONE (offline): AI cells will be pending'}"
         + (
             f"\nSUBSAMPLE smoke run: classify n={args.classify_limit or 'full'}, "
             f"generate n={args.n}, problems subtopics={args.subtopics or 'all'}, "
@@ -159,7 +159,7 @@ def main() -> int:
     if not report["ai_ran"]:
         print(
             "  AI cells are PENDING (no key). Re-run with OPENAI_API_KEY set to "
-            "populate them — no AI number was fabricated.",
+            "populate them; no AI number was fabricated.",
             flush=True,
         )
     return 0

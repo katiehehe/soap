@@ -15,6 +15,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // live inputs shown here match the numbers the engine computes elsewhere.
     import { masteryInputs } from "../study-map/lib";
     import {
+        METRIC_IDS,
+        METRIC_LABELS,
         MIN_COVERAGE,
         MIN_GRADED_REVIEWS,
         MIN_PERF_ACCURACY,
@@ -28,13 +30,24 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     // Embedded in the readiness dashboard's collapsible "How is this calculated?"
     // panel. The parent passes the signal to reveal (e.g. after a click on a
-    // readiness signal card); we scroll to it and briefly flash it.
+    // readiness signal card); it selects that signal's tab, so only that one
+    // explanation shows.
     export let anchor: MetricId | null = null;
+
+    // One signal's explanation is shown at a time, as a tab. Default to the
+    // parent's anchor (a clicked signal card) or Memory.
+    let active: MetricId = anchor ?? "memory";
+
+    // Per-signal accent, matching the readiness dashboard's signal colours
+    // (memory = accent, performance = quaternary, readiness = quinary).
+    const TAB_ACCENT: Record<MetricId, string> = {
+        memory: "var(--sr-accent)",
+        performance: "var(--sr-quaternary)",
+        readiness: "var(--sr-quinary)",
+    };
 
     let readiness: ReadinessResult | null = null;
     let mastery: MasteryState | null = null;
-    let mounted = false;
-    let flashId: MetricId | null = null;
 
     function pct(x: number): string {
         return `${Math.round(x * 100)}%`;
@@ -95,28 +108,30 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: coverageMet = coveragePct >= MIN_COVERAGE;
     $: practiceMet = practiceQuestions >= MIN_PRACTICE_QUESTIONS;
 
-    function scrollToMetric(id: MetricId | null): void {
-        if (!id || !mounted || typeof document === "undefined") {
+    // Roving-tabindex keyboard support for the tablist: arrows/Home/End move
+    // focus and change the shown signal (selection follows focus, the standard
+    // tabs pattern).
+    function onTabKey(e: KeyboardEvent, id: MetricId): void {
+        const i = METRIC_IDS.indexOf(id);
+        let next: number | null = null;
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+            next = (i + 1) % METRIC_IDS.length;
+        } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+            next = (i - 1 + METRIC_IDS.length) % METRIC_IDS.length;
+        } else if (e.key === "Home") {
+            next = 0;
+        } else if (e.key === "End") {
+            next = METRIC_IDS.length - 1;
+        }
+        if (next === null) {
             return;
         }
-        requestAnimationFrame(() => {
-            const el = document.getElementById(id);
-            if (!el) {
-                return;
-            }
-            el.scrollIntoView({ behavior: "smooth", block: "start" });
-            flashId = id;
-            window.setTimeout(() => {
-                if (flashId === id) {
-                    flashId = null;
-                }
-            }, 1500);
-        });
+        e.preventDefault();
+        active = METRIC_IDS[next];
+        document.getElementById(`tab-${active}`)?.focus();
     }
 
     onMount(async () => {
-        mounted = true;
-        const target = anchor;
         try {
             const inputs = masteryInputs();
             [readiness, mastery] = await Promise.all([
@@ -127,87 +142,71 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 getMasteryState(inputs),
             ]);
         } catch (_err) {
-            // Live inputs are a bonus — the definitions render without the engine.
+            // Live inputs are a bonus: the definitions render without the engine.
         }
-        scrollToMetric(target);
     });
 
-    // React to a parent-driven anchor change while already mounted.
-    $: if (mounted && anchor) {
-        scrollToMetric(anchor);
+    // A parent-driven anchor change (a clicked signal card) selects that tab.
+    $: if (anchor) {
+        active = anchor;
     }
 </script>
 
 <div class="metrics">
     <header class="page-head">
-        <p class="eyebrow">How the metrics work</p>
-        <h1>Three signals, never blended</h1>
-        <p class="subtitle">
-            Every number in this app answers one specific question, comes from a
-            named source, and is shown with its uncertainty. This page is the
-            whole method, in the open: what each signal means, exactly what data
-            feeds it, and how it is computed. Where the engine has your data, you
-            will see your own live inputs; where it does not, the signal
-            <b>abstains</b> — an honest amber "not yet", never a guess in a nice
-            font.
-        </p>
-        <nav class="jump" aria-label="Jump to a signal">
-            <button type="button" on:click={() => scrollToMetric("memory")}>
-                Memory
-            </button>
-            <button type="button" on:click={() => scrollToMetric("performance")}>
-                Performance
-            </button>
-            <button type="button" on:click={() => scrollToMetric("readiness")}>
-                Readiness
-            </button>
-        </nav>
+        <div class="tabs" role="tablist" aria-label="Choose a signal to explain">
+            {#each METRIC_IDS as id}
+                <button
+                    type="button"
+                    role="tab"
+                    id={`tab-${id}`}
+                    class="tab"
+                    class:active={active === id}
+                    style="--tab-accent:{TAB_ACCENT[id]}"
+                    aria-selected={active === id}
+                    aria-controls={`panel-${id}`}
+                    tabindex={active === id ? 0 : -1}
+                    on:click={() => (active = id)}
+                    on:keydown={(e) => onTabKey(e, id)}
+                >
+                    {METRIC_LABELS[id]}
+                </button>
+            {/each}
+        </div>
     </header>
 
-    <!-- The shared give-up rule, stated up front. It is a Rust assertion, not a
-         UI hint: below threshold the readiness type literally cannot hold a
-         number. -->
-    <section class="rule">
-        <p class="k">The give-up rule (enforced in Rust)</p>
-        <p>
-            Readiness stays <b>withheld</b> until there are
-            <b>≥ {MIN_GRADED_REVIEWS} graded reviews</b>
-            <b>and</b>
-            <b>≥ {pct(MIN_COVERAGE)} weighted syllabus coverage</b>
-            <b>and</b>
-            <b>≥ {MIN_PRACTICE_QUESTIONS} graded practice-test questions</b>. Below
-            any of these, <code>compute_readiness</code> returns
-            <code>NoScore</code> with the reason and what is missing — a bare
-            readiness number cannot be emitted, because the return type is a
-            <code>oneof</code>. Memory and Performance abstain on their own data,
-            independently of this gate.
-        </p>
-        <p class="src">Source: rslib/src/speedrun/service.rs · docs/score-models.md</p>
-    </section>
-
     <!-- ================= MEMORY ================= -->
-    <section id="memory" class="card memory" class:flash={flashId === "memory"}>
+    <div
+        id="panel-memory"
+        class="card memory"
+        role="tabpanel"
+        aria-labelledby="tab-memory"
+        tabindex="0"
+        hidden={active !== "memory"}
+    >
         <div class="card-head">
             <p class="metric-eyebrow">Signal 1 · Memory</p>
             <h2>Can you recall this fact right now?</h2>
+            <!-- Named source, kept for traceability but not rendered in the UI:
             <p class="source-line">
-                Source: <b>FSRS retrievability</b> — Anki's spaced-repetition
+                Source: <b>FSRS retrievability</b>, Anki's spaced-repetition
                 model, in the shared Rust engine.
             </p>
+            -->
         </div>
 
         <div class="live {memory?.hasData ? 'measured' : 'withheld'}">
-            <span class="badge">{memory?.hasData ? "Measured" : "Withheld — no reviews yet"}</span>
+            <span class="badge">{memory?.hasData ? "Measured" : "Withheld: no reviews yet"}</span>
             {#if memory?.hasData}
                 <p class="live-value">
                     {pct(memory.point)}
                     <span class="live-range">
-                        ({pct(memory.low)}–{pct(memory.high)})
+                        ({pct(memory.low)}-{pct(memory.high)})
                     </span>
                 </p>
                 <p class="live-note">
                     Mean P(recall today) across {memory.reviewedCards} reviewed
-                    cards · range is the 10th–90th percentile.
+                    cards · range is the 10th-90th percentile.
                 </p>
             {:else}
                 <p class="live-value muted">Not yet scored</p>
@@ -222,7 +221,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <div class="block">
                 <p class="k">What data goes in</p>
                 <p>
-                    Your review history, per card — the grades and timing FSRS
+                    Your review history, per card: the grades and timing FSRS
                     uses to fit each card's forgetting curve. Only cards tagged to
                     the syllabus that you have actually reviewed count.
                 </p>
@@ -233,7 +232,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     For every reviewed syllabus card the engine reads FSRS's
                     predicted probability of recall <i>today</i>. The point value
                     is the <b>mean</b> of those per-card probabilities; the range
-                    is their <b>10th–90th percentile</b>, so you see the spread,
+                    is their <b>10th-90th percentile</b>, so you see the spread,
                     not just an average. It never mixes in practice-test results.
                 </p>
                 <p class="formula">
@@ -250,32 +249,39 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </p>
             </div>
         </div>
+        <!-- Engine traceability, kept in source but not rendered in the UI:
         <p class="engine-src">
             Mirrors <code>memory_recall</code> in rslib/src/speedrun/mastery.rs,
             surfaced by <code>compute_readiness</code>.
         </p>
-    </section>
+        -->
+    </div>
 
     <!-- ================= PERFORMANCE ================= -->
-    <section
-        id="performance"
+    <div
+        id="panel-performance"
         class="card performance"
-        class:flash={flashId === "performance"}
+        role="tabpanel"
+        aria-labelledby="tab-performance"
+        tabindex="0"
+        hidden={active !== "performance"}
     >
         <div class="card-head">
             <p class="metric-eyebrow">Signal 2 · Performance</p>
             <h2>Can you solve a new, exam-style question?</h2>
+            <!-- Named source, kept for traceability but not rendered in the UI:
             <p class="source-line">
-                Source: <b>graded multiple-choice practice tests</b> — procedure,
-                not recall.
+                Source: <b>graded multiple-choice practice tests</b> (procedure,
+                not recall).
             </p>
+            -->
         </div>
 
         <div class="live {perf.withData > 0 ? 'measured' : 'withheld'}">
             <span class="badge">
                 {perf.withData > 0
                     ? "Measured (per subtopic)"
-                    : "Withheld — no graded questions yet"}
+                    : "Withheld: no graded questions yet"}
             </span>
             {#if perf.withData > 0}
                 <p class="live-value">
@@ -288,7 +294,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     Across {perf.withData} practiced subtopics · {perf.mastered}
                     at the mastery gate (≥ {MIN_PERF_QUESTIONS} questions and ≥ {pct(
                         MIN_PERF_ACCURACY,
-                    )}). Shown as measured counts, never as one blended score.
+                    )}).
                 </p>
             {:else}
                 <p class="live-value muted">Not yet measured</p>
@@ -302,10 +308,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <div class="block">
                 <p class="k">What data goes in</p>
                 <p>
-                    Correct / total on <b>disguised, parameterized</b> A–E
+                    Correct / total on <b>disguised, parameterized</b> A-E
                     questions, tallied <b>per subtopic</b>. The numbers regenerate
                     on each attempt, so this measures whether you can run the
-                    procedure — not whether you recognise a memorised cue.
+                    procedure, not whether you recognise a memorised cue.
                 </p>
             </div>
             <div class="block">
@@ -330,31 +336,38 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     graded questions. The calibrated cross-item model that predicts
                     <i>unseen</i> questions is validated on a held-out item corpus
                     plus a synthetic cohort, and reads "not yet measured" on a real
-                    student until a real labelled dataset exists — never a
+                    student until a real labelled dataset exists, never a
                     fabricated number.
                 </p>
             </div>
         </div>
+        <!-- Engine traceability, kept in source but not rendered in the UI:
         <p class="engine-src">
             Mirrors the per-subtopic performance gate in
             rslib/src/speedrun/mastery.rs · docs/score-models.md §2.
         </p>
-    </section>
+        -->
+    </div>
 
     <!-- ================= READINESS ================= -->
-    <section
-        id="readiness"
+    <div
+        id="panel-readiness"
         class="card readiness-card"
-        class:flash={flashId === "readiness"}
+        role="tabpanel"
+        aria-labelledby="tab-readiness"
+        tabindex="0"
+        hidden={active !== "readiness"}
     >
         <div class="card-head">
             <p class="metric-eyebrow">Signal 3 · Readiness</p>
             <h2>Would you pass today, and how sure are we?</h2>
+            <!-- Named source, kept for traceability but not rendered in the UI:
             <p class="source-line">
                 Source: the <b>P(pass) model</b> in the Rust engine
                 (<code>compute_readiness</code>), from graded practice-test
                 evidence.
             </p>
+            -->
         </div>
 
         {#if score}
@@ -363,7 +376,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 <p class="live-value">
                     {one(score.point)}
                     <span class="live-range">
-                        ({one(score.low)}–{one(score.high)}) / {SCALE_MAX}
+                        ({one(score.low)}-{one(score.high)}) / {SCALE_MAX}
                     </span>
                 </p>
                 <p class="live-note">
@@ -374,7 +387,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </div>
         {:else}
             <div class="live withheld">
-                <span class="badge">Withheld — {noScore ? "give-up rule" : "no data"}</span>
+                <span class="badge">Withheld: {noScore ? "give-up rule" : "no data"}</span>
                 <p class="live-value muted">Not enough data yet</p>
                 {#if noScore}
                     <p class="live-note">{noScore.reason}</p>
@@ -410,7 +423,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <div class="block">
                 <p class="k">How it is calculated</p>
                 <p>
-                    <b>Projected 0–{SCALE_MAX} band:</b> the point is ≈ {SCALE_MAX}
+                    <b>Projected 0-{SCALE_MAX} band:</b> the point is ≈ {SCALE_MAX}
                     × p̂; the range is {SCALE_MAX} × the <b>95% Wilson interval</b>
                     on p̂ (robust for small samples), so it is always a range, never
                     a bare point.
@@ -418,22 +431,22 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 <p>
                     <b>P(pass):</b> SOA P passes at scaled ≥ {PASS_SCALED}, i.e.
                     p̂ ≥ {PASS_PROPORTION} under the linear map. Then
-                    <span class="nowrap">P(pass) = Φ((p̂ − {PASS_PROPORTION}) / se)</span>,
-                    with se = √(p̂(1−p̂)/n). The {PASS_PROPORTION} cutoff is a
-                    stated, recalibratable assumption — never tuned to flatter a
+                    <span class="nowrap">P(pass) = Φ((p̂ − {PASS_PROPORTION}) / se)</span>, <!-- dash-ok -->
+                    with se = √(p̂(1−p̂)/n). The {PASS_PROPORTION} cutoff is a <!-- dash-ok -->
+                    stated, recalibratable assumption, never tuned to flatter a
                     result.
                 </p>
                 <p>
                     <b>Confidence</b> rises with a tighter band and more coverage.
                     Every score also carries its reasons, the last-updated time,
                     past-prediction accuracy (shown "not yet available" until
-                    there is a track record), and the single best next action —
+                    there is a track record), and the single best next action:
                     the honesty bundle, enforced by the type so a bare number
                     can't ship.
                 </p>
                 <p class="formula">
                     point = {SCALE_MAX}·p̂ · band = {SCALE_MAX}·Wilson₉₅(p̂) ·
-                    P(pass) = Φ((p̂ − {PASS_PROPORTION}) / se)
+                    P(pass) = Φ((p̂ − {PASS_PROPORTION}) / se) <!-- dash-ok -->
                 </p>
             </div>
             <div class="block">
@@ -450,18 +463,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         More representative tests count more: each test's evidence is
                         weighted by scope × source (a full official whole-exam test =
                         1.0; unit/subtopic drills and generated questions count less),
-                        and the band uses that weighted proportion — while the give-up
+                        and the band uses that weighted proportion, while the give-up
                         rule above still counts your raw graded questions.
                     </span>
                 </p>
             </div>
         </div>
+        <!-- Engine traceability, kept in source but not rendered in the UI:
         <p class="engine-src">
             Mirrors <code>readiness_from_practice</code> /
             <code>wilson_interval</code> / <code>normal_cdf</code> in
             rslib/src/speedrun/service.rs · docs/score-models.md §3.
         </p>
-    </section>
+        -->
+    </div>
 </div>
 
 <style>
@@ -477,40 +492,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         line-height: 1.55;
     }
 
-    /* Header */
+    /* Header: now just wraps the signal tabs. */
     .page-head {
         margin-bottom: 1.75rem;
     }
-    .eyebrow {
-        margin: 0;
-        font-family: var(--sr-font-body);
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: var(--sr-accent);
-    }
-    .page-head h1 {
-        margin: 0.5rem 0 0;
-        font-family: var(--sr-font-heading);
-        font-size: clamp(2rem, 4.5vw, 2.9rem);
-        font-weight: 600;
-        line-height: 1.05;
-        letter-spacing: -0.01em;
-    }
-    .subtitle {
-        margin: 0.7rem 0 0;
-        max-width: 68ch;
-        color: var(--fg-subtle);
-        font-size: 0.95rem;
-    }
-    .jump {
+    /* Tab switcher: one signal's explanation at a time. Each tab carries its
+       signal's accent (--tab-accent); the active tab reads as an accent-tinted
+       pill with a clear accent ring, the same treatment as the home shell's
+       view tabs, all from design tokens (no hardcoded colours). */
+    .tabs {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
         margin-top: 1.1rem;
     }
-    .jump button {
+    .tab {
         border: 1px solid var(--border);
         background: var(--canvas-elevated);
         color: var(--fg);
@@ -525,32 +521,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             color 0.2s ease,
             background 0.2s ease;
     }
-    .jump button:hover {
-        border-color: var(--sr-accent);
-        color: var(--sr-accent);
-        background: var(--sr-accent-weak);
+    .tab:hover {
+        border-color: var(--tab-accent, var(--sr-accent));
+        color: var(--tab-accent, var(--sr-accent));
+        background: color-mix(in srgb, var(--tab-accent, var(--sr-accent)) 10%, transparent);
     }
-    .jump button:focus-visible {
+    .tab.active {
+        color: var(--tab-accent, var(--sr-accent));
+        background: color-mix(in srgb, var(--tab-accent, var(--sr-accent)) 16%, transparent);
+        border-color: color-mix(in srgb, var(--tab-accent, var(--sr-accent)) 55%, transparent);
+        font-weight: 700;
+    }
+    .tab:focus-visible {
         outline: 2px solid var(--sr-focus);
         outline-offset: 2px;
-    }
-
-    /* Give-up rule callout — honest amber top accent (we're withholding). */
-    .rule {
-        border: 1px solid var(--border);
-        border-radius: var(--sr-radius-lg);
-        padding: 1.3rem 1.5rem;
-        margin-bottom: 1.6rem;
-        background: var(--canvas-elevated);
-        box-shadow:
-            inset 0 3px 0 0 var(--sr-progress),
-            var(--sr-shadow-sm);
-    }
-    .rule p {
-        margin: 0.5rem 0 0;
-    }
-    .rule p:first-child {
-        margin-top: 0;
     }
 
     /* Signal cards. Top-accent stripe colour-codes each section (decorative
@@ -565,7 +549,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         box-shadow:
             inset 0 3px 0 0 var(--accent, var(--sr-accent)),
             var(--sr-shadow);
-        scroll-margin-top: 1rem;
     }
     .card.memory {
         --accent: var(--sr-accent);
@@ -576,23 +559,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .card.readiness-card {
         --accent: var(--sr-quinary);
     }
-    /* Brief, calm highlight when navigated to (no glow). */
-    .card.flash {
-        animation: metric-flash 1.5s ease;
-    }
-    @keyframes metric-flash {
-        0%,
-        100% {
-            box-shadow:
-                inset 0 3px 0 0 var(--accent, var(--sr-accent)),
-                var(--sr-shadow);
-        }
-        30% {
-            box-shadow:
-                inset 0 3px 0 0 var(--accent, var(--sr-accent)),
-                inset 0 0 0 2px var(--accent),
-                var(--sr-shadow);
-        }
+    /* Only the active signal's panel shows; the others stay in the DOM (so each
+       tab's aria-controls target stays valid) but are hidden. */
+    .card[hidden] {
+        display: none;
     }
 
     .card-head h2 {
@@ -612,13 +582,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         text-transform: uppercase;
         color: var(--accent);
     }
-    .source-line {
-        margin: 0.6rem 0 0;
-        color: var(--fg-subtle);
-        font-size: 0.9rem;
-    }
-
-    /* Live-inputs panel — measured (calm sage) vs withheld (honest amber). The
+    /* Live-inputs panel: measured (calm sage) vs withheld (honest amber). The
        state colour reads on the badge + a top accent (never a side stripe). */
     .live {
         margin: 1.1rem 0 0.4rem;
@@ -731,13 +695,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin-top: 0.4rem;
         color: var(--fg-subtle);
         font-style: italic;
-    }
-    .engine-src,
-    .rule .src {
-        margin: 1rem 0 0;
-        font-family: var(--sr-font-body);
-        font-size: 0.72rem;
-        color: var(--fg-subtle);
     }
     code {
         font-family: var(--sr-font-mono);

@@ -22,7 +22,7 @@ Two layers, kept separate so real data flows through the same code:
   clearly-labelled synthetic persona/cohort or, when it exists, real graded data.
 
 Honesty: the committed dataset is ORIGINAL, held-out, no-copyright; the reworded
-questions must be genuinely reworded (checked by ``reworded_distinctness`` — a
+questions must be genuinely reworded (checked by ``reworded_distinctness``, a
 near-copy of the card prompt would make "performance" trivially equal memory at
 the DATA level). Nothing here fabricates a real student result.
 """
@@ -42,7 +42,7 @@ _DATA_PATH = Path(__file__).parent / "paraphrase_items.json"
 COPYING_GAP = 0.05
 
 # Reworded questions whose word-overlap (Jaccard) with the card prompt is at or
-# above this are too close to count as "reworded" — they'd make the performance
+# above this are too close to count as "reworded": they'd make the performance
 # side a re-read of the memory side.
 MAX_REWORD_OVERLAP = 0.5
 
@@ -108,16 +108,16 @@ class ParaphraseResult:
         if self.copying:
             return (
                 "COPYING: reworded accuracy tracks card recall (gap "
-                f"{self.gap:+.1%}) — the performance signal is not separated from "
+                f"{self.gap:+.1%}); the performance signal is not separated from "
                 "memory."
             )
         if self.gap > 0:
             return (
-                f"BRIDGE: recall exceeds reworded accuracy by {self.gap:.1%} — "
+                f"BRIDGE: recall exceeds reworded accuracy by {self.gap:.1%}, so "
                 "performance is a distinct, harder signal than memory."
             )
         return (
-            f"reworded accuracy exceeds recall by {-self.gap:.1%} — unusual; "
+            f"reworded accuracy exceeds recall by {-self.gap:.1%}, unusually; "
             "performance is still separated from memory."
         )
 
@@ -205,7 +205,7 @@ def reworded_distinctness(cards: list[ParaphraseCard]) -> list[tuple[str, float]
     """Word-overlap (Jaccard) of each reworded question with its card prompt.
 
     Returns ``(card_id#index, overlap)`` for any reworded question at or above
-    ``MAX_REWORD_OVERLAP`` — i.e. too close to the memory prompt to count as a
+    ``MAX_REWORD_OVERLAP``, i.e. too close to the memory prompt to count as a
     genuine rewording. An empty list means every rewording is distinct.
     """
     flagged: list[tuple[str, float]] = []

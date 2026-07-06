@@ -36,19 +36,20 @@ html {
 }
 
 // ============================================================================
-// SOAP (SOA Exam P) — the "clean / fresh" design system (the DNA)
+// SOAP (SOA Exam P): the "clean / fresh" design system (the DNA)
 // ============================================================================
 // One place to tune the whole custom UI. The pun is the brand: SOA Exam P →
-// SOAP. The register is clean water + soap suds: aqua/teal leads, rounded bubbly
+// SOAP. The register is clean water + soap suds: a pale blue leads in light mode
+// (teal in dark), rounded bubbly
 // shapes, a friendly rounded type pairing (Fredoka display / Nunito body), soft
 // foam-like elevation, quiet motion. All accent + effect tokens are
 // speedrun-only (new names) so they NEVER touch stock Anki screens. The neutral
 // surface/text tokens (--canvas*, --fg*, --border*) are Anki core tokens,
-// RE-MAPPED only inside the speedrun roots below — stock Anki keeps its own.
+// RE-MAPPED only inside the speedrun roots below; stock Anki keeps its own.
 //
 // HONESTY GUARDRAIL (this app's auto-fail rule): decoration is chrome. The three
 // signal colours (--sr-pending / --sr-progress / --sr-mastered) stay SEMANTIC
-// and fixed — never rotated through the accent palette — because they carry
+// and fixed (never rotated through the accent palette) because they carry
 // measured meaning (not-started / in-progress / mastered). Readiness numbers
 // stay high-contrast and are NEVER set in the bubbly display font; suds, gloss,
 // and bubbles are decorative only and never touch a measured number.
@@ -72,12 +73,12 @@ html {
     // text/borders/nodes.
     --sr-accent-strong: #0c6c78; // solid button fill (foam text ≥ 4.5:1)
     --sr-accent-strong-2: #095662; // its hover / pressed (deeper, higher contrast)
-    --sr-on-accent: #f1fbfb; // foam — label/icon colour on teal fills
+    --sr-on-accent: #f1fbfb; // foam: label/icon colour on teal fills
     // Text on a *warm/light* accent fill (lemon, mint): a fixed near-black ink
     // that stays legible in both themes (the warm fills are light in both).
     --sr-on-warm: #14201f;
 
-    // Semantic signal colours — ONE shared language for the map + readiness.
+    // Semantic signal colours: ONE shared language for the map + readiness.
     // FIXED + meaningful (never rotated):
     //   not-started (cool grey) · in-progress (suds gold) · mastered (fresh mint).
     --sr-pending: #8a9598; // cool grey
@@ -94,7 +95,7 @@ html {
     --sr-correct-fill: #256b45; // solid green chip (foam text ≥ 4.5:1)
     --sr-wrong-fill: #a83f2b; // solid red chip (foam text ≥ 4.5:1)
 
-    // Shape + radius — bubbly and rounded (soap bar / bubble). Cards get a soft
+    // Shape + radius: bubbly and rounded (soap bar / bubble). Cards get a soft
     // generous radius; the pill stays fully round.
     --sr-radius-sm: 12px;
     --sr-radius: 16px; // containers
@@ -103,16 +104,16 @@ html {
     --sr-border: 2px; // standard border
     --sr-border-heavy: 3px;
 
-    // Soft, diffuse elevation (foam-like) — a quiet teal-tinted depth, no
+    // Soft, diffuse elevation (foam-like): a quiet teal-tinted depth, no
     // clashing multi-colour stacks. Vocabulary is sm / md (default) / lg.
     --sr-shadow-sm: 0 1px 3px rgba(6, 40, 45, 0.22);
     --sr-shadow: 0 6px 18px rgba(6, 40, 45, 0.24);
     --sr-shadow-lg: 0 18px 46px rgba(6, 40, 45, 0.38);
 
-    // Typography — Fredoka (rounded display) for headings/brand, Nunito (rounded
+    // Typography: Fredoka (rounded display) for headings/brand, Nunito (rounded
     // sans) for body/UI. Monospace is reserved for verbatim code / engine
     // references on the transparency + honesty surfaces. Measured numbers stay in
-    // the clean body font, high-contrast — never the bubbly display font.
+    // the clean body font, high-contrast, never the bubbly display font.
     --sr-font-heading: "Fredoka Variable", "Fredoka", "Baloo 2", system-ui,
         sans-serif;
     --sr-font-body: "Nunito Variable", "Nunito", system-ui, sans-serif;
@@ -135,22 +136,27 @@ html {
 .metrics,
 .formula-sheet,
 .ptest {
-    --canvas: #eaf5f7; // pale aqua porcelain
-    --canvas-elevated: #ffffff; // clean tile — sheets float on the porcelain
-    --canvas-inset: #d7eaee; // tracks / insets / rails
-    --sr-muted: #e4f1f3; // container tint base
+    --canvas: #e8f3fd; // pale sky-blue (the light hero, soap suds on water)
+    --canvas-elevated: #ffffff; // clean tile: sheets float on the pale blue
+    --canvas-inset: #d8e8f8; // tracks / insets / rails
+    --sr-muted: #e3eefb; // container tint base
     --sr-card-bg: #ffffff; // opaque cards (no glass)
-    --fg: #123338; // deep teal ink (critical text) — AAA on porcelain
-    --fg-subtle: #4f6b70; // muted teal-grey secondary text
-    --border: rgba(18, 51, 56, 0.14); // subtle structural hairline
-    --border-subtle: rgba(18, 51, 56, 0.07);
-    --sr-focus: #0f766e; // teal focus ring on light
+    --fg: #12324e; // deep navy ink (critical text), AAA on pale blue
+    --fg-subtle: #4f6684; // muted blue-grey secondary text
+    --border: rgba(18, 50, 78, 0.14); // subtle structural hairline
+    --border-subtle: rgba(18, 50, 78, 0.07);
+    --sr-focus: #2563c9; // blue focus ring on light
 
-    // The five soap accents are bright on the dark hero, but only reach ~2–3:1 on
-    // porcelain. In the light variant they deepen to AA-legible tones (≥ 4.5:1 as
-    // text on porcelain) WITHOUT touching the fixed signal colours
-    // (--sr-pending/progress/mastered), which stay semantic.
-    --sr-accent: #0f766e; // aqua/teal (deepened for paper)
+    // Light hero = PALE BLUE. The primary accent + its companions deepen to
+    // AA-legible blues on the pale-blue surface (they override the shared teal
+    // companions in :root, which stay for the dark "bath-water" mode). The
+    // section-rotation hues (mint/amber/bubblegum/sky) stay for variety, and the
+    // fixed signal colours (--sr-pending/progress/mastered) are untouched.
+    --sr-accent: #2563c9; // blue (deepened for pale-blue paper; ≥ 4.5:1 as text)
+    --sr-accent-2: #1e4fa6; // deeper blue (brand gradient / hover)
+    --sr-accent-weak: rgba(37, 99, 201, 0.14); // faint blue wash
+    --sr-accent-strong: #1d4ed8; // solid blue button fill (white text ≥ 4.5:1)
+    --sr-accent-strong-2: #1a45c0; // its hover / pressed
     --sr-secondary: #067a5e; // mint
     --sr-tertiary: #8a6d1f; // suds gold (deep amber)
     --sr-quaternary: #b13a72; // bubblegum
@@ -199,11 +205,11 @@ html {
 // ---------------------------------------------------------------------------
 // The academic system carries no ambient/decorative motion (the earlier
 // "hyperpop" float/pulse/glow/spin utilities were removed with that register).
-// Motion here only ever conveys state — hover, focus, reveal — and lives in the
+// Motion here only ever conveys state (hover, focus, reveal) and lives in the
 // component that owns the transition. What remains global is the honest promise
 // below: honour the user's reduced-motion preference everywhere.
 
-// Motion sensitivity — keep every visual style, drop the continuous motion.
+// Motion sensitivity: keep every visual style, drop the continuous motion.
 @media (prefers-reduced-motion: reduce) {
     .app,
     .readiness,

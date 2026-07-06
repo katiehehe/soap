@@ -12,25 +12,26 @@ test("centre Exam P bubble opens its mastery detail, which launches the practice
     });
 
     // The centre "Exam P" bubble now opens the overall-mastery detail; its
-    // "Practice test (whole exam)" button launches the FULL EXAM SIMULATION.
+    // "Practice test" button launches the FULL EXAM SIMULATION.
     await page.locator("button.bubble.center").click();
     await expect(page.getByRole("heading", { name: "SOA Exam P" })).toBeVisible();
     await page
-        .getByRole("button", { name: "Practice test (whole exam)" })
+        .getByRole("button", { name: "Practice test", exact: true })
         .click();
 
     // The intro renders without any desktop bridge (assembly happens on Start).
     await expect(
         page.getByRole("heading", { name: "Full exam simulation" }),
     ).toBeVisible();
-    await expect(page.getByText(/exam-shaped/)).toBeVisible();
+    // Integrity: every item is drawn from a pre-built bank, nothing generated live.
+    await expect(page.getByText(/pre-built bank/)).toBeVisible();
     // Honesty framing: it records real evidence and feeds the ranged Readiness.
     await expect(page.getByText(/real graded evidence/)).toBeVisible();
-    // Fixed shape per the exam: exactly 30 questions on a 3:00:00 countdown, and
-    // no length picker (the size is set by the mode, not chosen).
-    await expect(
-        page.getByText(/exactly 30 multiple-choice questions/),
-    ).toBeVisible();
+    // Fixed shape per the exam, shown as a spec strip: 30 questions, A-E
+    // multiple choice, on a 3:00:00 countdown. No length picker (the size is
+    // set by the mode, not chosen).
+    await expect(page.getByText("30", { exact: true })).toBeVisible();
+    await expect(page.getByText("multiple choice")).toBeVisible();
     await expect(page.getByText("03:00:00")).toBeVisible();
     await expect(page.getByText(/auto-submits at zero/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Start exam" })).toBeVisible();

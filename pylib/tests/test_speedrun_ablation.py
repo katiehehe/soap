@@ -16,7 +16,7 @@ from anki.speedrun.soa_sample import load_sample_items
 
 
 def test_equal_study_time_across_builds():
-    # Every build studies the identical multiset of reps — only order differs.
+    # Every build studies the identical multiset of reps; only order differs.
     counts = {b: rep_counts(build_sequence(b)) for b in BUILDS}
     ref = counts["full"]
     for b in BUILDS:

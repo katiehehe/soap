@@ -6,7 +6,7 @@ the sync bring-up and its test so Friday is a checklist, not a design session.
 
 ## What we rely on
 
-Anki already has a full sync protocol (`rslib/src/sync/`) — collection sync +
+Anki already has a full sync protocol (`rslib/src/sync/`): collection sync +
 media sync against a sync server. We do **not** write a new sync engine; we make
 our fork's desktop and the AnkiDroid build talk to the **same self-hosted sync
 server** and verify reviews flow both ways without loss.
@@ -20,7 +20,7 @@ server** and verify reviews flow both ways without loss.
 3. Do a first full sync so both sides share one collection (the Exam P deck with
    its subtopic tags).
 
-## Test 7b — reviews land once, conflicts resolve
+## Test 7b: reviews land once, conflicts resolve
 
 - **Offline divergence:** with both offline, review **10 cards on the phone** and
   **10 different cards on the desktop**.
@@ -55,7 +55,7 @@ server** and verify reviews flow both ways without loss.
   phone runs the same engine, so the scripted desktop↔desktop test exercises the
   identical sync code path).
 
-## On-device verification (emulator) — status + tooling
+## On-device verification (emulator): status + tooling
 
 Re-checked the 2-way sync requirements against the **real AnkiDroid emulator**
 (our fork's engine), talking to a local `make sync-server` on `10.0.2.2:27701`.
@@ -78,7 +78,7 @@ Verified:
 - **Server → phone demonstrated on-device (re-verified this session):** with the
   fully-scored persona uploaded to the local server
   (`tools/speedrun/sync_setup.py --from-collection out/demo-persona.anki2`), the
-  `Speedrun_P` emulator ran the real protocol — Sync → *Select collection to keep*
+  `Speedrun_P` emulator ran the real protocol: Sync → *Select collection to keep*
   → **AnkiWeb** → **Replace** → full download + media sync (logcat:
   `anki::sync::media::syncer: media sync complete`, `SyncMediaWorker: success`;
   186 notes pulled). The phone then rendered the three scores with ranges (see
@@ -100,15 +100,15 @@ Not cleanly demonstrated on-device (environment-blocked, **not** a sync defect):
   processes) or a release build (no LeakCanary), the reviewer flow is stable. The
   server→phone full download + the three-score render DID complete on-device this
   session; only the phone→desktop *review* leg awaits a stable capture (prior real
-  capture exists — see above). The shared engine merges correctly (proven by
+  capture exists, see above). The shared engine merges correctly (proven by
   `make sync-test`/`make sync-twoway`), so this is a demo-environment limitation.
 
 Tooling added for reproducing the on-device test:
 
-- `tools/speedrun/sync_emu.py` — desktop-side peer on the shared engine (persistent
+- `tools/speedrun/sync_emu.py`: desktop-side peer on the shared engine (persistent
   headless collection) with `sync` / `status` / `review N` / `card` / `reset`
   subcommands, pointed at the same local server the phone uses.
-- `tools/speedrun/emu_drive.py` — tiny uiautomator driver (tap-by-text, wait,
+- `tools/speedrun/emu_drive.py`: tiny uiautomator driver (tap-by-text, wait,
   screenshot) to drive the AnkiDroid emulator UI robustly.
 
 Repro sketch: `make sync-server` (leave running) → boot emulator + open AnkiDroid

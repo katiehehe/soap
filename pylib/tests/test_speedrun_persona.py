@@ -5,6 +5,8 @@ from anki.speedrun.persona import (
     SYNTHETIC_LABEL,
     answer_items,
     default_persona,
+    experienced_persona,
+    new_persona,
     p_correct,
     review_grades,
     synthetic_cohort,
@@ -12,10 +14,35 @@ from anki.speedrun.persona import (
 from anki.speedrun.soa_sample import load_sample_items
 
 
+def _mean_skill(persona) -> float:
+    return sum(persona.skill.values()) / len(persona.skill)
+
+
 def test_persona_is_labelled_synthetic():
-    # Anti-fabrication: a persona must never look like a real measurement.
-    p = default_persona()
-    assert p.label == SYNTHETIC_LABEL
+    # Anti-fabrication: a persona must never look like a real measurement. Every
+    # scenario persona carries the synthetic label so nothing looks like real data.
+    for persona in (default_persona(), new_persona(), experienced_persona()):
+        assert persona.label == SYNTHETIC_LABEL
+
+
+def test_scenario_personas_are_deterministic_and_cover_every_subtopic():
+    for factory in (new_persona, experienced_persona):
+        a = factory(123)
+        b = factory(123)
+        assert a.skill == b.skill
+        assert len(a.skill) == 19
+        assert all(0.0 <= v <= 1.0 for v in a.skill.values())
+
+
+def test_scenario_personas_are_ordered_new_intermediate_experienced():
+    # The three mock users span the readiness range: barely-ready < borderline <
+    # well-prepared. Ordering the mean latent skill keeps the demo scenarios
+    # honestly distinct (new abstains, experienced clears every gate).
+    assert (
+        _mean_skill(new_persona())
+        < _mean_skill(default_persona())
+        < _mean_skill(experienced_persona())
+    )
 
 
 def test_default_persona_is_deterministic():

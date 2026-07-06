@@ -70,7 +70,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             color 0.2s ease;
     }
 
-    /* Sizes — all ≥ 44px tall (touch target). */
+    /* Sizes: all ≥ 44px tall (touch target). */
     .sm {
         height: 42px;
         padding: 0 1.15rem;
@@ -87,7 +87,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 1.05rem;
     }
 
-    /* Primary — solid periwinkle, paper text, gentle elevation. Uses the
+    /* Primary: solid periwinkle, paper text, gentle elevation. Uses the
        deeper --sr-accent-strong so the label clears WCAG-AA 4.5:1. */
     .primary {
         color: var(--sr-on-accent);
@@ -116,7 +116,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             inset 0 1px 0 rgba(255, 255, 255, 0.3);
     }
 
-    /* Secondary — quiet accent outline that tints on hover. */
+    /* Secondary: quiet accent outline that tints on hover. */
     .secondary {
         color: var(--btn-accent);
         background: transparent;
@@ -126,7 +126,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: var(--sr-accent-weak);
     }
 
-    /* Outline — bordered, soft elevation; text stays on --fg (always readable). */
+    /* Outline: bordered, soft elevation; text stays on --fg (always readable). */
     .outline {
         color: var(--fg);
         background: var(--canvas-elevated);
@@ -137,7 +137,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: var(--sr-accent-weak);
     }
 
-    /* Ghost — plain text with a quiet underline. */
+    /* Ghost: plain text with a quiet underline. */
     .ghost {
         color: var(--sr-accent);
         background: transparent;
@@ -154,7 +154,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         transform: scale(0.98);
     }
 
-    /* Focus — visible ring with offset. */
+    /* Focus: visible ring with offset. */
     .sr-btn:focus-visible {
         outline: 2px solid var(--sr-focus);
         outline-offset: 2px;

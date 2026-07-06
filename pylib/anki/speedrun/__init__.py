@@ -116,7 +116,7 @@ def unit_deck_name(
 # Mirrors ACTIVE_TIER_SCOPE_KEY + TierScope in rslib/src/speedrun/mastery.rs.
 # When the user opens a within-unit (unit) or cross-unit (root) TIER deck, we
 # record which tier + which deck here so the Rust queue builder serves ONLY the
-# subtopics actually in that mastery pool — a still-blocked subtopic never leaks
+# subtopics actually in that mastery pool, so a still-blocked subtopic never leaks
 # into a parent deck's study session. Keyed to the deck id, so a stale value can
 # never affect a different deck; absent -> no scoping (the deck studies its whole
 # subtree, exactly as upstream). Selection only: it drops out-of-tier cards from
@@ -132,8 +132,8 @@ def tier_for_deck_name(name: str, root: str = "SOA Exam P") -> str | None:
 
     - the ROOT deck (``SOA Exam P``) -> cross-unit tier;
     - a UNIT deck (a direct child, ``SOA Exam P::<unit>``) -> within-unit tier;
-    - a subtopic (leaf) deck or any non-exam deck -> ``None`` (no scope needed —
-      a subtopic deck already holds a single subtopic, so it is already strict).
+    - a subtopic (leaf) deck or any non-exam deck -> ``None`` (no scope needed,
+      since a subtopic deck already holds a single subtopic, so it is already strict).
     """
     if not name:
         return None
@@ -146,7 +146,7 @@ def tier_for_deck_name(name: str, root: str = "SOA Exam P") -> str | None:
 
 def set_tier_scope(col: Any, deck_id: int, tier: str) -> None:
     """Record the active tier study scope (deck id + tier) so the Rust queue
-    builder serves only that tier's mastery pool. Selection only — it never
+    builder serves only that tier's mastery pool. Selection only, so it never
     touches FSRS intervals, undo, or any score."""
     col.set_config(ACTIVE_TIER_SCOPE_KEY, {"deck_id": int(deck_id), "tier": tier})
 
@@ -290,7 +290,7 @@ def set_mastery_scheduler(col: Any, on: bool) -> None:
 
 def set_guided_mode(col: Any, on: bool) -> None:
     """Turn the guided prerequisite gate on/off (the global 'free mode' bypass).
-    Curriculum ordering only — it never changes any score or the give-up rule."""
+    Curriculum ordering only, so it never changes any score or the give-up rule."""
     col.set_config(GUIDED_MODE_KEY, bool(on))
 
 
@@ -351,7 +351,7 @@ POOL_CROSS_UNIT = 2
 
 
 def tier_scope_name(pool: int, tag: str, topics: dict[str, Any] | None = None) -> str:
-    """The scope label to show for a card's mastery tier — the descriptor after
+    """The scope label to show for a card's mastery tier: the descriptor after
     the tier name in the reviewer banner (and it mirrors the study map's plan).
 
     The scope is the tier's, not just the current card's subtopic:

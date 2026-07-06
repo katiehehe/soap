@@ -6,8 +6,8 @@ product
 
 ## Users
 
-Candidates preparing for the SOA Exam P (Probability) actuarial exam — self-studying
-adults putting in 150–300 hours, mostly on a desktop (this Anki fork) with a phone
+Candidates preparing for the SOA Exam P (Probability) actuarial exam: self-studying
+adults putting in 150-300 hours, mostly on a desktop (this Anki fork) with a phone
 companion that shares the same engine. On any given screen the user is in one of three
 tasks: studying the cards due now, deciding what to study next (concept map / plan), or
 checking how ready they are (readiness).
@@ -22,7 +22,7 @@ and always knows the single best next action.
 
 ## Brand Personality
 
-Calm, scholarly, and trustworthy — an academic study tool, not an arcade. Three words:
+Calm, scholarly, and trustworthy: an academic study tool, not an arcade. Three words:
 **scholarly, honest, focused**. A restrained "dark-academia" palette (ink + warm ivory,
 muted indigo / teal / gold accents) with a serif/sans pairing (Fraunces + DM Sans);
 personality comes through craft and typography, not noise. Easy on the eyes for long
@@ -33,8 +33,8 @@ study sessions.
 - A guess dressed up as a measurement: a glowing/celebratory readiness score, or hype
   words behind a "no score yet" state. (This is an auto-fail for the project.)
 - Blending the three scores into a single "% ready".
-- Overstimulating chrome — neon clashes, gradient text, glows, floating emoji — that is
-  jarring and fatiguing across 150–300 hours of study.
+- Overstimulating chrome (neon clashes, gradient text, glows, floating emoji) that is
+  jarring and fatiguing across 150-300 hours of study.
 - Looking like stock Anki.
 
 ## Design Principles

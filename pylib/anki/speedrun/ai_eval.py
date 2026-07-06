@@ -9,13 +9,13 @@ record. This module wraps those records into one machine-readable artifact and
 writes it to a committed path, so the "AI beats a simpler baseline" claim lives
 as a reproducible FILE, not free-floating prose.
 
-Honesty contract (hard rule — see .cursor/rules/ai-traceability.mdc):
+Honesty contract (hard rule, see .cursor/rules/ai-traceability.mdc):
 
 - **Baseline / offline cells are reproducible without a key** and are always
   filled in.
 - **AI cells are populated ONLY when the eval ran against a real provider**
   (``OPENAI_API_KEY`` set). With no key the AI cell is ``null`` and the verdict
-  is ``"pending"`` — never a fabricated or hardcoded number.
+  is ``"pending"``, never a fabricated or hardcoded number.
 - The top-level ``ai_ran`` flag + per-eval ``ai_ran`` let a reader tell at a
   glance whether the AI side is real or pending, and ``git_sha`` +
   ``generated_at_*`` date the run.
@@ -50,7 +50,7 @@ DEFAULT_ARTIFACT_PATH = (
 _NOTE = (
     "Baseline/offline cells are reproducible with no key and are always filled. "
     "AI cells are populated only when the eval ran with OPENAI_API_KEY; when "
-    "absent they are null and the verdict is 'pending' — never fabricated. "
+    "absent they are null and the verdict is 'pending', never fabricated. "
     "Regenerate with `make ai-report` (add OPENAI_API_KEY to populate AI cells)."
 )
 
@@ -66,7 +66,7 @@ def read_git_sha(repo: str | Path | None = None) -> str | None:
             timeout=5,
             check=False,
         )
-    except Exception:  # noqa: BLE001 — provenance is best-effort, never fatal
+    except Exception:  # noqa: BLE001 (provenance is best-effort, never fatal)
         return None
     sha = out.stdout.strip()
     return sha or None
@@ -110,7 +110,7 @@ def build_report(
         "ai_ran": ai_ran,
         # A keyed run over a capped subsample (a smoke run), NOT the full held-out
         # set. When true, the AI cells are sampled and must not be read as the
-        # full result — the per-eval AI cells carry sample_size/seed.
+        # full result: the per-eval AI cells carry sample_size/seed.
         "is_subsample": is_subsample if ai_ran else False,
         # Only name a provider/model when the AI side actually ran, so a pending
         # artifact never implies an AI result it does not have.

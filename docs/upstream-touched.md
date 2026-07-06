@@ -56,7 +56,7 @@ Format: `path - what changed - merge risk (low/med/high)`.
   (topic weight x weakness). The strict-tier scope reads a transient
   `speedrunActiveTierScope` config (`{deck_id, tier}`, keyed to the deck being
   studied), so opening a unit deck (within-unit tier) or the root deck
-  (cross-unit tier) serves ONLY the subtopics actually in that mastery pool — a
+  (cross-unit tier) serves ONLY the subtopics actually in that mastery pool, so a
   still-Blocked subtopic can no longer leak in via the parent deck's subtree. It
   only DROPS out-of-tier gathered cards (like a per-deck limit); cards with no
   syllabus subtopic are never touched. All flags default off; when both reorder
@@ -98,6 +98,58 @@ Format: `path - what changed - merge risk (low/med/high)`.
 - `pylib/tests/{test_collection,test_importing,test_models,test_schedv3,test_stats}.py`
   - unused-import cleanups only (e.g. dropping unused `pytest`/`re`/`os` imports);
     no behaviour change - low.
+- `qt/aqt/__init__.py` - macOS hover-cursor crash guard - med, behavioural. In
+  `AnkiApp.eventFilter`, wrap the hover pointing-hand cursor block in
+  `if not is_mac:` so the cosmetic `setOverrideCursor(QCursor(...))` never runs on
+  macOS, where realizing the cursor to a CGImage (`QImage::toCGImage` ->
+  `CGImageCreate`) hits an arm64 pointer-authentication SIGTRAP (the same class of
+  crash guarded in `progress.py`), so hovering a button (e.g. Sync) cannot take the
+  app down. Re-indents an existing upstream block, so a rebase that edits
+  `eventFilter` will conflict.
+- `qt/aqt/overview.py` - hide the overview bottom bar on the finished screen - med.
+  `Overview.show()` hides `mw.bottomWeb` when `sched._is_finished()`, and
+  `refresh()`'s success path draws `_renderBottom()` only when NOT finished, so the
+  full-bleed custom congrats page never shows Anki's "Options / Custom study"
+  chrome. Read-only (no writes); a normal deck overview keeps its bottom bar.
+  Replaces one existing `_renderBottom()` call site, so re-check on rebase.
+- `qt/aqt/deckbrowser.py` - remove the "Create Deck" button - low/med. Drop the
+  `["", "create", tr.decks_create_deck()]` entry from `DeckBrowser.drawLinks`
+  (single-exam fork: no ad-hoc decks; Get Shared / Import File and the categorized
+  add-card flow remain). Small edit to a list literal.
+- `ts/vite.config.ts` - dev-server proxy override - low. The `/_anki` proxy target
+  becomes `process.env.ANKI_PROXY_TARGET ?? "http://127.0.0.1:40000"` so the Svelte
+  dev server can point at another backend. Dev tooling only (one line), no effect
+  on the shipped app.
+- `package.json` (+ `yarn.lock`) - add two font deps - low. Add
+  `@fontsource-variable/fredoka` and `@fontsource-variable/nunito` (the SOAP theme
+  fonts); `yarn.lock` regenerates to match. Append-only to the dependencies map;
+  `yarn.lock` is machine-generated, so resolve any conflict by re-running yarn.
+- `qt/tests/test_mediasrv.py` - test additions (allow-list authorization) - low.
+  Add a `TestDynamicRequestPermissions` class + `SPEEDRUN_ALLOWLISTED_PATHS`
+  proving the first-party speedrun endpoints authorize via the allow-list with no
+  Bearer header (plus a control that an unlisted path still 403s), and a few new
+  imports from `aqt.mediasrv`. Append-only apart from the import list.
+- `qt/tests/launch_anki_for_e2e.py` - e2e launch env - low. Set
+  `ANKI_SPEEDRUN_NOSEED=1` so Playwright runs exercise the empty-collection
+  give-up / honesty states (3 lines, append-only insertion into the env dict).
+- `.dprint.json` - formatter exclude - low. Add `docs/project-brief.md` to the
+  formatter's exclude list (1 line, append-only to an array).
+- `.gitignore` - fork ignores - low. Append `.env` (API keys), personal Cursor
+  rules, the gitignored real SOA sample JSON, `*.pdf` (copyrighted study
+  material), and `.impeccable/` (append-only).
+- `.version` - set the app version string to `25.09.99` - med. The fork sets this
+  one-line version file (upstream base was `26.05`); upstream rewrites it on every
+  release, so it conflicts on each rebase, but the resolution is a trivial one-line
+  pick.
+- `README.md` - rewritten as the fork README - low/med. Replaces Anki's stock
+  README with the SOAP / SOA Exam P overview (the three scores, the exam, build /
+  run). Fork-owned content, so resolve a rebase conflict by keeping the fork
+  version; re-check for any new upstream README sections worth carrying over.
+- `CLAUDE.md` - fork agent brief - low/med. Replaces Anki's stock "Claude Code
+  Configuration" with the fork's `AGENTS.md`-style agent brief (mirrors
+  `AGENTS.md`). Fork-owned; keep the fork version on a rebase conflict.
+- `CONTRIBUTORS` - add the fork author - low. Append `Katie He` to the contributor
+  list (1 line, append-only).
 
 Note: `get_study_plan` also _reads_ `Collection::deck_tree` (an existing public
 method) to get Anki's own daily-limit-capped due counts, and `get_study_pace`

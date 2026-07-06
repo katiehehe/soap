@@ -2,23 +2,28 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-"""Open the synthetic demo persona in the desktop app — no manual studying.
+"""Open a synthetic demo persona in the desktop app, no manual studying needed.
 
-    make demo
+    make demo               # intermediate: a real readiness range (default)
+    make demo-new           # barely studied: readiness honestly abstains
+    make demo-experienced   # well-prepared: a high, tight readiness range
 
-The demo persona (`out/demo-persona.anki2`, built by `make seed-persona` if
-missing) already has 200+ graded reviews, FSRS memory state, and graded practice
-tests, so the app opens straight into a FULLY POPULATED state: three signals each
-with a range (Memory / Performance / Readiness), a colour-filled concept map,
-today's tiered plan, and the exam-pace card — without grading a single card.
+Each scenario's collection (built by ``seed_persona.py`` if missing) already has
+its synthetic study history, so the app opens straight into a populated state:
+the three signals (Memory / Performance / Readiness), a colour-filled concept
+map, today's tiered plan, and the exam-pace card, all without grading a card. The
+"new" scenario opens into the honest ABSTAIN state (the give-up rule), which is
+the point of that demo.
 
-It uses a throwaway ANKI_BASE (`out/demo-base`) and its own "Demo" profile, so
-your real Anki collection is never touched. Re-run any time; the collection is
-refreshed from the latest persona on each launch.
+Each scenario uses its own throwaway ANKI_BASE (e.g. `out/demo-base-new`) and a
+"Demo" profile, so your real Anki collection is never touched and scenarios never
+clobber each other. Re-run any time; the collection is refreshed from the latest
+persona on each launch.
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import pickle
 import random
@@ -30,9 +35,19 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-PERSONA = REPO / "out" / "demo-persona.anki2"
-BASE = REPO / "out" / "demo-base"
 PROFILE = "Demo"
+
+
+def scenario_paths(scenario: str) -> tuple[Path, Path]:
+    """The (persona collection, ANKI_BASE) for a scenario. Mirrors the per-scenario
+    filenames written by ``seed_persona.py``; ``intermediate`` keeps the canonical
+    ``out/demo-persona.anki2`` and ``out/demo-base`` other tooling depends on."""
+    if scenario == "intermediate":
+        return REPO / "out" / "demo-persona.anki2", REPO / "out" / "demo-base"
+    return (
+        REPO / "out" / f"demo-persona-{scenario}.anki2",
+        REPO / "out" / f"demo-base-{scenario}",
+    )
 
 
 def _seed_prefs(base: Path) -> None:
@@ -83,22 +98,37 @@ def _seed_prefs(base: Path) -> None:
 
 
 def main() -> int:
-    if not PERSONA.exists():
-        print("Demo persona missing; building it (make seed-persona)...")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--scenario",
+        choices=("new", "intermediate", "experienced"),
+        default="intermediate",
+        help="which mock user to open (default: intermediate)",
+    )
+    args = parser.parse_args()
+    persona, base = scenario_paths(args.scenario)
+
+    if not persona.exists():
+        print(f"Demo persona missing; building the {args.scenario!r} scenario...")
         subprocess.run(
-            [sys.executable, str(REPO / "tools" / "speedrun" / "seed_persona.py")],
+            [
+                sys.executable,
+                str(REPO / "tools" / "speedrun" / "seed_persona.py"),
+                "--scenario",
+                args.scenario,
+            ],
             check=True,
             cwd=str(REPO),
         )
-    (BASE / PROFILE).mkdir(parents=True, exist_ok=True)
-    _seed_prefs(BASE)
+    (base / PROFILE).mkdir(parents=True, exist_ok=True)
+    _seed_prefs(base)
     # Fresh copy of the persona each launch, so demo edits never accumulate and
-    # the collection always reflects the latest `make seed-persona`.
-    shutil.copy(PERSONA, BASE / PROFILE / "collection.anki2")
+    # the collection always reflects the latest seed.
+    shutil.copy(persona, base / PROFILE / "collection.anki2")
 
     print("=" * 70)
-    print("Opening the SYNTHETIC DEMO PERSONA in a throwaway profile.")
-    print(f"  base    : {BASE}")
+    print(f"Opening the {args.scenario!r} SYNTHETIC DEMO PERSONA in a throwaway profile.")
+    print(f"  base    : {base}")
     print("  profile : Demo   (your real Anki collection is NOT touched)")
     print("Everything is pre-populated: open Tools -> Exam readiness (Speedrun)")
     print("and Tools -> Study map (Speedrun) to see all three signals + the map.")
@@ -108,10 +138,10 @@ def main() -> int:
         print("SKIP_RUN set: setup only, not launching the GUI.")
         return 0
 
-    os.environ["ANKI_BASE"] = str(BASE)
+    os.environ["ANKI_BASE"] = str(base)
     sys.path[:0] = ["pylib", "qt", "out/pylib", "out/qt"]
     os.chdir(REPO)
-    sys.argv = ["anki", "-b", str(BASE), "-p", PROFILE]
+    sys.argv = ["anki", "-b", str(base), "-p", PROFILE]
     import aqt
 
     aqt.run()

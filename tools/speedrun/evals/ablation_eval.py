@@ -2,7 +2,7 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-"""Study-feature ablation (rubric section 8) — RUN the three builds.
+"""Study-feature ablation (rubric section 8): RUN the three builds.
 
 Feature under test: the WITHIN-UNIT interleaving tier of the three-tier
 mastery-gated scheduler. Builds: Full / Ablated (tier removed) / Plain Anki.
@@ -19,7 +19,7 @@ so it cannot smuggle in the answer:
 - at disc_gain = 0 the three builds must coincide (fair-test sanity).
 
 The real effect size for real students is unknown; this reports the experiment,
-the null, and the sensitivity to the assumed mechanism — not a measured claim.
+the null, and the sensitivity to the assumed mechanism, not a measured claim.
 
 Usage:
     out/pyenv/bin/python tools/speedrun/evals/ablation_eval.py [--students 60] [--seed 0]
@@ -76,7 +76,7 @@ def main() -> int:
     provenance = "official SOA" if corpus.is_real_soa else "original fallback"
 
     print("=" * 76)
-    print("STUDY-FEATURE ABLATION (section 8) — within-unit interleaving tier")
+    print("STUDY-FEATURE ABLATION (section 8): within-unit interleaving tier")
     print("Builds: Full / Ablated (tier removed) / Plain. Metric: accuracy on")
     print(
         f"{len(items)} held-out exam-style questions ({corpus.source}, {provenance})."
@@ -86,11 +86,11 @@ def main() -> int:
     )
     print("=" * 76)
 
-    # Equal study time — the invariant that keeps the test fair.
+    # Equal study time is the invariant that keeps the test fair.
     if not _equal_study_ok():
         print("\nABORT: builds do not share an identical study budget (bug).")
         return 1
-    print("\nEqual study time: CONFIRMED — every build studies the same reps per")
+    print("\nEqual study time: CONFIRMED. Every build studies the same reps per")
     print("subtopic; only the interleaving order differs.")
 
     # Held-out / leakage: the exam questions must not be near-copies of the study
@@ -100,7 +100,7 @@ def main() -> int:
     leaks = find_leaks(study, evalq)
     print(
         f"Leakage scan (study cards vs eval questions): "
-        f"{'CLEAN' if not leaks else f'{len(leaks)} LEAK(S) — aborting'}"
+        f"{'CLEAN' if not leaks else f'{len(leaks)} LEAK(S), aborting'}"
     )
     if leaks:
         return 1
@@ -138,7 +138,7 @@ def main() -> int:
     print("\n" + "-" * 76)
     print(
         f"NULL check (disc_gain = 0): build spread = {null_spread:.4f} "
-        f"({'PASS — builds coincide with no assumed effect' if null_spread < 1e-9 else 'FAIL — bias in the harness'})"
+        f"({'PASS, builds coincide with no assumed effect' if null_spread < 1e-9 else 'FAIL, bias in the harness'})"
     )
 
     if reference:
@@ -158,7 +158,7 @@ def main() -> int:
         )
     print(
         "\nHonest reading: with NO assumed mechanism (disc_gain=0) the builds are\n"
-        "identical — this run does not, and cannot, prove the feature works. It shows\n"
+        "identical, so this run does not, and cannot, prove the feature works. It shows\n"
         "a fair, reproducible experiment: equal study time, held-out leakage-clean\n"
         "questions, the ablation isolating the within-unit tier (Full vs Ablated), and\n"
         "the effect size that a real study-log run would need to measure."

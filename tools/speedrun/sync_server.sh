@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Start Anki's built-in sync server (the SAME Rust sync protocol the phone and
-# desktop use) for local phone<->desktop sync — no AnkiWeb account needed.
+# desktop use) for local phone<->desktop sync; no AnkiWeb account needed.
 #
 # It binds all interfaces so the Android emulator can reach it. From the host use
 #   http://127.0.0.1:$SYNC_PORT/
@@ -19,7 +19,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PY="$REPO/out/pyenv/bin/python"
-[ -x "$PY" ] || { echo "python not built yet at $PY — run ./run once first" >&2; exit 1; }
+[ -x "$PY" ] || { echo "python not built yet at $PY, run ./run once first" >&2; exit 1; }
 
 export SYNC_HOST="${SYNC_HOST:-0.0.0.0}"
 export SYNC_PORT="${SYNC_PORT:-27701}"

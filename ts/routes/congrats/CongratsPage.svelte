@@ -144,7 +144,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         position: relative;
         overflow: hidden;
 
-        /* A fresh "you finished" card — a mint top accent marks the win
+        /* A fresh "you finished" card: a mint top accent marks the win
            (inset shadow so it tucks into the rounded corners). */
         background-color: var(--canvas-elevated);
         border: 1px solid var(--border);

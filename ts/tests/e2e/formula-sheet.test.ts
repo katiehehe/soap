@@ -3,15 +3,16 @@
 
 import { expect, test } from "./fixtures";
 
-test("formula sheet groups sourced formulas and searches/filters", async ({ page }) => {
+test("formula sheet groups formulas and searches/filters", async ({ page }) => {
     await page.goto("/formula-sheet");
 
     await expect(page.getByRole("heading", { name: "Formula sheet" })).toBeVisible({
         timeout: 15000,
     });
 
-    // Honesty: it is a reference surface and says so — it never moves a score.
-    await expect(page.getByText(/never logs a review/)).toBeVisible();
+    // The "Reference only" banner and intro copy were removed, so their text is
+    // gone from the page (the sheet still never moves a score).
+    await expect(page.getByText(/never logs a review/)).toHaveCount(0);
 
     // Grouped by the official taxonomy (unit headings) with real formula names.
     await expect(
@@ -21,13 +22,14 @@ test("formula sheet groups sourced formulas and searches/filters", async ({ page
         page.locator(".formula-name", { hasText: "Bayes' theorem" }),
     ).toBeVisible();
 
-    // Every formula names its source (SOA syllabus / Ross / Hassett & Stewart).
+    // Sources stay recorded in the data layer (formulas.ts) for traceability but
+    // are no longer rendered on the sheet, so their named-source strings are gone.
     await expect(
-        page.getByText("Ross, A First Course in Probability").first(),
-    ).toBeVisible();
+        page.getByText("Ross, A First Course in Probability"),
+    ).toHaveCount(0);
     await expect(
-        page.getByText("Hassett & Stewart, Probability for Risk Management").first(),
-    ).toBeVisible();
+        page.getByText("Hassett & Stewart, Probability for Risk Management"),
+    ).toHaveCount(0);
 
     // Keyword search narrows to matching formulas only.
     await page.getByRole("textbox", { name: "Search formulas" }).fill("Poisson");

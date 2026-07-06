@@ -3,8 +3,8 @@
 
 // Best-effort MathJax rendering for the practice test. MathJax (tex-svg-full,
 // the same bundle the editor uses) is loaded lazily on the client and typesets a
-// node's LaTeX (\( ... \) / \[ ... \]). If it can't load — or an item carries no
-// LaTeX (the current PDF-extracted corpus, until it's re-authored) — the node
+// node's LaTeX (\( ... \) / \[ ... \]). If it can't load, or an item carries no
+// LaTeX (the current PDF-extracted corpus, until it's re-authored), the node
 // simply keeps its plain text, so this never breaks the test.
 
 /* eslint @typescript-eslint/no-explicit-any: "off" */
@@ -30,7 +30,7 @@ async function typeset(node: HTMLElement): Promise<void> {
         mj.typesetClear?.([node]);
         await mj.typesetPromise([node]);
     } catch {
-        // Leave the plain text in place — never block the test on rendering.
+        // Leave the plain text in place; never block the test on rendering.
     }
 }
 

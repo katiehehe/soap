@@ -1,6 +1,6 @@
 ---
 name: SOAP (SOA Exam P)
-description: A clean, fresh study companion for SOA Exam P — three honest signals, never blended. The brand is the pun: SOA Exam P → SOAP.
+description: A clean, fresh study companion for SOA Exam P, with three honest signals, never blended. The brand is the pun: SOA Exam P → SOAP.
 colors:
   aqua: "#46c7d1"
   aqua-deep: "#2aa6b3"
@@ -82,15 +82,15 @@ components:
 **Creative North Star: "Squeaky clean"**
 
 SOAP leans into its own pun: SOA Exam **P** → **SOAP**. The app should feel clean and
-fresh — clear water, a faint scatter of soap suds, glossy rounded controls, and a friendly
-rounded type. It is still a focused tool a candidate stares at for 150–300 hours, so the
+fresh: clear water, a faint scatter of soap suds, glossy rounded controls, and a friendly
+rounded type. It is still a focused tool a candidate stares at for 150-300 hours, so the
 chrome stays light and the _numbers_ lead. Personality comes through the bubbly brand and a
-bright aqua palette — never through noise on the data.
+bright aqua palette, never through noise on the data.
 
 The honesty rule is a _visual_ commitment: measured numbers stay high-contrast and sober in
 the clean body font (never the bubbly display font), and a withheld ("no score yet") state
 is styled as honest amber, never dressed up as a win. Suds, gloss, and bubbles are
-decoration only — they never touch a measured number, and they honour reduced-motion.
+decoration only: they never touch a measured number, and they honour reduced-motion.
 
 **Key Characteristics:**
 
@@ -107,7 +107,7 @@ five soap-bright accents used sparingly.
 
 ### Primary
 
-- **Aqua** (#46c7d1 dark / #0f766e light): the primary emphasis — brand mark, primary
+- **Aqua** (#46c7d1 dark / #0f766e light): the primary emphasis, brand mark, primary
   buttons, the map's centre node, active tab text, links. **Aqua Deep** (#2aa6b3) is its
   hover/pressed; the solid CTA uses **Teal Fill** (#0c6c78) so foam text clears AA in both
   themes.
@@ -135,7 +135,7 @@ five soap-bright accents used sparingly.
 
 **The Meaning-Only Accent Rule.** Accent colours never carry body text or measured
 numbers. They mark state (pending/progress/mastered), section identity, and the single
-primary action — nothing decorative.
+primary action, nothing decorative.
 
 **The Fixed-Signal Rule.** Pending (cool grey), In-progress (suds gold), Mastered (fresh
 mint) are semantic and _fixed_. They are never rotated through the decorative accents,
@@ -147,7 +147,7 @@ because they encode a measurement.
 **Body Font:** Nunito Variable (with system-ui, sans-serif)
 
 **Character:** A rounded, friendly display face for headings and the SOAP wordmark against a
-rounded humanist sans for everything functional — playful but highly legible. Headings are
+rounded humanist sans for everything functional, playful but highly legible. Headings are
 title-case, never uppercase-black.
 
 ### Hierarchy
@@ -155,14 +155,14 @@ title-case, never uppercase-black.
 - **Display** (Fredoka 700, clamp(2rem, 4.5vw, 2.9rem), 1.05): page titles ("Study map",
   "Exam readiness") and the SOAP wordmark.
 - **Title** (Fredoka 600, ~1.3rem, 1.1): panel/section headings and detail titles.
-- **Body** (Nunito 400–700, ~0.95rem, 1.55): prose and explanations; cap ~68ch.
+- **Body** (Nunito 400-700, ~0.95rem, 1.55): prose and explanations; cap ~68ch.
 - **Label** (Nunito 700, ~0.72rem, +0.06em, UPPERCASE): eyebrows, badges, small meta.
 
 ### Named Rules
 
 **The Round-Heads / Clean-Numbers Rule.** Headings are the rounded display font; every
 measured value, range, and data label is the clean body font with tabular figures, so
-numbers stay unambiguous and legible — never the bubbly display font.
+numbers stay unambiguous and legible, never the bubbly display font.
 
 ## 4. Elevation
 
@@ -202,11 +202,11 @@ The soap-bar gloss is a soft white top highlight, not a radiating colour.
 
 ### Cards / Containers (panels)
 
-- **Corner Style:** 16–22px (bubbly).
+- **Corner Style:** 16-22px (bubbly).
 - **Background:** elevated surface, opaque (no glass).
 - **Shadow Strategy:** `md` from Elevation.
 - **Border:** 1px hairline, plus a 3px **top-accent** stripe that colour-codes the section
-  (aqua / mint / lemon / bubblegum / sky). Top only — never a side stripe.
+  (aqua / mint / lemon / bubblegum / sky). Top only, never a side stripe.
 - **Internal Padding:** ~1.4rem (`lg`-ish).
 
 ### Inputs / Fields
@@ -231,16 +231,16 @@ The soap-bar gloss is a soft white top highlight, not a radiating colour.
 ### Do:
 
 - **Do** keep every measured number high-contrast in the clean body font (tabular figures),
-  always shown with its range and a named source — never the bubbly display font.
+  always shown with its range and a named source, never the bubbly display font.
 - **Do** style the "no score yet" abstain state as honest amber, clearly _not_ a win.
 - **Do** use accents only for state, section identity, and the single primary action (the
   Meaning-Only Accent Rule).
 - **Do** lead headings with the serif in title case; keep uppercase for small labels only.
-- **Do** use thin borders (1–2px) and soft shadows (blur ≤ 10px).
+- **Do** use thin borders (1-2px) and soft shadows (blur ≤ 10px).
 
 ### Don't:
 
-- **Don't** dress up a guess as a measurement — no glowing/celebratory readiness score, no
+- **Don't** dress up a guess as a measurement: no glowing/celebratory readiness score, no
   hype words behind a "no score yet" state. (Auto-fail for the project.)
 - **Don't** blend the three scores into a single "% ready".
 - **Don't** let the playful chrome touch the data: bubbles, suds, and gloss stay off every

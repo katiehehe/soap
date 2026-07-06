@@ -1,7 +1,7 @@
 # Android build status + reproducible recipe
 
 The "shared engine on the phone" track. Status: **the AnkiDroid APK now builds
-against our fork's engine and embeds it** — the desktop and phone run the same
+against our fork's engine and embeds it**: the desktop and phone run the same
 Rust backend (with the speedrun changes), which is what the PRD requires.
 
 ## What is done (verified)
@@ -18,7 +18,7 @@ Rust backend (with the speedrun changes), which is what the PRD requires.
   - `rsdroid-testing/build/libs/rsdroid-testing.jar`
 - **AnkiDroid builds a debug APK that embeds our engine:**
   `AnkiDroid/build/outputs/apk/play/debug/AnkiDroid-play-arm64-v8a-debug.apk`
-  contains `lib/arm64-v8a/librsdroid.so` (48 MB stripped) — i.e. our shared Rust
+  contains `lib/arm64-v8a/librsdroid.so` (48 MB stripped), i.e. our shared Rust
   backend, on the phone.
 
 ## The one real incompatibility (and its fix)
@@ -43,9 +43,9 @@ Order.RELATIVE_OVERDUENESS -> translations.decksRelativeOverdueness()
 
 `make phone-rebuild` moves the backend's `anki` submodule to soap's HEAD
 (`git checkout <sha>`) before overlaying the working tree. Two **nested**
-submodules of `anki` — `qt/installer/mac-template` (`briefcase-mac-template`) and
+submodules of `anki`, `qt/installer/mac-template` (`briefcase-mac-template`) and
 `qt/installer/windows-template` (`briefcase-windows-template`), used only for the
-*desktop* installer and irrelevant to the Android engine — can carry a stale
+*desktop* installer and irrelevant to the Android engine, can carry a stale
 `.git` gitdir pointer:
 
     gitdir: ../../../.git/modules/briefcase-mac-template        # WRONG
@@ -54,7 +54,7 @@ submodules of `anki` — `qt/installer/mac-template` (`briefcase-mac-template`) 
 nested git dirs live one level deeper. With the wrong pointer, the checkout
 aborts with `fatal: not a git repository: .../.git/modules/briefcase-mac-template`
 and phone-rebuild silently **falls back to the OLD submodule commit** (warning:
-"couldn't move submodule …") — so the phone would be built minus every *committed*
+"couldn't move submodule …"), so the phone would be built minus every *committed*
 change since that old commit. Fix = repoint each nested `.git` (one extra `../`
 plus the `anki/modules/` segment):
 
@@ -82,7 +82,7 @@ and skips the checkout on later runs (so this only bites when soap HEAD advances
 ```bash
 # 1. Point the backend's anki submodule at our fork (has the speedrun engine).
 cd ~/dev/projects/speedrun/Anki-Android-Backend/anki
-git remote add fork /Users/katiehe/dev/soap   # once
+git remote add fork /Users/katiehe/dev/projects/speedrun/soap   # once
 git fetch fork
 git checkout fork/main
 
@@ -125,7 +125,7 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 ```
 
 Then load the Exam P deck (export a `.colpkg` from desktop or sync) and run a
-review session — it exercises the same scheduler/engine as desktop.
+review session: it exercises the same scheduler/engine as desktop.
 
 ## Notes
 
@@ -139,7 +139,7 @@ review session — it exercises the same scheduler/engine as desktop.
 
 The debug APK above is what we test/record with. The hand-in deliverable is a
 **properly packaged, R8-minified, release-signed** APK of the same build (same
-engine, same working tree — including the uncommitted home-shell Sync-button fix
+engine, same working tree, including the uncommitted home-shell Sync-button fix
 in `SpeedrunPageFragment.kt`).
 
 **Keystore** (self-signed, lives in `$HOME`, never committed):
@@ -155,7 +155,7 @@ keytool -genkeypair -v -keystore "$HOME/exam-p-release.jks" \
 - Reuse this same keystore to sign future updates (a new key = users must
   uninstall/reinstall).
 
-**Build** — AnkiDroid's `signingConfigs.release` already reads the keystore from
+**Build**: AnkiDroid's `signingConfigs.release` already reads the keystore from
 env vars (falls back to a throwaway test key only if `KEYSTOREPATH` is unset), so
 Gradle signs + zipaligns the release APK directly; no manual `apksigner` needed:
 
@@ -176,14 +176,14 @@ cd ~/dev/projects/speedrun/Anki-Android
 which debug does not): AnkiDroid's custom `MenuTitleMaxLengthAttr` lint fails the
 build because our two nav-drawer menu-title strings lacked the repo-standard
 `maxLength` attribute. Fixed in `AnkiDroid/.../res/values/speedrun.xml` (a
-lint/translator hint only — no runtime effect), matching `sentence-case.xml`:
+lint/translator hint only, no runtime effect), matching `sentence-case.xml`:
 
 ```xml
 <string name="speedrun_readiness_title" maxLength="28">Exam readiness</string>
 <string name="speedrun_home_title" maxLength="28">Exam P</string>
 ```
 
-R8/minify (`minifyPlayReleaseWithR8`) runs **on** and succeeds on our engine —
+R8/minify (`minifyPlayReleaseWithR8`) runs **on** and succeeds on our engine, so
 no ProGuard changes needed. The WebView bridge survives R8 via the stock keep
 rules (`-keep class com.ichi2.anki.**.*Fragment { *; }` + the AGP default
 `@JavascriptInterface` keep + the protobuf keep). So `minifyEnabled=false` was
@@ -205,7 +205,7 @@ unzip -l "$APK" | grep librsdroid             # lib/arm64-v8a/librsdroid.so (~48
   `minSdk=24`), zipaligned (incl. 16 KB `.so` page alignment).
 - `lib/arm64-v8a/librsdroid.so` (our shared Rust engine) embedded.
 - package `com.ichi2.anki`, versionName `2.25.0alpha1`, minSdk 24 / targetSdk 35.
-- **Do not** `adb install` this over the debug app on the recording emulator —
+- **Do not** `adb install` this over the debug app on the recording emulator:
   different signature (and the release app id is `com.ichi2.anki`, not
   `...debug`); installing would require uninstalling the debug app and wipe the
   synced deck. Build/sign/verify only.

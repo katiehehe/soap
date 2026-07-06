@@ -1,5 +1,5 @@
 flowchart TB
-  subgraph Shared["Shared engine — Rust (the anki crate, rslib/)"]
+  subgraph Shared["Shared engine: Rust (the anki crate, rslib/)"]
     FSRS["FSRS memory model"]
     SCHED["Three-tier mastery-gated scheduler<br/>(OUR Rust change)"]
     COLL["Collection / SQLite"]
@@ -20,14 +20,14 @@ flowchart TB
   end
 
   subgraph Mobile["Mobile app (AnkiDroid, Kotlin)"]
-    JNI["Anki-Android-Backend<br/>(JNI .aar — same Rust engine)"]
+    JNI["Anki-Android-Backend<br/>(JNI .aar, same Rust engine)"]
     MUI["Review UI + 3 scores with ranges"]
     JNI --> MUI
   end
 
   PROTO --> PY
   PROTO --> JNI
-  Desktop <-->|"two-way sync — no lost / double reviews"| SyncSrv["Anki sync server"]
+  Desktop <-->|"two-way sync, no lost / double reviews"| SyncSrv["Anki sync server"]
   Mobile <-->|"offline-first, resumes on reconnect"| SyncSrv
 
   classDef ours fill:#2563eb,stroke:#1e3a8a,color:#fff;

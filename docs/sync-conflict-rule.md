@@ -17,20 +17,20 @@ once:
   `desktop 20 | phone 20`.
 
 (Two reviews created in the _same millisecond_ on two offline devices would share
-a revlog id and collide — astronomically rare for real reviews, which are seconds
+a revlog id and collide, which is astronomically rare for real reviews, since they are seconds
 apart. The test spaces reviews so each gets a distinct id, as real use does.)
 
 ## Same-card conflict → deterministic winner, no history lost
 
 If the **same card** is reviewed offline on both devices before syncing:
 
-1. **Both graded reviews are preserved** in the revlog — the full study history is
-   kept; nothing is dropped. (`sync_test.py`: the conflict card has **2** revlog
+1. **Both graded reviews are preserved** in the revlog: the full study history is
+   kept, and nothing is dropped. (`sync_test.py`: the conflict card has **2** revlog
    rows after sync.)
 2. The card's **scheduling state** (queue / due / interval) converges to a single
    winner: **the review with the newer card modification time wins** (Anki's
    per-object _newer-mtime-wins_ merge). Both devices end in the _same_ state
-   after syncing — the winner is deterministic, not device-dependent.
+   after syncing, so the winner is deterministic, not device-dependent.
 
 Card `mtime` is in **whole seconds**. The later review (a second or more after the
 other, as real cross-device reviews are) wins cleanly. A genuine same-second tie

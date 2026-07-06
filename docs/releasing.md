@@ -2,12 +2,12 @@
 
 Releases are managed by two GitHub Actions workflows under `.github/workflows/`:
 
-1. **`prepare-release.yml`** — Run first. Validates the version, checks that CI
+1. **`prepare-release.yml`**: Run first. Validates the version, checks that CI
    passed, updates `.version`, and pushes everything to the dispatching branch
    in a single commit. CI then runs automatically on the resulting commit (for
    `release/**` branches). The CI check can be skipped with `skip-ci-check`.
 
-2. **`release.yml`** — Run after CI passes on the prepared commit. Builds
+2. **`release.yml`**: Run after CI passes on the prepared commit. Builds
    installers and wheels for all platforms (Linux x86/ARM, macOS Intel/ARM,
    Windows), and can optionally sign macOS/Windows artifacts, create a draft
    GitHub release, publish wheels to TestPyPI, and publish wheels to PyPI.
@@ -27,7 +27,7 @@ Examples: `26.05b1` (beta), `26.05rc1` (release candidate), `26.05` (stable),
 ## Release branch workflow
 
 All releases are cut from a `release/YY.MM` branch. The branch name uses only
-the major version (`YY.MM`), not the full pre-release suffix — betas, release
+the major version (`YY.MM`), not the full pre-release suffix. Betas, release
 candidates, and the stable release all come from the same branch.
 
 ### Standard release
@@ -193,7 +193,7 @@ The release workflow uses GitHub
 as manual approval gates. Jobs that access signing credentials or publish
 artifacts require a reviewer to approve the deployment before they run:
 
-- **`release`** — Required when `sign`, `draft-release`, `publish-testpypi`, or
+- **`release`**: Required when `sign`, `draft-release`, `publish-testpypi`, or
   `publish-pypi` is enabled. Protects code-signing secrets, the release token,
   and PyPI/TestPyPI trusted publishing/OIDC.
 
@@ -254,16 +254,16 @@ To test the signing flow from a feature branch:
 
 > **Note:** `workflow_dispatch` workflows only appear in the GitHub Actions UI
 > if the workflow file exists on the default branch. If `release.yml` is new or
-> modified on your branch, use `gh workflow run` to trigger it — the UI
+> modified on your branch, use `gh workflow run` to trigger it, because the UI
 > dropdown won't show it until it's merged to main.
 
 ## Important notes
 
 - The release workflow builds the exact commit at `github.sha`. It does not
-  write `.version` — that is done by the prepare workflow. If you dispatch
+  write `.version`; that is done by the prepare workflow. If you dispatch
   release before prepare's commit has propagated, the build will use whatever
   `.version` was HEAD at dispatch time.
-- `draft-release=true` with `sign=false` is rejected — draft releases must use
+- `draft-release=true` with `sign=false` is rejected, because draft releases must use
   signed installer artifacts.
 - When `publish-pypi=true`, wheels are published to TestPyPI first, then to
   PyPI after the TestPyPI job succeeds. If `draft-release=true` is also set,

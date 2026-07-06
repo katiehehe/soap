@@ -40,7 +40,7 @@ jobs run `just test` (no coverage enforcement) for now.
 
 ## Notes
 
-- **Rust** — `cargo-llvm-cov` is installed on demand into `out/bin/` to avoid
+- **Rust**: `cargo-llvm-cov` is installed on demand into `out/bin/` to avoid
   polluting the global cargo install. Coverage runs rebuild the workspace with
   instrumentation, so they are slower than plain `just test-rust`.
   **Windows ARM64 (`aarch64-pc-windows-msvc`) is not supported**: the Rust
@@ -49,9 +49,9 @@ jobs run `just test` (no coverage enforcement) for now.
   [cargo-llvm-cov#436](https://github.com/taiki-e/cargo-llvm-cov/issues/436)).
   `just test-rust --coverage` exits with a clear message on ARM64 Windows;
   use `just test-rust` (no coverage) or rely on CI (Linux) for enforcement.
-- **Python** — coverage is split across two suites (`pylib` and `qt`) because
+- **Python**: coverage is split across two suites (`pylib` and `qt`) because
   they have different `PYTHONPATH` setups and test folders.
-- **TypeScript** — coverage is measured only over code reachable through
+- **TypeScript**: coverage is measured only over code reachable through
   Vitest's module graph. Svelte component rendering behavior is not covered.
 
 ## Gaps and future improvements
@@ -60,7 +60,7 @@ jobs run `just test` (no coverage enforcement) for now.
 - Exclude generated files from coverage denominators where appropriate.
 - Publish `out/coverage/` as a CI artifact so reviewers can browse HTML
   reports directly from a PR.
-- Consider diff/changed-file coverage once baselines are stable — it is a
+- Consider diff/changed-file coverage once baselines are stable, since it is a
   better enforcement mechanism for incremental improvement than whole-repo
   thresholds.
 - Add component or browser tests for Svelte UI surfaces if Svelte coverage

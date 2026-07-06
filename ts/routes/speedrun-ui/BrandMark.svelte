@@ -3,7 +3,7 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <!--
-  SOAP brand mark — a little bar of soap with rising bubbles. Drawn in
+  SOAP brand mark: a little bar of soap with rising bubbles. Drawn in
   currentColor so it inherits the colour of whatever it sits on (e.g. the
   --sr-on-accent foam colour inside the brand tile). Decorative only.
 -->

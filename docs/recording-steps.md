@@ -1,9 +1,9 @@
-# Recording steps — the manual captures for hand-in
+# Recording steps: the manual captures for hand-in
 
 Three clips need a real screen recording (they can't be scripted): the
 **phone→desktop sync**, the **clean-machine desktop install**, and the **phone
 install/review**. Everything is already built and tested; this is just the
-capture checklist. **Do not stage or fake any of it** — a faked sync/AI clip is
+capture checklist. **Do not stage or fake any of it**, because a faked sync/AI clip is
 an automatic fail. Use QuickTime (desktop) and the emulator's built-in recorder
 or `adb screenrecord` (phone).
 
@@ -13,7 +13,7 @@ Proves reviews flow phone→desktop with none lost/doubled. The code path is
 already verified green by `make sync-test` (20/20, conflict rule); this records
 it on-device.
 
-Prep (once) — all reproducible via the Makefile:
+Prep (once), all reproducible via the Makefile:
 
 ```bash
 make sync-server         # local sync server (Anki's own), binds 0.0.0.0:27701
@@ -84,7 +84,7 @@ shell to show the three signals (Memory / Performance / Readiness) with ranges +
 the give-up rule, computed on-device by the shared engine (the Svelte
 `readiness-dashboard` route → `computeReadiness` over AnkiDroid's post-bridge;
 the old native `ReadinessScoresActivity` was removed so scores stay
-engine-sourced — see `docs/phone-scores.md`). A captured example of this
+engine-sourced (see `docs/phone-scores.md`). A captured example of this
 populated three-score screen (synthetic-persona data) is in
 `out/phone-3scores-memory.png` / `-performance.png` / `-readiness.png`. Prove the
 engine is ours on camera (any one is enough):

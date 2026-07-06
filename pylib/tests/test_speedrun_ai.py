@@ -16,6 +16,8 @@ from anki.speedrun.ai import (
     candidate_tag,
     classify_subtopic,
     generate_cards,
+    openai_key_present,
+    openai_package_available,
     require_ai,
     set_ai_enabled,
 )
@@ -188,4 +190,19 @@ def test_candidate_tag_roundtrip():
 
 def test_available_provider_is_none_without_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert available_provider() is None
+
+
+def test_provider_preconditions_are_distinguishable(monkeypatch):
+    # Regression: a missing ``openai`` package must NOT masquerade as a missing
+    # key. The two preconditions are reported independently so the UI can name the
+    # real cause; ``available_provider`` is exactly their conjunction.
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-not-a-real-key")
+    assert openai_key_present() is True
+    both = openai_key_present() and openai_package_available()
+    assert (available_provider() == "openai") is both
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert openai_key_present() is False
+    # No key => no provider, regardless of whether the package is importable.
     assert available_provider() is None

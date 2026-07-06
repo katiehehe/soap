@@ -170,7 +170,7 @@ def test_seed_if_missing_builds_once_then_is_a_noop():
     assert seed_if_missing(col) is True  # built it now
     n = len(col.find_notes("tag:subtopic::*"))
     assert n == len(SEED_CARDS)
-    # Second call is a no-op (guarded by the flag) — no duplicate deck.
+    # Second call is a no-op (guarded by the flag), so no duplicate deck.
     assert seed_if_missing(col) is False
     assert len(col.find_notes("tag:subtopic::*")) == n
 

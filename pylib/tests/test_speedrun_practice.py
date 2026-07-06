@@ -4,16 +4,18 @@
 from anki.speedrun.practice_test import (
     PRACTICE_STATS_KEY,
     _unit_allocation,
+    assemblable,
     assemble_test,
     grade,
     is_mcq,
+    is_well_formatted,
     performance_by_subtopic,
     practice_stats,
     readiness_weight,
     record_test,
     reset_practice_stats,
 )
-from anki.speedrun.soa_sample import load_sample_items
+from anki.speedrun.soa_sample import SampleItem, load_fallback_items, load_sample_items
 from tests.shared import getEmptyCol
 
 
@@ -139,3 +141,96 @@ def test_assembled_pool_is_all_multiple_choice():
     chosen = assemble_test(n=30, seed=11, items=pool)
     assert len(chosen) == 30
     assert all(is_mcq(it) for it in chosen)
+
+
+# --- Formatting-quality gate (a badly-formatted question is never shown) ------
+
+
+def _item(question: str, answer: str = "0.5", id: str = "t") -> SampleItem:
+    return SampleItem(
+        id=id,
+        question=question,
+        subtopic="subtopic::general::sets_axioms",
+        difficulty="easy",
+        answer=answer,
+    )
+
+
+def test_gate_passes_clean_latex_and_word_problems():
+    # Math wrapped in balanced inline \( \) LaTeX renders cleanly.
+    assert is_well_formatted(
+        _item(r"Find \(P(A \cup B)\) when \(P(A) = 0.3\).", r"\(0.5\)")
+    )
+    # Balanced display \[ \] LaTeX, including a piecewise \begin{cases}.
+    assert is_well_formatted(
+        _item(
+            r"Density \[ f(x) = \begin{cases} 2x, & 0 < x < 1 \\ 0 \end{cases} \]",
+            "0.5",
+        )
+    )
+    # A pure word problem (prose + plain numbers, no real math) renders as text.
+    assert is_well_formatted(
+        _item("A committee of 4 is chosen from 12 people. Find the probability.", "0.42")
+    )
+
+
+def test_gate_excludes_mangled_math():
+    # Bare lost superscript "X2" (was X^2) sitting in raw text.
+    assert not is_well_formatted(_item("Let Y = X2. Find E[Y].", "3"))
+    # Stray caret from an e^(-x/2) that lost its LaTeX.
+    assert not is_well_formatted(_item("The density is e^(-x/2) for x > 0.", "0.5"))
+    # Lost exponent on a parenthesised base "(1+x)-4".
+    assert not is_well_formatted(
+        _item("f is proportional to (1+x)-4 on the interval.", "0.5")
+    )
+    # Unicode math (integral, less-than-or-equal) sitting in raw text.
+    assert not is_well_formatted(_item("Evaluate ∫ f(x) dx where x ≤ 2.", "0.5"))
+    # Unbalanced \( with no closing \).
+    assert not is_well_formatted(_item(r"Compute \(P(A) for the event.", "0.5"))
+    # A mangled ANSWER fails too (the superscript was lost in the answer).
+    assert not is_well_formatted(_item("Find the second moment.", "E[X2] = 27"))
+
+
+def test_gate_keeps_option_markers_and_ranges():
+    # Genuine (A)-(E) option markers and roman-numeral lists are SPACED, so they
+    # must not be mistaken for a lost exponent ")digit".
+    assert is_well_formatted(
+        _item("Calculate. (A) 24% (B) 36% (C) 41% (D) 52% (E) 60%", "D) 52%")
+    )
+    assert is_well_formatted(
+        _item("(i) 28% watch A (ii) 29% watch B. Find the probability.", "0.5")
+    )
+
+
+def test_assemblable_requires_both_well_formatted_and_mcq():
+    # Clean numeric word problem: well-formatted AND MCQ-able.
+    assert assemblable(_item("Committee of 4 from 12. Find P.", "0.42"))
+    # A non-numeric (letter-only) answer can't become A-E choices -> excluded.
+    assert not assemblable(_item("Name the distribution.", "Exponential"))
+    # A mangled question is excluded even with a numeric answer.
+    assert not assemblable(_item("Find E[X2].", "27"))
+
+
+def test_committed_fallback_corpus_all_passes_gate():
+    # The committed, no-copyright fallback corpus is already clean LaTeX; the
+    # heuristic must never drop a clean item (else it would eat good questions).
+    fb = load_fallback_items()
+    assert fb
+    assert all(is_well_formatted(it) for it in fb)
+    assert all(assemblable(it) for it in fb)
+
+
+def test_assemble_test_never_yields_badly_formatted_items():
+    # Whatever pool is passed, a badly-formatted item can NEVER be assembled.
+    mangled = [
+        _item("The density is e^(-x/2) for x > 0.", "0.5", id=f"bad-{i}")
+        for i in range(40)
+    ]
+    # No fallback: the entire junk pool is excluded, so we get an (empty) test
+    # rather than a badly-formatted one.
+    assert assemble_test(n=30, seed=1, items=mangled) == []
+    # With the committed clean fallback, a valid test is still assembled (every
+    # item well-formatted) instead of showing junk.
+    rescued = assemble_test(n=30, seed=1, items=mangled, fallback=load_fallback_items())
+    assert len(rescued) == 30
+    assert all(is_well_formatted(it) and is_mcq(it) for it in rescued)

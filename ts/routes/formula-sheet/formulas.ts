@@ -3,7 +3,7 @@
 
 // Curated Exam P formula reference, grouped by the official syllabus taxonomy
 // (the same TAXONOMY the study map and scheduler use). This is a REFERENCE
-// surface only — nothing here logs a review, schedules a card, or touches any
+// surface only, so nothing here logs a review, schedules a card, or touches any
 // score. Every formula is a standard, textbook result and cites a NAMED source
 // (Exam P is not one of the rubric's example exams, so provenance matters):
 //
@@ -12,7 +12,7 @@
 //   * Hassett & Stewart, Probability for Risk Management (the actuarial text
 //     covering deductibles/limits and the standard named distributions).
 //
-// Formulas are NOT invented here — they restate results already relied on by the
+// Formulas are NOT invented here; they restate results already relied on by the
 // seed content (pylib/anki/speedrun/seed.py) and the named source passages in
 // pylib/anki/speedrun/gen_sources.json. LaTeX is written with String.raw and
 // full \[ ... \] delimiters so the MathJax action typesets it verbatim.
@@ -114,7 +114,7 @@ export const FORMULAS: Record<string, Formula[]> = {
             source: SOURCES.ross,
         },
         {
-            name: "Inclusion–exclusion (three events)",
+            name: "Inclusion-exclusion (three events)",
             latex: String.raw`\[ P(A \cup B \cup C) = P(A)+P(B)+P(C) - P(A \cap B) - P(A \cap C) - P(B \cap C) + P(A \cap B \cap C) \]`,
             source: SOURCES.ross,
         },

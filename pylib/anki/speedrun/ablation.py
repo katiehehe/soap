@@ -6,11 +6,11 @@ tier of the three-tier scheduler help, at equal study time?
 
 Three builds (see ``docs/study-feature-ablation.md`` for the pre-registration):
 
-1. **Full**    — Blocked -> Within-unit interleave -> (Cross-unit). Confusable
+1. **Full**: Blocked -> Within-unit interleave -> (Cross-unit). Confusable
    sub-types of a unit are interleaved *together*.
-2. **Ablated** — Blocked -> ONE global mixed pool (the within-unit tier removed);
+2. **Ablated**: Blocked -> ONE global mixed pool (the within-unit tier removed);
    cleared subtopics mix with everything, so sibling sub-types are diluted.
-3. **Plain**   — stock deck order (blocked, no deliberate interleaving).
+3. **Plain**: stock deck order (blocked, no deliberate interleaving).
 
 Honesty (this is the crux). There is no real cohort in a week, so this is a
 SEEDED SIMULATION on the labelled synthetic persona cohort, and it is built so it
@@ -23,7 +23,7 @@ CANNOT smuggle in the conclusion:
   ``disc_gain`` (in logits), grounded in the interleaving literature.
 - At ``disc_gain = 0`` the three builds are provably identical (the null). Any
   separation only appears for an *assumed* positive effect size, and we report
-  the whole sweep — including the null. The real effect size for real students is
+  the whole sweep, including the null. The real effect size for real students is
   unknown and needs real study logs; this is a design + sensitivity analysis, not
   a measured claim about the feature.
 """
@@ -40,7 +40,7 @@ BUILDS = ("full", "ablated", "plain")
 
 # Study budget per subtopic and how many of those reps are the initial blocked
 # phase (shared by Full and Ablated). Total reps are identical across builds, so
-# proficiency is held equal — only the order (interleaving) changes.
+# proficiency is held equal: only the order (interleaving) changes.
 REPS_PER_SUBTOPIC = 8
 BLOCK_REPS = 3
 
@@ -76,7 +76,7 @@ def build_sequence(build: str) -> list[str]:
     """The order in which subtopic reps are studied under a given build.
 
     All builds contain the SAME multiset (each subtopic ``REPS_PER_SUBTOPIC``
-    times) — equal study time — so they differ only in ordering.
+    times) with equal study time, so they differ only in ordering.
     """
     by_unit = subtopics_by_unit()
     all_subs = [s for subs in by_unit.values() for s in subs]
@@ -96,7 +96,7 @@ def build_sequence(build: str) -> list[str]:
 
     if build == "full":
         # Within-unit interleave: cycle a unit's own siblings together, unit by
-        # unit — confusable sub-types are mixed *with each other*.
+        # unit: confusable sub-types are mixed *with each other*.
         for subs in by_unit.values():
             seq.extend(_round_robin({s: rest for s in subs}))
         return seq
@@ -146,7 +146,7 @@ def p_correct_confusable(
 ) -> float:
     """P(correct) on a confusable within-unit exam question.
 
-    Ability (skill, difficulty) is identical across builds — equal study. The
+    Ability (skill, difficulty) is identical across builds, with equal study. The
     only build-dependent term is ``disc_gain * interleave``: the discrimination
     boost from having interleaved the confusable siblings. ``disc_gain = 0``
     removes it entirely, so all builds coincide (the null).

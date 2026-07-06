@@ -180,7 +180,7 @@ def _start_review(mw: aqt.main.AnkiQt, deck_id: DeckId) -> None:
     if callable(is_finished) and is_finished():
         leaf = mw.col.decks.name(deck_id).split("::")[-1]
         tooltip(
-            f"Nothing to study in “{leaf}” right now — you're caught up.",
+            f"Nothing to study in “{leaf}” right now, you're caught up.",
             parent=mw,
         )
         return
@@ -196,7 +196,7 @@ def _open_named_deck(mw: aqt.main.AnkiQt, name: str | None) -> bool:
         return False
     # Strict tier study: scope a unit deck to within-unit and the root deck to
     # cross-unit (a subtopic/other deck clears the scope), so a parent deck never
-    # serves its still-blocked descendants. Selection only — the Rust queue
+    # serves its still-blocked descendants. Selection only; the Rust queue
     # builder just drops out-of-tier gathered cards, so FSRS intervals + undo are
     # untouched.
     from anki.speedrun import apply_tier_scope_for_deck
@@ -232,7 +232,7 @@ def open_all_deck(mw: aqt.main.AnkiQt) -> bool:
 # It is re-pointed to whatever scope the user practices (a subtopic, a unit, or
 # everything), so practice decks never pile up. Because reschedule is OFF,
 # cramming any amount never touches FSRS scheduling or the daily new/review
-# limits — it feeds the Performance side, not the Memory schedule.
+# limits; it feeds the Performance side, not the Memory schedule.
 PRACTICE_DECK = "SOA Exam P \u2014 Practice"
 
 
@@ -285,7 +285,7 @@ def practice_all(mw: aqt.main.AnkiQt) -> bool:
 # The exam-shaped test is assembled/graded/recorded in Python (practice_test.py);
 # the webview calls these two commands and gets JSON back via the bridge callback.
 # Every test is drawn from the PRE-BUILT bank (held-out corpus + templated /
-# verified-AI pool) — never generated on the spot — so it starts instantly and
+# verified-AI pool), never generated on the spot, so it starts instantly and
 # stays exactly timed. Data only: assembling writes nothing; grading records REAL
 # graded evidence that the readiness engine reads (still behind the give-up
 # rule), weighted by how representative the test was. No score is faked.
@@ -293,7 +293,7 @@ def practice_all(mw: aqt.main.AnkiQt) -> bool:
 
 def _test_params(raw: str) -> tuple[int, int, str, str]:
     """Parse "seed,size,scope[,source]"; scope is "all" | "unit:<id>" |
-    "subtopic:<tag>". A legacy trailing source field is tolerated but ignored —
+    "subtopic:<tag>". A legacy trailing source field is tolerated but ignored;
     every test now draws from the pre-built bank (no on-the-spot generation)."""
     parts = raw.split(",", 3)
     try:
@@ -348,7 +348,7 @@ def _assembled_item(
     generated: bool,
 ) -> dict[str, Any]:
     """Shape one practice item for the webview as real MULTIPLE CHOICE: the stem
-    plus A-E options — genuine embedded ones when present, otherwise plausible
+    plus A-E options: genuine embedded ones when present, otherwise plausible
     numeric distractors synthesised around the correct value. The correct letter
     is withheld until submission (graded server-side), so there is no peeking."""
     from anki.speedrun.practice_test import build_mcq
@@ -373,8 +373,8 @@ def ensure_practice_bank(col: Any) -> None:
     """Make sure the PRE-BUILT practice bank exists BEFORE any test starts, so a
     question is never generated on the spot (which would add lag and break the
     timed exam). Fills the quarantined pool once per collection with
-    deterministic templated (randomized-number) problems — pure math, no AI, no
-    model calls — so a full 30-question test is always assemblable offline.
+    deterministic templated (randomized-number) problems (pure math, no AI, no
+    model calls) so a full 30-question test is always assemblable offline.
     Verified AI problems, when enabled, are added to the SAME pool separately and
     out of the test flow. Guarded by a config flag (runs a single time) and
     best-effort: a warm-up failure never blocks a test."""
@@ -387,16 +387,19 @@ def ensure_practice_bank(col: Any) -> None:
 
         prebuild_templated_bank(col)
         col.set_config("speedrunBankWarmed", _BANK_WARM_VERSION)
-    except Exception:  # noqa: BLE001 — bank warm-up must never break a test
+    except Exception:  # noqa: BLE001 (bank warm-up must never break a test)
         pass
 
 
 def _bank_sample_items(col: Any, scope: str) -> list:
     """PRE-BUILT bank items for a scope (templated + verified AI, from the
     quarantined pool), as SampleItems so they flow through the same assembly and
-    grading path as the held-out corpus. Filtered to items that render as real
-    A-E multiple choice. Never the held-out set itself, so there is no leakage."""
-    from anki.speedrun.practice_test import is_mcq
+    grading path as the held-out corpus. Filtered to items that render with
+    clean math AND present as real A-E multiple choice, so a bank-topped-up test
+    can never show a badly-formatted question (a verified-AI item whose math is
+    not clean LaTeX is dropped here). Never the held-out set itself, so there is
+    no leakage."""
+    from anki.speedrun.practice_test import assemblable
     from anki.speedrun.problem_gen import load_pool
     from anki.speedrun.soa_sample import SampleItem
 
@@ -413,7 +416,7 @@ def _bank_sample_items(col: Any, scope: str) -> list:
             answer=p.final_answer,
             source=p.source_name,
         )
-        if is_mcq(item):
+        if assemblable(item):
             out.append(item)
     return out
 
@@ -425,30 +428,36 @@ def _assemble_practice_test(
     scope: str = "all",
 ) -> dict[str, Any]:
     """Assemble a timed, all-multiple-choice practice test from the PRE-BUILT
-    bank — nothing is generated on the spot.
+    bank; nothing is generated on the spot.
 
     Every question is drawn first from the OFFICIAL held-out corpus (section-
-    weighted across the three units for a whole-exam test), then — only if that
-    scoped pool is short — topped up from the pre-built templated / verified-AI
+    weighted across the three units for a whole-exam test), then, only if that
+    scoped pool is short, topped up from the pre-built templated / verified-AI
     bank. The pool is filtered to items that can be shown as real A-E multiple
     choice, so a test is 100% MC. Read-only + deterministic given the seed; the
     correct letter is withheld until submit (graded server-side)."""
     import random
 
-    from anki.speedrun.practice_test import assemble_test, is_mcq
-    from anki.speedrun.soa_sample import load_corpus
+    from anki.speedrun.practice_test import assemblable, assemble_test
+    from anki.speedrun.soa_sample import load_corpus, load_fallback_items
 
     # One-time, no-lag bank warm-up BEFORE the test (idempotent after the first).
     ensure_practice_bank(mw.col)
 
     n = max(1, min(size, 60))
     corpus = load_corpus()
-    # Official, held-out, MC-capable items for this scope; fall back to the full
-    # corpus if a scope matches nothing, so a test is always assembled.
-    official = [it for it in _scope_items(corpus.items, scope) if is_mcq(it)]
+    # Official, held-out items for this scope that BOTH render with clean math
+    # and present as A-E multiple choice; fall back to the full corpus if a scope
+    # matches nothing, so a test is always assembled. A badly-formatted item is
+    # never assemblable, so it can never appear (see assemble_test's gate too).
+    official = [it for it in _scope_items(corpus.items, scope) if assemblable(it)]
     if not official and scope != "all":
-        official = [it for it in corpus.items if is_mcq(it)]
-    chosen = assemble_test(n=n, seed=seed, items=official) if official else []
+        official = [it for it in corpus.items if assemblable(it)]
+    # For a whole-exam test, let a too-mangled corpus top up from the committed,
+    # already-clean fallback corpus before we reach the generated bank; a scoped
+    # test stays in-scope and tops up only from the (scoped) bank below.
+    fallback = load_fallback_items() if scope == "all" else None
+    chosen = assemble_test(n=n, seed=seed, items=official, fallback=fallback)
 
     # Top up any shortfall (a thin scope) from the pre-built bank, deterministically.
     generated_ids: set[str] = set()
@@ -491,8 +500,16 @@ def _set_ai_enabled_cmd(mw: aqt.main.AnkiQt, on: bool) -> None:
 def _speedrun_settings(mw: aqt.main.AnkiQt) -> dict[str, Any]:
     """Current app settings for the home settings strip: the light/dark theme, the
     tiered mastery scheduler (the ablation switch), and whether model-written AI
-    practice is on (plus whether a real provider key is present)."""
-    from anki.speedrun.ai import ai_enabled, available_provider
+    practice is on. For AI we report the two preconditions SEPARATELY: a key in
+    the environment (``hasKey``) and the optional ``openai`` package being importable
+    (``hasPackage``), so the UI can say which one is missing rather than blaming a
+    missing package on a missing key. Both must hold for the real provider to run;
+    either missing sends AI practice to the templated fallback."""
+    from anki.speedrun.ai import (
+        ai_enabled,
+        openai_key_present,
+        openai_package_available,
+    )
     from aqt.theme import theme_manager
 
     col = mw.col
@@ -503,14 +520,15 @@ def _speedrun_settings(mw: aqt.main.AnkiQt) -> dict[str, Any]:
         ),
         "guided": bool(col.get_config("speedrunGuidedMode", False)) if col else False,
         "aiEnabled": bool(ai_enabled(col)) if col else False,
-        "hasKey": available_provider() == "openai",
+        "hasKey": openai_key_present(),
+        "hasPackage": openai_package_available(),
     }
 
 
 def _set_theme_cmd(mw: aqt.main.AnkiQt, dark: bool) -> None:
     """Flip the whole app between light and dark. Uses Anki's own theme so it
     persists and re-styles every window live (the webview updates its night-mode
-    class via the theme_did_change hook — no reload needed)."""
+    class via the theme_did_change hook, no reload needed)."""
     from aqt.theme import Theme
 
     mw.set_theme(Theme.DARK if dark else Theme.LIGHT)
@@ -524,7 +542,11 @@ def _record_practice_test(mw: aqt.main.AnkiQt, payload: str) -> dict[str, Any]:
         record_test,
     )
     from anki.speedrun.problem_gen import load_pool
-    from anki.speedrun.soa_sample import SampleItem, load_sample_items
+    from anki.speedrun.soa_sample import (
+        SampleItem,
+        load_fallback_items,
+        load_sample_items,
+    )
 
     data = json.loads(payload)
     # Responses carry the student's chosen LETTER (every test is multiple
@@ -537,8 +559,11 @@ def _record_practice_test(mw: aqt.main.AnkiQt, payload: str) -> dict[str, Any]:
     scope_raw = str(data.get("scope") or "all")
     scope_kind = "all" if scope_raw == "all" else scope_raw.split(":", 1)[0]
     # Grade against BOTH the held-out corpus and the verified/templated bank, so
-    # bank-topped-up tests also record per-subtopic performance (labelled).
-    official = {it.id: it for it in load_sample_items()}
+    # bank-topped-up tests also record per-subtopic performance (labelled). The
+    # committed fallback corpus is included too (both are held-out "official"
+    # sources), so a whole-exam test topped up from it still grades every item.
+    official = {it.id: it for it in load_fallback_items()}
+    official.update({it.id: it for it in load_sample_items()})
     pool = load_pool(mw.col)
     generated = {
         p.id: SampleItem(
@@ -703,7 +728,7 @@ def study_recommended(mw: aqt.main.AnkiQt) -> None:
 
     Uses the tier-ordered study plan (blocked → within-unit → cross-unit), which
     the engine already filters to decks with cards due today, so the first item is
-    the honest "study next" target — one that always has cards. If nothing is due,
+    the honest "study next" target, one that always has cards. If nothing is due,
     say so instead of opening an empty deck (which would bounce to the finished
     screen). Never fabricated: it reflects measured due counts + the gate state."""
     from anki import speedrun_pb2
@@ -735,7 +760,7 @@ def study_recommended(mw: aqt.main.AnkiQt) -> None:
     )
     if items and open_deck_by_id(mw, items[0].deck_id):
         return
-    tooltip("You're caught up — nothing is due right now.", parent=mw)
+    tooltip("You're caught up. Nothing is due right now.", parent=mw)
 
 
 # --- Custom home shell (concept map + readiness tabs) ---------------------
@@ -748,8 +773,8 @@ def study_recommended(mw: aqt.main.AnkiQt) -> None:
 def _ensure_speedrun_defaults(mw: aqt.main.AnkiQt) -> None:
     """Seed the performance-first DEFAULTS on the open collection so an existing
     (pre-pivot) collection behaves like a freshly built one: the three-tier mastery
-    scheduler ON, and the guided gate OFF (the guided sequence stays as advice —
-    recommended next topic + arrows — but never withholds cards).
+    scheduler ON, and the guided gate OFF (the guided sequence stays as advice,
+    recommended next topic + arrows, but never withholds cards).
 
     Only sets a value when it is ABSENT, so a user's later choice in the settings
     strip (e.g. turning the scheduler off for the ablation) persists across reopens."""
@@ -794,7 +819,7 @@ def go_home_tab(mw: aqt.main.AnkiQt, tab: str) -> None:
 
 def _classify_card(mw: aqt.main.AnkiQt, front: str) -> dict[str, Any]:
     """Suggest the best-matching subtopics for a typed card front (top 3), each
-    with the named source it was matched against. Suggestion only — the user
+    with the named source it was matched against. Suggestion only; the user
     picks. Falls back to the keyword baseline when AI is off."""
     from anki.speedrun import subtopic_name
     from anki.speedrun.ai import ai_enabled, available_provider, classify_subtopic_core
@@ -848,7 +873,7 @@ def _add_card(mw: aqt.main.AnkiQt, payload: str) -> dict[str, Any]:
 # The formula-sheet page shows curated, sourced Exam P formulas plus the user's
 # OWN added cards, grouped by subtopic. This bridge returns those user cards. It
 # is reference only: it READS notes and never logs a review, schedules a card, or
-# changes any score/config (the honesty rule — a reference must not move a
+# changes any score/config (the honesty rule: a reference must not move a
 # metric). It sits alongside the unlimited cram deck as a "just let me look /
 # practice freely" surface.
 
@@ -878,7 +903,7 @@ def _formula_cards(mw: aqt.main.AnkiQt) -> dict[str, list[dict[str, str]]]:
     try:
         # User-added flashcards only: exclude the seeded cards (difficulty::*).
         note_ids = col.find_notes("tag:format::flashcard -tag:difficulty::*")
-    except Exception:  # noqa: BLE001 — a search failure must never break the page
+    except Exception:  # noqa: BLE001 (a search failure must never break the page)
         return {}
 
     grouped: dict[str, list[dict[str, str]]] = {}
@@ -916,7 +941,7 @@ def _home_bridge_cmd(mw: aqt.main.AnkiQt, cmd: str) -> Any:
         # Read-only: the user's own cards for the formula sheet (no writes).
         return _formula_cards(mw)
     # Everything else may move to another state or reload the webview, which must
-    # not run from inside the webview's own bridge callback — so defer it.
+    # not run from inside the webview's own bridge callback, so defer it.
     QTimer.singleShot(0, lambda: _dispatch_home_cmd(mw, cmd))
     return None
 
@@ -1012,11 +1037,11 @@ _POOL_WITHIN_UNIT = 1
 _POOL_CROSS_UNIT = 2
 
 _TIER_LABELS: dict[int, tuple[str, str]] = {
-    # honey — build procedure in isolation
+    # honey: build procedure in isolation
     _POOL_BLOCKED: ("Blocked practice", "#d3a95f"),
-    # periwinkle — train recognition across a unit's confusable sub-types
-    _POOL_WITHIN_UNIT: ("Within-unit interleaving", "#8189d6"),
-    # sage — spacing across units
+    # blue: train recognition across a unit's confusable sub-types
+    _POOL_WITHIN_UNIT: ("Within-unit interleaving", "#2563c9"),
+    # sage: spacing across units
     _POOL_CROSS_UNIT: ("Cross-unit review", "#6fa892"),
 }
 
@@ -1044,7 +1069,7 @@ def _tier_for_tag(col: Collection, tag: str) -> tuple[str, str] | None:
         return None
     label, color = _TIER_LABELS.get(pool, _TIER_LABELS[_POOL_BLOCKED])
     # The scope after the tier name is the TIER's scope (subtopic for blocked,
-    # unit for within-unit, all units for cross-unit) — see tier_scope_name.
+    # unit for within-unit, all units for cross-unit); see tier_scope_name.
     # This mirrors the study map's Today's-plan labels, so the reviewer banner
     # and the plan never disagree about what a tier is scoped to.
     return (f"{label} · {tier_scope_name(pool, tag)}", color)
@@ -1113,8 +1138,8 @@ def register_reviewer_banner() -> None:
 
 # Anki's v3 scheduler can run a per-collection "Custom scheduling" JS snippet
 # (config key ``cardStateCustomizer``), injected into the reviewer on EVERY card
-# as ``anki.mutateNextCardStates(...)``. This fork never uses it — the three-tier
-# mastery scheduler lives in the Rust engine and is toggled by a config flag — so
+# as ``anki.mutateNextCardStates(...)``. This fork never uses it: the three-tier
+# mastery scheduler lives in the Rust engine and is toggled by a config flag, so
 # any value there is leftover/experimental. Left in place it breaks review: a JS
 # error on every card and, if the snippet touches the ``/_anki/`` backend, Anki's
 # "Unexpected API access" guard (card JS is untrusted). Wipe it on load so it can
@@ -1167,7 +1192,7 @@ def register_collection_hooks() -> None:
 # Appended to the app stylesheet via the style_did_init filter hook, so it runs
 # on startup and on every theme change, and layers on top of Anki's own styles.
 
-SPEEDRUN_ACCENT = "#8189d6"
+SPEEDRUN_ACCENT = "#2563c9"
 
 _SPEEDRUN_QSS = f"""
 /* Speedrun (SOA Exam P) accent + rounded controls */
@@ -1181,7 +1206,7 @@ QPushButton:default {{
     border: 1px solid {SPEEDRUN_ACCENT};
 }}
 QPushButton:default:hover {{
-    background-color: #9aa1e0;
+    background-color: #5b84e0;
 }}
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QTextEdit {{
     border-radius: 8px;
@@ -1204,7 +1229,7 @@ QListWidget::item:selected {{
 QTreeView::item:selected:!active,
 QTableView::item:selected:!active,
 QListView::item:selected:!active {{
-    background-color: rgba(129, 137, 214, 0.45);
+    background-color: rgba(37, 99, 201, 0.45);
     color: white;
 }}
 QHeaderView::section {{
@@ -1225,7 +1250,7 @@ def _append_theme(buf: str) -> str:
 # Anki's own webviews (reviewer, deck list, overview, answer bar) default to a
 # system font, which reads as stock Anki next to the custom app. We reuse the
 # woff2 files the SvelteKit build ALREADY ships (served at /_anki/sveltekit/...),
-# so every surface renders in the app's Fraunces + DM Sans — no separate font
+# so every surface renders in the app's Fraunces + DM Sans, no separate font
 # pipeline, works offline. Best-effort: if the files aren't found we simply fall
 # back to the system stack rather than break a webview.
 
@@ -1259,7 +1284,7 @@ def _app_font_face_css() -> str:
                 f'src:url("{head}") format("woff2");}}'
             )
         return out
-    except Exception:  # noqa: BLE001 — theming is best-effort; never break a webview
+    except Exception:  # noqa: BLE001 (theming is best-effort; never break a webview)
         return ""
 
 
@@ -1269,7 +1294,7 @@ def _app_font_face_css() -> str:
 def _chrome_css() -> str:
     return f"""<style>
 {_app_font_face_css()}
-/* The app doesn't time study — hide Anki's review timer entirely so it's never
+/* The app doesn't time study: hide Anki's review timer entirely so it's never
    an option, regardless of the deck's "Show timer" setting. */
 #time {{ display: none !important; }}
 body, button, input, select, textarea, table, td, th, .deck {{
@@ -1277,15 +1302,15 @@ body, button, input, select, textarea, table, td, th, .deck {{
 }}
 h1, h2, h3, .title {{ font-family: {_APP_HEAD_FONT} !important; }}
 a {{ color: {SPEEDRUN_ACCENT}; }}
-a:hover {{ color: #9aa1e0; }}
+a:hover {{ color: #5b84e0; }}
 button {{ border-radius: 8px; padding: 6px 14px; }}
 #study {{
     background: {SPEEDRUN_ACCENT}; color: #fff;
     border: 1px solid {SPEEDRUN_ACCENT}; font-weight: 600;
 }}
-#study:hover {{ background: #9aa1e0; }}
+#study:hover {{ background: #5b84e0; }}
 tr.deck td {{ padding-top: 7px; padding-bottom: 7px; }}
-tr.deck:hover td {{ background: rgba(129, 137, 214, 0.07); }}
+tr.deck:hover td {{ background: rgba(37, 99, 201, 0.07); }}
 </style>"""
 
 
@@ -1298,11 +1323,11 @@ def _reviewer_head_css() -> str:
 .card {{ font-family: {_APP_BODY_FONT} !important; }}
 #typeans {{
     font-family: {_APP_BODY_FONT};
-    border: 2px solid rgba(129, 137, 214, 0.35);
+    border: 2px solid rgba(37, 99, 201, 0.35);
     border-radius: 10px; padding: 8px 12px; outline: none; min-width: 12em;
 }}
 #typeans:focus {{
-    border-color: {SPEEDRUN_ACCENT}; box-shadow: 0 0 0 3px rgba(129, 137, 214, 0.22);
+    border-color: {SPEEDRUN_ACCENT}; box-shadow: 0 0 0 3px rgba(37, 99, 201, 0.22);
 }}
 </style>"""
 
@@ -1320,10 +1345,10 @@ body {{ padding-top: 3.1rem; }}
     display: flex; align-items: center; gap: 0.75rem;
     height: 3.1rem; box-sizing: border-box; padding: 0 1rem;
     font-family: {_APP_BODY_FONT};
-    background: #fdfbf6; border-bottom: 1px solid rgba(129, 137, 214, 0.18);
+    background: #ffffff; border-bottom: 1px solid rgba(37, 99, 201, 0.18);
 }}
 .night-mode #speedrun-review-bar {{
-    background: #221f2b; border-bottom-color: rgba(236, 230, 218, 0.12); color: #ece6da;
+    background: #143b42; border-bottom-color: rgba(231, 245, 244, 0.12); color: #e7f5f4;
 }}
 #speedrun-review-bar .sr-back {{
     display: inline-flex; align-items: center; gap: 0.35rem;
@@ -1331,13 +1356,13 @@ body {{ padding-top: 3.1rem; }}
     color: {SPEEDRUN_ACCENT}; font-weight: 700; font-size: 0.9rem;
     padding: 0.35rem 0.6rem; cursor: pointer;
 }}
-#speedrun-review-bar .sr-back:hover {{ background: rgba(129, 137, 214, 0.12); }}
+#speedrun-review-bar .sr-back:hover {{ background: rgba(37, 99, 201, 0.12); }}
 </style>"""
 
 
 def _review_bar_html(cmd: str = "speedrun-home") -> str:
     # The shared back-to-home affordance (reviewer, deck list, overview). Just the
-    # "← Exam P" button — during review the current subtopic is shown by the
+    # "← Exam P" button; during review the current subtopic is shown by the
     # mastery-tier banner right below it, so we don't repeat the topic name here.
     # `cmd` lets the bar target a specific landing: the reviewer sends the user
     # back to the daily Plan (where they came from), while the deck list / overview
@@ -1358,7 +1383,7 @@ def _on_webview_content(web_content: WebContent, context: object) -> None:
     if isinstance(context, aqt.reviewer.Reviewer):
         web_content.head += _reviewer_head_css() + _back_bar_css()
         # During question-solving the back arrow returns to the daily Plan tab
-        # (where the study session was launched from), not the map — so leaving a
+        # (where the study session was launched from), not the map, so leaving a
         # card lands you back on your plan. Handled by 'speedrun-plan' in
         # _on_js_message → go_home_tab(mw, "plan").
         web_content.body += _review_bar_html("speedrun-plan")
@@ -1366,7 +1391,7 @@ def _on_webview_content(web_content: WebContent, context: object) -> None:
         # Anki's top toolbar is hidden on these screens too (see main.py's
         # _deckBrowserState / _overviewState), so without this they'd have no
         # one-click way back to the home shell. Give them the SAME "← Exam P" bar
-        # the reviewer uses — same HTML, same speedrun-home handler (_on_js_message).
+        # the reviewer uses: same HTML, same speedrun-home handler (_on_js_message).
         web_content.head += _chrome_css() + _back_bar_css()
         web_content.body += _review_bar_html()
     elif isinstance(context, aqt.reviewer.ReviewerBottomBar):
@@ -1407,7 +1432,7 @@ def _on_js_message(
 def load_dotenv_if_present() -> None:
     """Load ``KEY=VALUE`` lines from the repo-root ``.env`` into the process
     environment (without overriding anything already set), so an ``OPENAI_API_KEY``
-    placed in ``.env`` is actually picked up — Anki itself never reads ``.env``, it
+    placed in ``.env`` is actually picked up; Anki itself never reads ``.env``, it
     only sees ``os.environ``. Best-effort: malformed lines and a missing file are
     ignored, and existing env vars always win. Never logs the value."""
     try:
@@ -1422,7 +1447,7 @@ def load_dotenv_if_present() -> None:
             key = key.strip()
             if key and key not in os.environ:
                 os.environ[key] = val.strip().strip('"').strip("'")
-    except Exception:  # noqa: BLE001 — never block startup on .env parsing
+    except Exception:  # noqa: BLE001 (never block startup on .env parsing)
         pass
 
 

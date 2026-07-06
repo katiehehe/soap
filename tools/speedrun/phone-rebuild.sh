@@ -3,13 +3,13 @@
 # Rebuild the phone APK from your CURRENT working tree, then install + open it.
 #
 # The phone bundles the UI + Rust engine inside the APK, so there is no hot
-# reload — this is the (slow) command that gets a code change onto the phone.
+# reload, so this is the (slow) command that gets a code change onto the phone.
 # For fast iteration prefer the desktop `./run`; use this to verify on-device.
 #
 # Why it is more than one build: the engine .aar is compiled from a SEPARATE
 # `anki` git submodule inside Anki-Android-Backend, so this script first overlays
 # your working-tree changes (including UNCOMMITTED ones) into that submodule, so
-# what you see on the phone is exactly what you have here — no commit required.
+# what you see on the phone is exactly what you have here, no commit required.
 #
 #   1. Sync this repo's working tree into the backend's `anki` submodule.
 #   2. Build the engine + UI .aar          (Anki-Android-Backend/build.sh)
@@ -46,7 +46,7 @@ done
 echo "==> [1/4] Sync working tree -> engine submodule ($SUB)"
 # Files to overlay: tracked-and-modified (minus deletes) + new untracked files
 # that git isn't ignoring. This naturally excludes out/, target/, node_modules,
-# .env, etc. via .gitignore. (Read-only git queries — safe for --dry-run.)
+# .env, etc. via .gitignore. (Read-only git queries, safe for --dry-run.)
 LIST="$(mktemp)"
 { git -C "$SOAP" diff --name-only --diff-filter=d HEAD
   git -C "$SOAP" ls-files --others --exclude-standard; } | sort -u > "$LIST"
@@ -72,7 +72,7 @@ if [ "$SUB_HEAD" != "$SOAP_HEAD" ]; then
 fi
 # Reset to committed state so a previous overlay never leaves stale files.
 # `clean` respects .gitignore, so the submodule's build caches (out/, target/,
-# node_modules — all gitignored) are preserved for a fast incremental build.
+# node_modules, all gitignored) are preserved for a fast incremental build.
 git -C "$SUB" reset -q --hard HEAD 2>/dev/null || echo "    (warn: submodule reset skipped)"
 git -C "$SUB" clean -fdq 2>/dev/null || echo "    (warn: submodule clean skipped)"
 
@@ -91,4 +91,4 @@ echo "==> [4/4] Install on the emulator + open"
 "$SOAP/tools/speedrun/phone.sh" --install
 
 echo
-echo "Done — your working-tree changes are now on the phone. (☰ -> Exam readiness)"
+echo "Done. Your working-tree changes are now on the phone. (☰ -> Exam readiness)"

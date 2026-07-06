@@ -6,14 +6,14 @@
 
 Any material used as an AI GENERATION INPUT (source passages, a reference PDF, a
 scraped note set) must NOT contain the held-out evaluation items, or scores are
-inflated by memorisation — a rubric AUTOMATIC FAIL. This scans a source against
+inflated by memorisation, a rubric AUTOMATIC FAIL. This scans a source against
 the held-out corpus and exits non-zero if any held-out item is reproduced in the
 source (verbatim or near-copy), so it can gate CI / a source drop-in.
 
 It complements ``leakage_scan.py`` (which splits ONE item set into train/test):
 here the source is a long free-text blob (a PDF or note file), so we detect a
-reproduced problem by word-shingle CONTAINMENT — the fraction of a held-out
-item's k-word shingles that appear verbatim in the source — plus an exact
+reproduced problem by word-shingle CONTAINMENT (the fraction of a held-out
+item's k-word shingles that appear verbatim in the source), plus an exact
 normalised-substring check. This is exactly the method that caught the ACTEX
 manual reproducing the official SOA sample questions.
 

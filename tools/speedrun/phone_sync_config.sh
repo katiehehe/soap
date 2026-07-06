@@ -2,8 +2,8 @@
 #
 # (Re)configure AnkiDroid on the emulator to sync with the LOCAL server, with no
 # UI login: writes syncBaseUrl + switch + username + hkey into its
-# SharedPreferences (debug build only, via `run-as`). Idempotent — safe to re-run
-# if a hard kill lost the prefs.
+# SharedPreferences (debug build only, via `run-as`). Idempotent, so it is safe
+# to re-run if a hard kill lost the prefs.
 #
 # Prereqs: `make sync-server` running, and the emulator booted (`make phone`).
 # Then:    make sync-phone-config
@@ -21,11 +21,11 @@ PHONE_URL="${PHONE_SYNC_URL:-http://10.0.2.2:27701/}"   # emulator -> host alias
 USER_NAME="${SYNC_USER:-user}"
 PREFS="/data/data/$PKG/shared_prefs/${PKG}_preferences.xml"
 
-[ -x "$PY" ] || { echo "python not built ($PY) — run ./run once first" >&2; exit 1; }
+[ -x "$PY" ] || { echo "python not built ($PY), run ./run once first" >&2; exit 1; }
 
 # Mint an hkey against the local server (login only, no seeding).
 HKEY="$(PYTHONPATH="$REPO/pylib:$REPO/out/pylib" "$PY" "$REPO/tools/speedrun/sync_hkey.py")"
-[ -n "$HKEY" ] || { echo "could not get an hkey — is 'make sync-server' running?" >&2; exit 1; }
+[ -n "$HKEY" ] || { echo "could not get an hkey, is 'make sync-server' running?" >&2; exit 1; }
 echo "hkey ${HKEY:0:8}...   server $PHONE_URL   user $USER_NAME"
 
 "$ADB" wait-for-device

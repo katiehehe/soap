@@ -9,7 +9,7 @@ counts. A test is assembled from the HELD-OUT exam-style corpus
 weights (General 23-30%, Univariate 44-50%, Multivariate 23-30%). Grading a test
 accumulates ``{questions, correct, tests}`` into collection config
 (``speedrunPracticeStats``), which the Rust ``compute_readiness`` reads to emit a
-readiness band — still behind the give-up rule.
+readiness band, still behind the give-up rule.
 
 Honesty: practice items are held-out evaluation only (never AI training), and the
 stored counts are real graded results (from a real student, or the clearly
@@ -26,7 +26,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from anki.speedrun import unit_weights
-from anki.speedrun.soa_sample import SampleItem, load_sample_items
+from anki.speedrun.soa_sample import (
+    SampleItem,
+    load_fallback_items,
+    load_sample_items,
+)
 
 if TYPE_CHECKING:
     from anki.collection import Collection
@@ -41,9 +45,9 @@ PERFORMANCE_KEY = "speedrunPerformanceBySubtopic"
 
 # A practice test comes in two shapes (both timed at the real exam's ~6 min per
 # question pace; the timing is enforced client-side in the practice-test screen):
-#   * FULL EXAM SIMULATION — the canonical, most-representative test: exactly
+#   * FULL EXAM SIMULATION, the canonical, most-representative test: exactly
 #     30 questions, section-weighted across the three units, timed for 3 hours.
-#   * TOPIC / UNIT QUIZ — a shorter, scoped drill: 10 questions by default,
+#   * TOPIC / UNIT QUIZ, a shorter, scoped drill: 10 questions by default,
 #     timed for 1 hour.
 DEFAULT_TEST_SIZE = 30
 FULL_EXAM_SIZE = 30
@@ -81,7 +85,7 @@ def readiness_weight(scope: str, source: str) -> float:
 # and grade objectively. Items with no (A)-(E) block (the committed original
 # fallback corpus) return no choices, and the caller grades them by typed value.
 
-# A genuine option marker "(A)", NOT preceded by a letter/digit — so probability
+# A genuine option marker "(A)", NOT preceded by a letter/digit, so probability
 # notation like "P(A)", "P(B)", "P(A∪B)" is never mistaken for choice letters.
 _CHOICE_RE = re.compile(r"(?<![A-Za-z0-9])\(([A-E])\)")
 
@@ -241,6 +245,94 @@ def is_mcq(item: SampleItem) -> bool:
     return bool(choices) and correct is not None
 
 
+# --- Formatting-quality gate ------------------------------------------------
+# HARD RULE: every question that can appear in a practice test MUST render as
+# clean MathJax LaTeX. If an item's math cannot be shown correctly it is
+# EXCLUDED entirely. Never shown badly formatted; drop when in doubt.
+#
+# The preferred corpus is extracted from a PDF, so some items carry MANGLED
+# math: lost exponents/subscripts ("x2", "(1+x)-4", "e16"), private-use glyphs
+# from broken piecewise braces, unicode math sitting in raw text ("P(A∪B)",
+# "≤", "∫", "σ²"), stray "^"/"_", leftover "\left"/"\frac", or unbalanced "\(".
+# The Svelte renderer only typesets balanced \( \)/\[ \] spans and leaves the
+# rest as raw text, so those items look broken. This gate keeps them out of
+# every assembled test. It is PRESENTATION filtering only: it never changes an
+# item's meaning or its answer value, and it does not touch the held-out set
+# used for AI evals / the classifier gold set (no leakage). Hand-authored
+# ``latex_overrides.json`` (merged in ``soa_sample``) restores clean LaTeX so a
+# rescued item passes.
+
+# Unicode math glyphs that belong INSIDE LaTeX. Any of these left in raw text
+# (outside a \(...\)/\[...\] span) means the math lost its formatting.
+_MATH_UNICODE = frozenset(
+    "√∛∜∫∮∬∭∯∑∏∐∞≤≥≠≈≡≢≅≜≝≪≫∝∼±∓×÷⋅·∗∈∉∋∌⊂⊆⊄⊃⊇⊕⊗⊙∪∩∅∀∃∄∇∂∆∘∠∥⊥∴∵"
+    "→←↔↕⇒⇐⇔↦°′″‴⌊⌋⌈⌉〈〉"
+    "αβγδεζηθϑικλμνξοπϖρςστυφϕχψωΓΔΘΛΞΠΣΦΨΩ"
+    "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿⁱ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₙ"
+    "−"  # U+2212 MINUS SIGN (prose uses hyphen-minus / an en-dash instead); dash-ok
+)
+
+# Balanced inline / display LaTeX spans, removed before inspecting the raw text.
+_LATEX_SPAN_RE = re.compile(r"\\\(.*?\\\)|\\\[.*?\\\]", re.S)
+# A standalone math variable glued to a digit ("x2", "e16"): a lost super/
+# subscript. The leading boundary keeps ordinary words/numbers from matching.
+_LOST_SUPERSCRIPT_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]\d")
+# A closing paren glued to a (signed) digit ("(1+x)-4", "(0.6)2.5"): a lost
+# exponent on a parenthesised base. Requiring NO space keeps genuine option
+# markers "(A) 4" and roman-numeral lists "(i) 28%" (spaced) from matching.
+_LOST_PAREN_EXPONENT_RE = re.compile(r"\)[-−]?\d")  # dash-ok: intentional U+2212 in the exponent regex
+# A stray backslash command sitting outside any LaTeX span (e.g. a leftover
+# "\left"/"\frac"/"\cup" where the delimiters were lost).
+_STRAY_LATEX_CMD_RE = re.compile(r"\\[A-Za-z]+")
+
+
+def _math_renders_cleanly(text: str) -> bool:
+    """Whether one field (a question or an answer) is free of mangled or
+    unformatted math. Strips balanced LaTeX spans, then rejects anything math-
+    like left in the raw text. Empty text is trivially clean."""
+    if not text:
+        return True
+    # Unbalanced delimiters -> MathJax can't typeset it.
+    if text.count(r"\(") != text.count(r"\)"):
+        return False
+    if text.count(r"\[") != text.count(r"\]"):
+        return False
+    outside = _LATEX_SPAN_RE.sub(" ", text)
+    # Private-use-area glyphs are PDF-extraction garbage (broken braces, etc.).
+    if any("\ue000" <= ch <= "\uf8ff" for ch in outside):
+        return False
+    if any(ch in _MATH_UNICODE for ch in outside):
+        return False
+    if "^" in outside or "_" in outside:
+        return False
+    if _STRAY_LATEX_CMD_RE.search(outside):
+        return False
+    if _LOST_SUPERSCRIPT_RE.search(outside):
+        return False
+    if _LOST_PAREN_EXPONENT_RE.search(outside):
+        return False
+    return True
+
+
+def is_well_formatted(item: SampleItem) -> bool:
+    """Whether an item renders with clean, correct math and so may be shown.
+
+    PASSES when BOTH the question and the answer are plain prose + numbers, or
+    have every mathematical expression wrapped in balanced ``\\( \\)``/``\\[ \\]``
+    LaTeX. FAILS (the item is dropped from every practice test) when either
+    field shows mangled/unformatted math: lost exponents or subscripts ("x2",
+    "(1+x)-4"), unicode math outside LaTeX, private-use glyphs, stray ``^``/``_``
+    or LaTeX commands, or unbalanced delimiters. Bias is to EXCLUDE when unsure:
+    a badly formatted question must never reach a student."""
+    return _math_renders_cleanly(item.question) and _math_renders_cleanly(item.answer)
+
+
+def assemblable(item: SampleItem) -> bool:
+    """An item may enter a practice test only when it is BOTH well-formatted
+    (renders cleanly) AND presentable as real A-E multiple choice."""
+    return is_well_formatted(item) and is_mcq(item)
+
+
 @dataclass(frozen=True)
 class TestResult:
     questions: int
@@ -277,6 +369,7 @@ def assemble_test(
     seed: int = 0,
     items: list[SampleItem] | None = None,
     topics: dict[str, Any] | None = None,
+    fallback: list[SampleItem] | None = None,
 ) -> list[SampleItem]:
     """Assemble a section-weighted test of ``n`` items from the held-out corpus.
 
@@ -284,8 +377,30 @@ def assemble_test(
     possible; if a unit has fewer items than its allocation, it takes all of them
     and the shortfall is filled from the remaining pool, so the test is always
     exam-shaped and reproducible.
+
+    FORMATTING GATE (hard rule): the pool is filtered to items that both render
+    with clean math (``is_well_formatted``) AND present as real A-E multiple
+    choice (``is_mcq``). See ``assemblable``. A badly-formatted item can never
+    be assembled into a test, whatever pool is passed in. When the resulting
+    clean pool cannot fill ``n`` questions, it is topped up from the committed,
+    already-clean fallback corpus (``load_fallback_items``; auto-loaded when no
+    ``items`` are given) so a valid (possibly smaller, honest) test is still
+    returned instead of showing junk. Nothing is fabricated: fewer clean
+    questions is fine.
     """
-    pool = items if items is not None else load_sample_items()
+    if items is None:
+        pool = [it for it in load_sample_items() if assemblable(it)]
+        if fallback is None:
+            fallback = load_fallback_items()
+    else:
+        pool = [it for it in items if assemblable(it)]
+
+    if fallback and len(pool) < n:
+        have = {it.id for it in pool}
+        pool = pool + [
+            it for it in fallback if it.id not in have and assemblable(it)
+        ]
+
     by_unit: dict[str, list[SampleItem]] = {}
     for it in pool:
         by_unit.setdefault(it.unit_id, []).append(it)

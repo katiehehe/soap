@@ -7,7 +7,7 @@ alwaysApply: true
 
 Read `AGENTS.md`, `PRD.md`, and `SPEC_CHECKLIST.md` before coding. Rubric wins on conflicts.
 
-- ALWAYS make real changes in Anki's **Rust engine** for scheduling/backend work. NEVER reimplement the scheduler in JS/Swift/Python — it caps the grade at 50%.
+- ALWAYS make real changes in Anki's **Rust engine** for scheduling/backend work. NEVER reimplement the scheduler in JS/Swift/Python: doing so caps the grade at 50%.
 - The app has **three separate scores** (memory, performance, readiness), each shown **with a range**. NEVER blend them into one number.
 - NEVER show a readiness number without the honesty bundle: evidence, missing data, past accuracy, a range, and the single best next action.
 - The **give-up rule is code**: return NO score below the stated data threshold. It is an assertion + a test, not a UI hint.

@@ -4,4 +4,7 @@
 #
 #   out/pyenv/bin/pip install -r tools/speedrun/requirements-ai.txt
 #   export OPENAI_API_KEY=...      # then: make ai-eval
-openai>=1.0
+#
+# Pinned to the 1.x line: the client uses the 1.x OpenAI() + chat.completions API
+# (see anki/speedrun/ai.py); 2.x is untested here. Tested with 1.109.1.
+openai>=1.40,<2

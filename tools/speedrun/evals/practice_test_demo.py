@@ -122,7 +122,7 @@ def main() -> int:
             print(f"  next best      : {s.next_best_action}")
         else:
             ns = result.no_score
-            print(f"\nReadiness: NoScore (give-up rule) — {ns.reason}")
+            print(f"\nReadiness: NoScore (give-up rule): {ns.reason}")
     finally:
         col.close()
     return 0

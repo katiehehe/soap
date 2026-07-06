@@ -32,7 +32,7 @@ CMD ["anki-sync-server"]
 
 # Use the built-in healthcheck to avoid noisy HTTP log entries on every probe.
 # The --healthcheck flag exits 0 if the server is healthy, 1 otherwise, and
-# produces no stdout output — allowing Docker/k3s to surface health status
+# and produces no stdout output, so Docker/k3s can surface health status
 # without polluting container logs.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD anki-sync-server --healthcheck

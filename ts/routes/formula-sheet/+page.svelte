@@ -11,16 +11,18 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     } from "@tslib/bridgecommand";
 
     import { subtopicTag, TAXONOMY } from "../study-map/lib";
-    import { FORMULAS, formulasForTag, type Formula } from "./formulas";
+    import { formulasForTag, type Formula } from "./formulas";
     import { mathjax } from "./mathjax";
 
     // An easy-to-reference Exam P formula sheet: every curated formula grouped by
     // the official syllabus (the same TAXONOMY the study map + scheduler use),
-    // MathJax-rendered, keyword-searchable, and each one traceable to a NAMED
-    // source. It is REFERENCE ONLY — it reads the user's own added cards but
-    // never logs a review, schedules anything, or changes any of the three
-    // scores. It sits alongside unlimited cram as the other "just let me look
-    // things up" surface, so a candidate can check a formula without it counting.
+    // MathJax-rendered, and keyword-searchable. Each formula still records its
+    // NAMED source in the data layer (formulas.ts) for traceability, but the
+    // sheet no longer renders those citations. It is REFERENCE ONLY: it reads the
+    // user's own added cards but never logs a review, schedules anything, or
+    // changes any of the three scores. It sits alongside unlimited cram as the
+    // other "just let me look things up" surface, so a candidate can check a
+    // formula without it counting.
 
     // The user's own added flashcards, grouped by subtopic tag, fetched read-only
     // from the desktop bridge (speedrun-formula-cards). Empty in a plain browser
@@ -43,8 +45,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         });
     });
 
-    // Keyword search + a unit filter. Both are pure view state — they never touch
-    // any score or the engine.
+    // Keyword search + a unit filter. Both are pure view state, so they never
+    // touch any score or the engine.
     let query = "";
     let unitFilter: "all" | string = "all";
 
@@ -52,19 +54,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     // unit for its heading marker + each card's TOP stripe. Never applied to the
     // formulas/numbers themselves.
     const UNIT_ACCENTS = [
-        "var(--sr-accent)", // periwinkle — General Probability
-        "var(--sr-secondary)", // sage — Univariate RVs
-        "var(--sr-quinary)", // mauve — Multivariate RVs
+        "var(--sr-accent)", // periwinkle for General Probability
+        "var(--sr-secondary)", // sage for Univariate RVs
+        "var(--sr-quinary)", // mauve for Multivariate RVs
     ];
-
-    const TOTAL_FORMULAS = Object.values(FORMULAS).reduce(
-        (sum, list) => sum + list.length,
-        0,
-    );
-    const TOTAL_SUBTOPICS = TAXONOMY.reduce(
-        (sum, u) => sum + u.subtopics.length,
-        0,
-    );
 
     function matchesFormula(
         f: Formula,
@@ -75,7 +68,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         if (!q) {
             return true;
         }
-        return `${f.name} ${f.note ?? ""} ${f.source} ${f.latex} ${subName} ${unitName}`
+        return `${f.name} ${f.note ?? ""} ${f.latex} ${subName} ${unitName}`
             .toLowerCase()
             .includes(q);
     }
@@ -156,15 +149,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         <header class="sheet-head">
             <p class="eyebrow">Reference</p>
             <h1>Formula sheet</h1>
-            <p class="lede">
-                Every Exam&nbsp;P formula, grouped by the official syllabus. Look
-                anything up as you study — {TOTAL_FORMULAS} formulas across the
-                {TOTAL_SUBTOPICS} subtopics, each traceable to a named source.
-            </p>
-            <p class="ref-only" role="note">
-                Reference only — this page never logs a review, schedules a card,
-                or changes your Memory, Performance, or Readiness scores.
-            </p>
 
             <div class="controls">
                 <input
@@ -195,14 +179,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     {/each}
                 </div>
             </div>
-
-            <p class="sources">
-                Sources: SOA&nbsp;Exam&nbsp;P syllabus · Ross, <i
-                    >A First Course in Probability</i
-                >
-                · Hassett&nbsp;&amp;&nbsp;Stewart,
-                <i>Probability for Risk Management</i>.
-            </p>
         </header>
 
         {#if !hasResults}
@@ -244,9 +220,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                                     </p>
                                                 {/if}
                                             </div>
-                                            <span class="formula-source"
-                                                >{f.source}</span
-                                            >
                                         </li>
                                     {/each}
                                 </ul>
@@ -254,12 +227,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
                             {#if sub.cards.length > 0}
                                 <div class="user-cards">
-                                    <p class="user-cards-head">
-                                        Your added cards
-                                        <span class="user-cards-sub"
-                                            >your own notes · not scored</span
-                                        >
-                                    </p>
+                                    <p class="user-cards-head">Your added cards</p>
                                     {#each sub.cards as c, ci (ci)}
                                         <div class="user-card">
                                             <div class="uc-front">{c.front}</div>
@@ -282,12 +250,64 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style>
     .formula-sheet {
+        /* Match the shared branded backdrop (the home shell's .app): a faint top
+           accent wash over the canvas, with the static soap-ring layer painted by
+           ::before. position + isolation give the rings a stacking context so
+           they sit behind the content. */
+        position: relative;
+        isolation: isolate;
         min-height: 100%;
-        background: var(--canvas);
+        background:
+            radial-gradient(
+                120% 80% at 50% -12%,
+                var(--sr-accent-weak),
+                transparent 60%
+            ),
+            var(--canvas);
         color: var(--fg);
         font-family: var(--sr-font-body);
     }
+    /* Faint soap rings (thin circles, not filled dots) tinted to the theme
+       accent, the same backdrop the home shell, study map, and readiness screens
+       use, so the sheet reads as one product. Purely decorative: it sits behind
+       the content, never intercepts clicks (pointer-events: none), and carries no
+       motion, so the search box, filters, and formulas stay fully interactive and
+       legible. The .formula-sheet root is already in the reduced-motion guardrail
+       in base.scss, so this stays consistent for reduced-motion users too. */
+    .formula-sheet::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-image:
+            radial-gradient(
+                circle at 30% 32%,
+                transparent 0 7px,
+                var(--sr-accent-weak) 8px 9px,
+                transparent 10px
+            ),
+            radial-gradient(
+                circle at 72% 60%,
+                transparent 0 11px,
+                var(--sr-accent-weak) 12px 13px,
+                transparent 14px
+            ),
+            radial-gradient(
+                circle at 52% 86%,
+                transparent 0 5px,
+                var(--sr-accent-weak) 6px 7px,
+                transparent 8px
+            );
+        background-size:
+            150px 150px,
+            220px 220px,
+            120px 120px;
+    }
+    /* Lift the real content above the decorative ring layer. */
     .sheet {
+        position: relative;
+        z-index: 1;
         max-width: 900px;
         margin: 0 auto;
         padding: 2rem 1.5rem 4rem;
@@ -309,22 +329,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: clamp(2rem, 4.5vw, 2.8rem);
         line-height: 1.05;
         letter-spacing: -0.01em;
-    }
-    .lede {
-        margin: 0.6rem 0 0;
-        max-width: 62ch;
-        color: var(--fg-subtle);
-        line-height: 1.55;
-    }
-    .ref-only {
-        margin: 0.9rem 0 0;
-        display: inline-block;
-        padding: 0.45rem 0.8rem;
-        font-size: 0.78rem;
-        color: var(--fg-subtle);
-        background: var(--canvas-inset);
-        border: 1px solid var(--border);
-        border-radius: var(--sr-radius-sm);
     }
 
     /* Controls -------------------------------------------------------------- */
@@ -384,16 +388,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         outline: 2px solid var(--sr-focus);
         outline-offset: 2px;
     }
-    .sources {
-        margin: 1rem 0 0;
-        font-size: 0.78rem;
-        color: var(--fg-subtle);
-        line-height: 1.5;
-    }
-    .sources i {
-        font-style: italic;
-    }
-
     .empty {
         margin: 2rem 0;
         padding: 1.4rem;
@@ -485,7 +479,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin-top: 0.35rem;
         overflow-x: auto;
         overflow-y: hidden;
-        /* Measured content stays high-contrast ink — never an accent colour. */
+        /* Measured content stays high-contrast ink, never an accent colour. */
         color: var(--fg);
         font-size: 1.02rem;
     }
@@ -501,14 +495,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg-subtle);
         line-height: 1.5;
     }
-    .formula-source {
-        flex: 0 0 auto;
-        align-self: flex-start;
-        margin-top: 0.35rem;
-        font-size: 0.72rem;
-        color: var(--fg-subtle);
-        white-space: nowrap;
-    }
 
     /* The user's own cards -------------------------------------------------- */
     .user-cards {
@@ -518,23 +504,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .user-cards-head {
         margin: 0 0 0.6rem;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        gap: 0.5rem;
         font-size: 0.74rem;
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
         color: var(--fg-subtle);
-    }
-    .user-cards-sub {
-        font-size: 0.68rem;
-        font-weight: 600;
-        letter-spacing: 0;
-        text-transform: none;
-        color: var(--fg-subtle);
-        opacity: 0.85;
     }
     .user-card {
         padding: 0.6rem 0.75rem;
@@ -569,9 +543,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                .formula-math (overflow-x: auto), not the page. */
             flex: 1 1 auto;
             width: 100%;
-        }
-        .formula-source {
-            margin-top: 0;
         }
     }
 </style>

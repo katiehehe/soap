@@ -30,7 +30,7 @@ async function typeset(node: HTMLElement): Promise<void> {
         mj.typesetClear?.([node]);
         await mj.typesetPromise([node]);
     } catch {
-        // Leave the plain text in place — never block the sheet on rendering.
+        // Leave the plain text in place; never block the sheet on rendering.
     }
 }
 

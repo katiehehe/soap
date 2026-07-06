@@ -1,4 +1,4 @@
-default_install_hook_types: [pre-push]
+default_install_hook_types: [pre-commit, pre-push]
 
 repos:
     - repo: local
@@ -10,3 +10,22 @@ repos:
             pass_filenames: false
             always_run: true
             stages: [pre-push]
+          - id: prose-dash-gate
+            name: prose dash gate (no em/en dashes; U+2212 needs a dash-ok marker)
+            entry: python3 tools/speedrun/prose_dash_gate.py
+            language: system
+            pass_filenames: true
+            types: [text]
+            stages: [pre-commit]
+            files: |
+              (?x)^(
+                pylib/anki/speedrun/|
+                pylib/tests/|
+                qt/aqt/speedrun\.py|
+                rslib/src/speedrun/|
+                ts/routes/|
+                ts/tests/|
+                tools/speedrun/|
+                docs/|
+                [^/]+\.md$
+              )

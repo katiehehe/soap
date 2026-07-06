@@ -304,7 +304,7 @@ def _prereq_msgs() -> tuple[
 
 def test_guided_is_advisory_by_default_and_gate_still_works_when_enabled():
     # Performance-first app: a freshly built deck has the guided gate OFF, so
-    # NOTHING is ever locked — the guided sequence is advice (recommended order +
+    # NOTHING is ever locked: the guided sequence is advice (recommended order +
     # arrows), not a gate. unmet_prereqs is still populated (the advice), and
     # performance is reported as its OWN signal, abstaining with no data.
     col = getEmptyCol()
@@ -369,12 +369,12 @@ def test_performance_satisfies_a_prereq_without_flashcards():
     sa = by_tag["subtopic::general::sets_axioms"]
     assert sa.perf_questions == 8
     assert sa.performance_mastered is True
-    # ...but the MEMORY gate is untouched (no reviews) — the two never blend.
+    # ...but the MEMORY gate is untouched (no reviews); the two never blend.
     assert sa.gate_cleared is False
     assert sa.reviews == 0
     # combinatorics depends only on sets_axioms, so performance unlocks it...
     assert by_tag["subtopic::general::combinatorics"].locked is False
-    # ...while bayes (its prereq chain unsatisfied) stays locked — proving the
+    # ...while bayes (its prereq chain unsatisfied) stays locked, proving the
     # gate is active and performance specifically cleared combinatorics.
     assert by_tag["subtopic::general::bayes"].locked is True
 
@@ -480,7 +480,7 @@ def _rebuild_for(col, deck_id, other_id):
 def test_tier_scope_keeps_blocked_out_of_cross_unit_live_queue():
     # Strict tiers, end to end through the LIVE Rust queue: on a freshly built
     # deck (mastery scheduler ON) every subtopic is still Blocked, so scoping the
-    # root deck to the cross-unit tier must serve NOTHING — a still-blocked
+    # root deck to the cross-unit tier must serve NOTHING: a still-blocked
     # subtopic must never leak into cross-unit study. Clearing the scope restores
     # normal study. This is the strict-tier fix exercised from Python.
     col = getEmptyCol()

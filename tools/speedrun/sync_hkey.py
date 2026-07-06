@@ -1,4 +1,4 @@
-"""Print an auth hkey for the local sync server (login only — no seeding).
+"""Print an auth hkey for the local sync server (login only, no seeding).
 
 Used by tools/speedrun/phone_sync_config.sh to authenticate AnkiDroid without a
 UI login. The built-in server derives a stable hkey from the username, so this

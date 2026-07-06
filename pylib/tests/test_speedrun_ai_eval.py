@@ -4,7 +4,7 @@
 """Schema tests for the committed AI-eval artifact builder (ai_eval.py).
 
 These exercise the pure wrapper/writer only (no key, no network): they assert
-the artifact shape and — the honesty-critical part — that AI cells stay null /
+the artifact shape and, the honesty-critical part, that AI cells stay null /
 "pending" and ``ai_ran`` stays false unless an eval actually ran the AI side.
 The heavy per-eval collection is exercised by running the eval scripts.
 """
@@ -76,7 +76,7 @@ def test_report_schema_and_metadata():
 
 def test_ai_cells_pending_when_nothing_ran():
     # The honesty guard: with no eval having run the AI side, the top-level
-    # flags stay off/null and the eval's AI cell stays null — even though a
+    # flags stay off/null and the eval's AI cell stays null, even though a
     # provider/model/seed were passed in.
     report = build_report(
         {"a": dict(_PENDING_EVAL)},

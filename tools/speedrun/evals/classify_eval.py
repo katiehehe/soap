@@ -6,9 +6,9 @@
 
     out/pyenv/bin/python tools/speedrun/evals/classify_eval.py [gold.json]
 
-The held-out gold set is the sample-item corpus (``anki.speedrun.soa_sample`` —
+The held-out gold set is the sample-item corpus (``anki.speedrun.soa_sample``):
 the official SOA sample questions when present, else the committed original
-fallback). The keyword baseline ranks the 19 official subtopics by word overlap
+fallback. The keyword baseline ranks the 19 official subtopics by word overlap
 between a question and each subtopic's curated terms; it has NO dependencies, so
 it always runs and gives the bar the AI classifier must beat.
 
@@ -44,7 +44,7 @@ AI_TOP1_MARGIN = 0.05
 
 # Curated keyword hints per subtopic tag, drawn from the official 2026-05
 # learning outcomes. This is the baseline's index AND (with the outcome text) the
-# only "training" input the AI classifier is allowed — gold items never leak in.
+# only "training" input the AI classifier is allowed; gold items never leak in.
 SUBTOPIC_KEYWORDS: dict[str, list[str]] = {
     "subtopic::general::sets_axioms": ["set", "sample space", "event", "axiom", "venn"],
     "subtopic::general::combinatorics": [
@@ -224,13 +224,13 @@ def collect_results(run_ai: bool = True, limit: int = 0, seed: int = 0) -> dict:
 
     The keyword baseline is always computed on the FULL held-out set; the AI cell
     is populated only when a provider/key is configured AND ``run_ai`` is True,
-    else left ``None`` with a ``pending`` verdict — no AI number is ever
+    else left ``None`` with a ``pending`` verdict: no AI number is ever
     fabricated here. Pass ``run_ai=False`` to force the offline/baseline-only
     record.
 
     ``limit`` caps the AI side to a seeded random SUBSAMPLE of the held-out items
     (cost control for a keyed smoke run). Sampling only chooses which held-out
-    items to *evaluate* — it never touches the classifier's index / training, so
+    items to *evaluate*; it never touches the classifier's index / training, so
     there is no leakage. When it samples, the AI cell carries ``is_subsample``,
     ``sample_size``, ``seed`` and an apples-to-apples ``baseline_on_sample``.
     """
@@ -255,12 +255,12 @@ def collect_results(run_ai: bool = True, limit: int = 0, seed: int = 0) -> dict:
 
         # The AI ranker makes one API call per item; run them concurrently (they
         # are I/O-bound) so the full 715-item held-out set completes in minutes,
-        # not ~15 min sequentially. A failed call returns [] (counts as wrong —
+        # not ~15 min sequentially. A failed call returns [] (counts as wrong;
         # this can only ever LOWER the AI score, never inflate it).
         def _safe_rank(question: str) -> list[str]:
             try:
                 return ranker(question)
-            except Exception:  # noqa: BLE001 — a failed classify counts as wrong
+            except Exception:  # noqa: BLE001 - a failed classify counts as wrong
                 return []
 
         questions = [it["question"] for it in sample]
@@ -295,7 +295,7 @@ def collect_results(run_ai: bool = True, limit: int = 0, seed: int = 0) -> dict:
         )
 
     return {
-        "name": "Feature 1 — subtopic classifier",
+        "name": "Feature 1: subtopic classifier",
         "make_target": "make classify",
         "baseline_vs": "keyword overlap",
         "dataset": {

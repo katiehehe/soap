@@ -8,10 +8,10 @@
   "ai_provider": "openai",
   "ai_model": "gpt-4o-mini",
   "seed": 0,
-  "note": "Baseline/offline cells are reproducible with no key and are always filled. AI cells are populated only when the eval ran with OPENAI_API_KEY; when absent they are null and the verdict is 'pending' — never fabricated. Regenerate with `make ai-report` (add OPENAI_API_KEY to populate AI cells).",
+  "note": "Baseline/offline cells are reproducible with no key and are always filled. AI cells are populated only when the eval ran with OPENAI_API_KEY; when absent they are null and the verdict is 'pending', never fabricated. Regenerate with `make ai-report` (add OPENAI_API_KEY to populate AI cells).",
   "evals": {
     "classify": {
-      "name": "Feature 1 — subtopic classifier",
+      "name": "Feature 1: subtopic classifier",
       "make_target": "make classify",
       "baseline_vs": "keyword overlap",
       "dataset": {
@@ -53,7 +53,7 @@
       "verdict": "PASS on full set: AI top-1 38% vs baseline 13% (margin +25%)"
     },
     "generate": {
-      "name": "Feature 2 — card generation from a named source",
+      "name": "Feature 2: card generation from a named source",
       "make_target": "make ai-eval",
       "baseline_vs": "template/extraction (stub)",
       "dataset": {
@@ -107,7 +107,7 @@
       "verdict": "PASS on full set: AI correct 92% vs baseline 30%, bad-teaching 0%"
     },
     "problems": {
-      "name": "Feature 2 (Phase 2) — exam-style problem generation",
+      "name": "Feature 2 (Phase 2): exam-style problem generation",
       "make_target": "make problems",
       "baseline_vs": "templated (correct by construction)",
       "dataset": {

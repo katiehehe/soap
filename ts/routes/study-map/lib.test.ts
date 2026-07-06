@@ -25,7 +25,11 @@ import {
     projectedFinishWeeks,
     prereqChain,
     prereqEdges,
+    renderedCorner,
+    renderedHalf,
     shrinkCircle,
+    squircleBorderPoint,
+    squircleEdgeBetween,
     statusLabel,
     subRadius,
     subtopicTag,
@@ -182,6 +186,31 @@ function segSeparation(
         pointToSeg(b.x1, b.y1, a),
         pointToSeg(b.x2, b.y2, a),
     );
+}
+
+// A point lies on a bubble's RENDERED squircle border if it is on a flat side
+// (|dx| or |dy| == half-width, within the straight band) or on a rounded corner
+// arc (radius renderedCorner about the corner-arc centre). Mirrors the geometry
+// squircleBorderPoint solves, so arrow endpoints can be checked against the drawn
+// bubble edge, not the inscribed circle.
+function onSquircleBorder(
+    p: { x: number; y: number },
+    c: Circle,
+    eps = 1e-3,
+): boolean {
+    const half = renderedHalf(c.r);
+    const cr = renderedCorner(c.r);
+    const dx = Math.abs(p.x - c.x);
+    const dy = Math.abs(p.y - c.y);
+    const onFlatX = Math.abs(dx - half) < eps && dy <= half - cr + eps;
+    const onFlatY = Math.abs(dy - half) < eps && dx <= half - cr + eps;
+    const ex = dx - (half - cr);
+    const ey = dy - (half - cr);
+    const onArc =
+        dx > half - cr - eps &&
+        dy > half - cr - eps &&
+        Math.abs(Math.hypot(ex, ey) - cr) < eps;
+    return onFlatX || onFlatY || onArc;
 }
 
 describe("two-track edges (dual-metric connectors)", () => {
@@ -371,7 +400,7 @@ describe("hierarchical upward fill (child -> parent)", () => {
 // SVG bubble-mask must aim at NODE_TOUCH·r, or the line stops in the empty ring
 // between the drawn bubble and the collision circle and reads as a floating gap.
 // These tests lock the corrected endpoints onto the VISIBLE border.
-describe("edges touch the visible (drawn) bubble border — no floating gap", () => {
+describe("edges touch the visible (drawn) bubble border, no floating gap", () => {
     const dist = (p: { x: number; y: number }, c: Circle): number =>
         Math.hypot(p.x - c.x, p.y - c.y);
     const onVisible = (p: { x: number; y: number }, c: Circle): boolean =>
@@ -423,7 +452,7 @@ describe("edges touch the visible (drawn) bubble border — no floating gap", ()
         }
     });
 
-    test("prereq arrows land on the VISIBLE border, not the collision circle", () => {
+    test("prereq arrows land on the drawn squircle border, tucked in the collision circle", () => {
         const leafByTag = new Map<string, Circle>(
             layout.units.flatMap((u) => u.subs.map((s) => [s.tag, s] as const)),
         );
@@ -433,26 +462,69 @@ describe("edges touch the visible (drawn) bubble border — no floating gap", ()
         const nodeFor = (tag: string): Circle =>
             (leafByTag.get(tag) ?? unitByTag.get(tag))!;
 
-        const scaled = prereqEdges(layout, NODE_TOUCH);
-        // Same set of arrows as the default, just pulled onto the visible border.
-        expect(scaled.length).toBe(prereqEdges(layout).length);
-        expect(scaled.length).toBeGreaterThan(0);
+        const edges = prereqEdges(layout);
+        expect(edges.length).toBeGreaterThan(0);
 
-        for (const e of scaled) {
+        for (const e of edges) {
             const from = nodeFor(e.from);
             const to = nodeFor(e.to);
+            // Endpoints sit on the RENDERED squircle border, so the arrowhead tip
+            // touches the drawn bubble edge, no gap, nothing tucked under a corner.
             expect(
-                onVisible({ x: e.geom.x1, y: e.geom.y1 }, from),
-                `${e.from} tail on visible border`,
+                onSquircleBorder({ x: e.geom.x1, y: e.geom.y1 }, from),
+                `${e.from} tail on squircle border`,
             ).toBe(true);
             expect(
-                onVisible({ x: e.geom.x2, y: e.geom.y2 }, to),
-                `${e.to} head on visible border`,
+                onSquircleBorder({ x: e.geom.x2, y: e.geom.y2 }, to),
+                `${e.to} head on squircle border`,
             ).toBe(true);
             // Strictly inside the collision circle → the drawn bubble covers the
             // tucked end and nothing pokes out past the bubble.
             expect(dist({ x: e.geom.x2, y: e.geom.y2 }, to)).toBeLessThan(to.r);
         }
+    });
+});
+
+describe("rendered squircle border (arrow endpoints land on the drawn edge)", () => {
+    const c: Circle = { x: 100, y: 100, r: 50 };
+    const half = renderedHalf(c.r);
+    const cr = renderedCorner(c.r);
+
+    test("renderedHalf / renderedCorner mirror the CSS box (scale + 34%)", () => {
+        expect(half).toBeCloseTo(50 * NODE_TOUCH);
+        expect(cr).toBeCloseTo(0.34 * 2 * half);
+        // 34% is a rounded square, not a circle (corner radius below half-width).
+        expect(cr).toBeLessThan(half);
+    });
+
+    test("straight-axis rays land on the flat side at the half-width", () => {
+        const right = squircleBorderPoint(c, 1000, 100);
+        expect(right.x).toBeCloseTo(c.x + half);
+        expect(right.y).toBeCloseTo(c.y);
+        const up = squircleBorderPoint(c, 100, -1000);
+        expect(up.y).toBeCloseTo(c.y - half);
+        expect(up.x).toBeCloseTo(c.x);
+    });
+
+    test("a corner ray lands on the rounded arc, inside the bbox corner and the collision circle", () => {
+        const p = squircleBorderPoint(c, 1000, 1000); // 45° toward the corner
+        const ex = Math.abs(p.x - c.x) - (half - cr);
+        const ey = Math.abs(p.y - c.y) - (half - cr);
+        // On the corner arc: distance to the arc centre equals the corner radius.
+        expect(Math.hypot(ex, ey)).toBeCloseTo(cr);
+        const reach = Math.hypot(p.x - c.x, p.y - c.y);
+        // Pulled inside the square bounding-box corner (a rounded, not sharp, corner)
+        expect(reach).toBeLessThan(half * Math.SQRT2);
+        // ...and inside the collision circle, so the drawn bubble covers the end.
+        expect(reach).toBeLessThan(c.r);
+    });
+
+    test("squircleEdgeBetween puts both ends on each node's squircle border", () => {
+        const a: Circle = { x: 0, y: 0, r: 40 };
+        const b: Circle = { x: 200, y: 120, r: 55 };
+        const e = squircleEdgeBetween(a, b);
+        expect(onSquircleBorder({ x: e.x1, y: e.y1 }, a)).toBe(true);
+        expect(onSquircleBorder({ x: e.x2, y: e.y2 }, b)).toBe(true);
     });
 });
 
@@ -511,6 +583,57 @@ describe("honest mastery display", () => {
     });
 });
 
+// The Memory rail on a map edge is filled by feeding leafProgress (its honest
+// fill fraction) into fillSegment along the edge's Memory track, exactly as
+// +page.svelte does. Real review evidence must produce a NON-EMPTY fill that
+// grows from the child end toward the parent, on its OWN track, never shared
+// with Performance. This locks the memory-edge-fill contract: a component
+// reactivity bug once left every Memory rail stuck at 0 (leafProgress computed
+// once against empty data, never refilled) while the Performance rails filled.
+// Honest data only, built through evi()/perf(); nothing is faked to look filled.
+describe("memory rail fill from review evidence (dual-metric edge)", () => {
+    const child: Circle = { x: 0, y: 200, r: 20 };
+    const parent: Circle = { x: 0, y: 0, r: 30 };
+    const near = (v: number, t: number): boolean => Math.abs(v - t) < 1e-6;
+
+    test("no reviews -> the Memory rail stays empty (fill collapses to the child)", () => {
+        const { memory } = hierEdges(child, parent);
+        const seg = fillSegment(memory, leafProgress(null));
+        expect(near(seg.x2, memory.x1)).toBe(true);
+        expect(near(seg.y2, memory.y1)).toBe(true);
+    });
+
+    test("real reviews drive a non-empty Memory fill that grows toward the parent", () => {
+        const { memory } = hierEdges(child, parent);
+        // Gathering evidence (6 real reviews) already lifts the fill off zero.
+        const gathering = leafProgress(evi(6, 1.0, 1.0));
+        expect(gathering).toBeGreaterThan(0);
+        const seg = fillSegment(memory, gathering);
+        // The fill advanced up the rail: its tip left the child end and moved
+        // toward (above) the parent.
+        expect(
+            Math.hypot(seg.x2 - memory.x1, seg.y2 - memory.y1),
+        ).toBeGreaterThan(0);
+        expect(seg.y2).toBeLessThan(memory.y1);
+        // A cleared memory gate fills the whole rail up to the parent border.
+        const full = fillSegment(memory, leafProgress(evi(15, 0.95, 0.95, true)));
+        expect(near(full.x2, memory.x2)).toBe(true);
+        expect(near(full.y2, memory.y2)).toBe(true);
+    });
+
+    test("Memory and Performance rails fill from their OWN evidence, never shared", () => {
+        const two = hierEdges(child, parent);
+        // Memory has cleared evidence; performance has none. Only the Memory rail
+        // fills (to the parent); the Performance rail stays empty at the child.
+        const memFill = fillSegment(two.memory, leafProgress(evi(15, 0.95, 0.95, true)));
+        const perfFill = fillSegment(two.performance, perfProgress(null));
+        expect(near(memFill.x2, two.memory.x2)).toBe(true);
+        expect(near(memFill.y2, two.memory.y2)).toBe(true);
+        expect(near(perfFill.x2, two.performance.x1)).toBe(true);
+        expect(near(perfFill.y2, two.performance.y1)).toBe(true);
+    });
+});
+
 function perf(
     perfQuestions: number,
     perfCorrect: number,
@@ -551,7 +674,7 @@ describe("honest performance progress (perfProgress)", () => {
 
     test("uncapped by time: fill reflects accumulated practice only", () => {
         // Two topics with identical practice evidence get identical fills,
-        // regardless of any (absent) schedule — performance is the practice track.
+        // regardless of any (absent) schedule: performance is the practice track.
         expect(perfProgress(perf(12, 10, true))).toBe(perfProgress(perf(12, 10, true)));
     });
 
@@ -618,16 +741,21 @@ describe("prerequisite DAG", () => {
     test("prereq edges touch both bubble borders and carry an arrowhead", () => {
         const edges = prereqEdges(layout);
         expect(edges.length).toBeGreaterThan(0);
-        const onBorder = (x: number, y: number, c: Circle): boolean =>
-            Math.abs(Math.hypot(x - c.x, y - c.y) - c.r) < 0.001;
         const leafByTag = new Map(
             layout.units.flatMap((u) => u.subs.map((s) => [s.tag, s])),
         );
         for (const e of edges.filter((e) => e.kind === "subtopic")) {
             const from = leafByTag.get(e.from)!;
             const to = leafByTag.get(e.to)!;
-            expect(onBorder(e.geom.x1, e.geom.y1, from), `${e.from} tail`).toBe(true);
-            expect(onBorder(e.geom.x2, e.geom.y2, to), `${e.to} head`).toBe(true);
+            // Ends land on the drawn (squircle) bubble border, tip flush on the edge.
+            expect(
+                onSquircleBorder({ x: e.geom.x1, y: e.geom.y1 }, from),
+                `${e.from} tail`,
+            ).toBe(true);
+            expect(
+                onSquircleBorder({ x: e.geom.x2, y: e.geom.y2 }, to),
+                `${e.to} head`,
+            ).toBe(true);
             // Arrowhead is a 3-point polygon whose tip sits at the edge end.
             const pts = arrowHead(e.geom).split(" ");
             expect(pts).toHaveLength(3);
@@ -736,5 +864,36 @@ describe("mastery pace", () => {
         // The 1-vs-≥2 boundary the copy pluralises on.
         expect(projectedFinishWeeks(10)).toBe(1); // "week"
         expect(projectedFinishWeeks(11)).toBeGreaterThan(1); // "weeks"
+    });
+});
+
+// "Linear combos" (multivariate) is nudged up one half-width (yShiftHalfWidths:-1)
+// so its Memory rail to the unit no longer passes under the neighbouring "Order
+// statistics" bubble. These lock that in: the rail must clear every sibling, and
+// undoing the nudge must put it back under Order statistics (so the fix can't be
+// silently removed). The rail is built exactly as +page.svelte draws it: hierEdges
+// on the visible (drawn) borders.
+describe("Linear combos vertical nudge (memory rail clears its neighbour)", () => {
+    const unit = layout.units.find((u) => u.id === "multivariate")!;
+    const lc = unit.subs.find((s) => s.id === "linear_combinations")!;
+    const memRail = (leaf: Circle) =>
+        hierEdges(shrinkCircle(leaf, NODE_TOUCH), shrinkCircle(unit, NODE_TOUCH)).memory;
+
+    test("its memory rail stays outside every other multivariate bubble", () => {
+        const rail = memRail(lc);
+        for (const s of unit.subs) {
+            if (s.id === lc.id) {
+                continue;
+            }
+            expect(pointToSeg(s.x, s.y, rail), `clears ${s.id}`).toBeGreaterThan(s.r);
+        }
+    });
+
+    test("the up nudge is what clears it: un-nudged, the rail cuts under Order statistics", () => {
+        const os = unit.subs.find((s) => s.id === "order_statistics")!;
+        // Undo the one-half-width up nudge (it lifted Linear combos by lc.r).
+        const unNudged: Circle = { x: lc.x, y: lc.y + lc.r, r: lc.r };
+        expect(pointToSeg(os.x, os.y, memRail(unNudged))).toBeLessThan(os.r);
+        expect(pointToSeg(os.x, os.y, memRail(lc))).toBeGreaterThan(os.r);
     });
 });

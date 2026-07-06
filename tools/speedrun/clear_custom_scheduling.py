@@ -13,8 +13,8 @@ Why this exists
 Anki's v3 scheduler can run a per-collection "Custom scheduling" snippet (stored
 in the collection config key ``cardStateCustomizer``). It is injected into the
 reviewer as ``anki.mutateNextCardStates(...)`` and runs on EVERY card. This fork
-does NOT use custom scheduling — the three-tier mastery scheduler lives in the
-Rust engine and is toggled by a config flag — so that field should be empty.
+does NOT use custom scheduling: the three-tier mastery scheduler lives in the
+Rust engine and is toggled by a config flag, so that field should be empty.
 
 If it contains leftover/experimental code it breaks review in two visible ways:
 
@@ -68,7 +68,7 @@ def clear(path: str, *, dry_run: bool) -> int:
     try:
         current = col.get_config(_CONFIG_KEY, None)
         if not current:
-            print(f"'{_CONFIG_KEY}' is already empty — nothing to do.")
+            print(f"'{_CONFIG_KEY}' is already empty, nothing to do.")
             return 0
         print(f"current custom scheduling code:\n  {current!r}")
         if dry_run:

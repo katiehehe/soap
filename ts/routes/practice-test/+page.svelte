@@ -13,20 +13,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     // A timed, exam-shaped, ALL-multiple-choice practice test drawn from a
     // PRE-BUILT bank (the held-out corpus + the pre-generated templated /
-    // verified-AI pool) — nothing is generated on the spot, so it starts
+    // verified-AI pool). Nothing is generated on the spot, so it starts
     // instantly and stays exactly timed. It comes in two shapes:
     //
     //   * FULL EXAM SIMULATION (the centre "Exam P" bubble / Practice tab):
     //     exactly 30 questions, section-weighted across the three units, on a
-    //     visible 3:00:00 countdown. The canonical, most-representative test —
-    //     it moves Readiness the most.
+    //     visible 3:00:00 countdown. It is the canonical, most-representative
+    //     test, and it moves Readiness the most.
     //   * TOPIC / UNIT QUIZ (a subtopic or unit bubble): 10 questions at the same
     //     6-min-per-question exam pace (a 1:00:00 countdown). Records the same
     //     graded evidence, but counts LESS toward Readiness.
     //
     // Either way the countdown auto-submits at zero, and you can submit early at
     // any time. Grading is OBJECTIVE against the correct choice (no self-marking,
-    // no peeking — the correct letter is withheld until submit and graded
+    // no peeking: the correct letter is withheld until submit and graded
     // server-side). It records REAL evidence for the Performance + Readiness
     // signals (readiness stays behind the give-up rule and is always a range).
 
@@ -83,7 +83,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         ),
     );
 
-    // The exam is 3 hours for 30 questions — i.e. 6 minutes (360s) per question.
+    // The exam is 3 hours for 30 questions, i.e. 6 minutes (360s) per question.
     // A scoped quiz keeps that exam pace, so its clock scales with its length.
     const FULL_EXAM_SIZE = 30;
     const FULL_EXAM_SECONDS = 10_800; // 3:00:00
@@ -118,11 +118,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         return "the whole exam";
     }
-    // How much a result of this scope counts toward Readiness — stated honestly
+    // How much a result of this scope counts toward Readiness, stated honestly
     // up front, mirroring the engine's representativeness weighting.
     function readinessNote(s: TestScope): string {
         if (s.kind === "subtopic") {
-            return "A single-topic quiz counts the least toward your Readiness — take a full 30-question exam to move it the most.";
+            return "A single-topic quiz counts the least toward your Readiness, so take a full 30-question exam to move it the most.";
         }
         if (s.kind === "unit") {
             return "A unit quiz counts less toward your Readiness than a full, whole-exam simulation.";
@@ -207,7 +207,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         phase = "loading";
         // A fresh random seed each run gives a different exam-shaped draw every
         // time; the assembly itself stays reproducible for any given seed. Every
-        // question comes from the PRE-BUILT bank — never generated on the spot.
+        // question comes from the PRE-BUILT bank; it is never generated on the spot.
         const seed = Math.floor(Math.random() * 1_000_000);
         bridgeCommand(
             `speedrun-assemble-test:${seed},${plannedSize},${scopeStr}`,
@@ -225,8 +225,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         if (!auto && !allAnswered) {
             const missing = total - answered;
             const ok = confirm(
-                `${missing} question${missing === 1 ? "" : "s"} still unanswered — ` +
-                    "submit anyway? Unanswered questions are marked wrong.",
+                `${missing} question${missing === 1 ? "" : "s"} still unanswered. ` +
+                    "Submit anyway? Unanswered questions are marked wrong.",
             );
             if (!ok) {
                 return;
@@ -289,32 +289,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     </span>
                 </div>
                 <div class="spec">
-                    <span class="spec-num">A–E</span>
+                    <span class="spec-num">A-E</span>
                     <span class="spec-label">multiple choice</span>
                 </div>
             </div>
             <p class="lead">
-                {#if isFullExam}
-                    An <b>exam-shaped</b>
-                    test of exactly {FULL_EXAM_SIZE} multiple-choice questions, mixed
-                    across the three units by the official SOA section weights (General
-                    23–30% · Univariate 44–50% · Multivariate 23–30%) and timed like
-                    the real exam.
-                {:else}
-                    An <b>exam-shaped</b>
-                    quiz of {QUIZ_SIZE} multiple-choice questions on {scopeLabel}, at the
-                    real exam's 6-minutes-per-question pace.
-                {/if}
-                Every question is drawn from a pre-built bank — nothing is generated
+                Every question is drawn from a pre-built bank. Nothing is generated
                 while you test.
             </p>
             <p class="timing-line">
-                A visible countdown <b>auto-submits at zero</b>; you can also submit
-                early at any time.
+                A visible countdown <b>auto-submits at zero</b>.
             </p>
             <p class="note">
-                Submitting records <b>real graded evidence</b>
-                — each question is marked objectively against the correct choice (no
+                Submitting records <b>real graded evidence</b>: each question is marked
+                objectively against the correct choice (no
                 self-marking). {readinessLine} It feeds Readiness, which stays hidden
                 until the give-up threshold and always shows a range.
             </p>
@@ -348,24 +336,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     </div>
                 </div>
                 <p class="paper-hint">
-                    Work each one and pick an answer. Nothing is marked until you
-                    submit — the test auto-submits when the clock hits zero.
+                    The test auto-submits when the clock hits zero.
                 </p>
             </div>
 
             {#each items as it, i}
                 <section class="q">
                     <div class="q-head">
+                        <!-- No per-question topic label during the test. A real SOA
+                             Exam P never tells you which unit a question is from, so
+                             showing it would leak information and break exam realism.
+                             Each item still carries its unitId/subtopic for
+                             server-side scoring and readiness weighting; the category
+                             is hidden from the test view only. -->
                         <span class="qnum">Question {i + 1}</span>
-                        <!-- The unit is only worth labelling per-question on the
-                             whole-exam test, where questions span the three units.
-                             For a single-topic or single-unit test it's implied by
-                             the header, so we drop the repetitive chip. -->
-                        {#if scope.kind === "all"}
-                            <span class="unit-chip">
-                                {UNIT_NAME.get(it.unitId) ?? it.unitId}
-                            </span>
-                        {/if}
                     </div>
                     <div class="q-stem">{clean(it.stem)}</div>
 
@@ -432,7 +416,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     {/each}
                 </div>
                 <p class="note">
-                    Recorded as real evidence — <b>{result.stats.tests}</b>
+                    Recorded as real evidence: <b>{result.stats.tests}</b>
                     {result.stats.tests === 1 ? "test" : "tests"} ·
                     <b>{result.stats.questions}</b>
                     questions graded all-time. Open the
@@ -450,7 +434,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </div>
             </section>
 
-            <h2 class="review-title">Review — every question</h2>
+            <h2 class="review-title">Review: every question</h2>
             {#each items as it, i}
                 {@const r = reviewById[it.id]}
                 <section
@@ -610,7 +594,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         text-transform: uppercase;
         color: var(--fg-subtle);
     }
-    /* Honest urgency in the final minutes — a colour shift, never a glow. */
+    /* Honest urgency in the final minutes: a colour shift, never a glow. */
     .clock.low {
         border-color: color-mix(in srgb, var(--sr-wrong) 55%, var(--border));
     }
@@ -716,15 +700,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         letter-spacing: 0.05em;
         text-transform: uppercase;
         color: var(--fg-subtle);
-    }
-    .unit-chip {
-        font-size: 0.75rem;
-        font-weight: 700;
-        padding: 0.22rem 0.65rem;
-        border-radius: var(--sr-radius-pill, 999px);
-        background: var(--sr-accent-weak);
-        color: var(--sr-accent);
-        border: 1px solid var(--border);
     }
     .q-stem {
         font-size: 1.05rem;

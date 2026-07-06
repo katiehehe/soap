@@ -2,7 +2,7 @@
 
 Two clients each download the shared collection, review a DIFFERENT set of cards
 offline, then sync. Asserts every review lands on BOTH clients with none lost or
-doubled — i.e. reviews flow both directions (rubric 7b), against the actual
+doubled, so reviews flow both directions (rubric 7b), against the actual
 running server (default http://127.0.0.1:27701/), not an ephemeral one.
 
   make sync-server   # in another terminal, first

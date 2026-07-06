@@ -7,13 +7,13 @@ A probabilistic model is *calibrated* when, among the times it predicts
 probability ~p, about a fraction p actually happen. These pure, deterministic
 functions measure that so anyone can re-run and get the same numbers:
 
-- ``brier_score`` and ``log_loss`` — proper scoring rules (lower is better).
-- ``reliability_bins`` / ``expected_calibration_error`` — the reliability curve
+- ``brier_score`` and ``log_loss`` are proper scoring rules (lower is better).
+- ``reliability_bins`` / ``expected_calibration_error`` give the reliability curve
   and a single-number summary of how far predictions sit from outcomes.
 
 The honesty/give-up rule applies to calibration too: below ``min_samples`` graded
 predictions, ``calibration_report`` returns an explicit ``insufficient_data``
-status instead of a shaky number. Nothing here fabricates a score — it only
+status instead of a shaky number. Nothing here fabricates a score; it only
 scores predictions against real outcomes.
 """
 

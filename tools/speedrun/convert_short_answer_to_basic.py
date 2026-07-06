@@ -26,11 +26,11 @@ This one-off, idempotent maintenance step rewrites those in place:
     ``difficulty::`` tag, so they are left exactly as-is.
   * Runs through Anki's own note-type conversion (``models.change``), mapping the
     single card template 1:1, so every card KEEPS its FSRS scheduling / review
-    history and undo still works — the collection is never corrupted.
+    history and undo still works, so the collection is never corrupted.
 
 Changing a note's notetype is a schema modification (it forces one full sync on
 next sync, which pushes the fix to the phone too). Because it is schema-modifying
-and one-time, it is a deliberate maintenance step — run with Anki CLOSED (it
+and one-time, it is a deliberate maintenance step: run with Anki CLOSED (it
 holds an exclusive lock and caches config/notes in memory), not silently on load.
 """
 
@@ -85,7 +85,7 @@ def convert(path: str, *, dry_run: bool) -> int:
     try:
         pending = _seeded_short_answer_count(col)
         if pending == 0:
-            print("no seeded 'SOA Short Answer' cards found — nothing to do.")
+            print("no seeded 'SOA Short Answer' cards found, nothing to do.")
             return 0
         print(f"found {pending} seeded typed short-answer card(s) to convert.")
         if dry_run:

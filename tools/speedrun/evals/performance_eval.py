@@ -14,7 +14,7 @@ a real student result):
   crossed with a synthetic student **cohort** (``persona.synthetic_cohort``).
   Correctness comes from each student's latent skill vs each item's difficulty.
   The held-out split is BY ITEM (never by example), so no item's text appears in
-  both train and test — the leakage scan enforces this.
+  both train and test, so the leakage scan enforces this.
 
 On a real labelled held-out set of disguised questions the same pipeline runs
 unchanged; until that data exists the app shows "performance: not yet measured"
@@ -141,7 +141,7 @@ def run_persona(students: int, seed: int, test_frac: float) -> int:
     items_by_id = {it.id: it for it in corpus.items}
     provenance = "official SOA" if corpus.is_real_soa else "original fallback"
     print("=" * 72)
-    print("PERSONA MODE — real held-out item corpus x a SYNTHETIC student cohort.")
+    print("PERSONA MODE: real held-out item corpus x a SYNTHETIC student cohort.")
     print(f"corpus: {corpus.source} ({provenance}); split BY ITEM (no item leakage).")
     print("These numbers measure the model on synthetic responses; NOT a real student.")
     print("=" * 72)
@@ -157,7 +157,7 @@ def run_persona(students: int, seed: int, test_frac: float) -> int:
         [(i, items_by_id[i].question) for i in test_ids],
     )
     print(
-        f"Leakage scan (by item): {'CLEAN' if not leaks else f'{len(leaks)} LEAK(S) — aborting'}"
+        f"Leakage scan (by item): {'CLEAN' if not leaks else f'{len(leaks)} LEAK(S), aborting'}"
     )
     if leaks:
         return 1
@@ -191,7 +191,7 @@ def main() -> int:
         return run_persona(args.students, args.seed, args.test_frac)
 
     print("=" * 72)
-    print("SYNTHETIC FIXTURE — validates the performance pipeline end to end.")
+    print("SYNTHETIC FIXTURE: validates the performance pipeline end to end.")
     print("These numbers are NOT a real student measurement. On real data the")
     print("same pipeline runs unchanged; until then the app abstains.")
     print("=" * 72)
@@ -208,7 +208,7 @@ def main() -> int:
         [(i, by_id[i].text) for i in test_ids],
     )
     print(
-        f"Leakage scan: {'CLEAN' if not leaks else f'{len(leaks)} LEAK(S) — aborting'}"
+        f"Leakage scan: {'CLEAN' if not leaks else f'{len(leaks)} LEAK(S), aborting'}"
     )
     if leaks:
         return 1

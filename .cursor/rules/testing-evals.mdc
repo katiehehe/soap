@@ -9,16 +9,16 @@ alwaysApply: false
 Reproducibility is graded and several caps hang on it (no re-runnable tests → 60% max; no held-out testing → 60% max; leaked data → 0).
 
 - **Held-out split with a fixed seed.** Anyone can re-run and get the same numbers. Document the command.
-- **Leakage scan (7e):** a script that scans training data for any test item or near-copy and reports clean. Wire it as a pre-commit / CI gate — leaked data zeroes the score, so catch it automatically, not by hand.
+- **Leakage scan (7e):** a script that scans training data for any test item or near-copy and reports clean. Wire it as a pre-commit / CI gate: leaked data zeroes the score, so catch it automatically, not by hand.
 - **Memory calibration (Step 1, required):** when the model says 80%, ~80% recall should follow. Produce a calibration chart + Brier or log loss on held-back reviews.
 - **Performance (Step 2, required):** accuracy on held-back exam-style questions using topic mastery, difficulty, timing, coverage.
-- **Paraphrase test (7d):** take 30 cards, write 2 reworded exam-style questions each, compare card recall vs reworded accuracy, and **report the gap**. If the two numbers match, performance is just copying memory — flag it, don't hide it.
+- **Paraphrase test (7d):** take 30 cards, write 2 reworded exam-style questions each, compare card recall vs reworded accuracy, and **report the gap**. If the two numbers match, performance is just copying memory, so flag it and don't hide it.
 - **AI card check (7f):** gold set of 50; generate 50 from one source; report correct / wrong / bad-teaching; cutoff set before looking.
-- **The study-feature ablation (section 8) — it targets the WITHIN-UNIT interleaving tier of the scheduler.** Three builds, **equal study time, same learners, same questions**:
+- **The study-feature ablation (section 8) targets the WITHIN-UNIT interleaving tier of the scheduler.** Three builds, **equal study time, same learners, same questions**:
   1. full three-tier scheduler (block subtopics → interleave within a unit → interleave across units),
-  2. within-unit interleaving removed — a mastered subtopic drops straight into a global mixed pool (skips tier 2),
+  2. within-unit interleaving removed, so a mastered subtopic drops straight into a global mixed pool (skips tier 2),
   3. plain unmodified Anki.
-  Pre-register the main metric (accuracy on held-out SOA sample questions, especially confusable sub-types). Hypothesis: build 1 beats build 2 on confusable sub-types; if not, that is a real, reportable null. **Report ranges and report results that did not work** — "within-unit interleaving made no difference here" scores well. You are not proving the idea; you are running a fair test that could disprove it.
+  Pre-register the main metric (accuracy on held-out SOA sample questions, especially confusable sub-types). Hypothesis: build 1 beats build 2 on confusable sub-types; if not, that is a real, reportable null. **Report ranges and report results that did not work.** For example, "within-unit interleaving made no difference here" scores well. You are not proving the idea; you are running a fair test that could disprove it.
 - **`make bench` (7h):** one command loads the 50k-card deck and prints p50 / p95 / worst for each action. One cherry-picked number does not count.
 - **Crash/offline (7g):** kill each app mid-review 20× → zero corrupted collections; pull the network → AI turns off cleanly, apps keep working and still score.
 

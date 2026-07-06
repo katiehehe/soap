@@ -31,10 +31,10 @@ The first run can be slow (~60 s) because Anki must fully initialise before test
 Start Anki once in a separate terminal, then reuse it across multiple test runs:
 
 ```shell
-# Terminal 1 — keep running
+# Terminal 1: keep running
 ./run
 
-# Terminal 2 — fast iteration
+# Terminal 2: fast iteration
 ANKI_E2E_REUSE_SERVER=1 just test-e2e
 ```
 

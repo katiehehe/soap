@@ -6,7 +6,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { createEventDispatcher, onMount } from "svelte";
     import { slide } from "svelte/transition";
 
-    import { bridgeCommand } from "@tslib/bridgecommand";
+    import { bridgeCommand, bridgeCommandsAvailable } from "@tslib/bridgecommand";
     import {
         computeReadiness,
         getMasteryState,
@@ -168,6 +168,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let studyPlan: StudyPlan | null = null;
     let pace: StudyPace | null = null;
     let loadError = "";
+    // Unseen new cards the daily limit is still holding back in the exam deck
+    // (ignoring today's cap), fetched from the desktop bridge. `null` means
+    // unknown (no bridge: the browser/e2e, or the phone before its native
+    // handler exists), where we keep the "study more" lever as a safe fallback.
+    // It makes that lever honest: raising today's new limit only surfaces cards
+    // when some remain, so at 0 we say "caught up" instead of a button that
+    // quietly does nothing (extend_limits has nothing to add).
+    let newRemaining: number | null = null;
     let selectedLeaf: LeafNode | null = null;
     let selectedUnit: UnitNode | null = null;
     // The centre "Exam P" node opens an overall-mastery detail; mastery lives
@@ -215,8 +223,38 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         } catch (err) {
             loadError = String(err);
         }
+        // Desktop only: how many new cards the daily limit is still holding back,
+        // so the "study more today" lever is honest (see newRemaining). Read-only
+        // count; a plain browser / the phone (no bridge) leaves it null.
+        if (bridgeCommandsAvailable()) {
+            bridgeCommand<number>("speedrun-new-remaining", (n) => {
+                newRemaining = typeof n === "number" ? n : null;
+            });
+        }
     }
-    onMount(loadState);
+    onMount(() => {
+        loadState();
+        // Bug fix: the counts were only fetched once at mount, so a subtopic's
+        // "N due" count did not clear after finishing a review until a full
+        // reload. Re-fetch whenever the page becomes visible again (returning
+        // from a review session, a tab/app focus change, a WebView resume, or a
+        // bfcache/back-forward restore) so the due counts refresh in place.
+        // loadState() only reads state, so re-running is safe. Cross-platform;
+        // also covers the desktop return-from-review case.
+        function refetchIfVisible(): void {
+            if (document.visibilityState === "visible") {
+                loadState();
+            }
+        }
+        document.addEventListener("visibilitychange", refetchIfVisible);
+        // Some webviews restore from bfcache without firing visibilitychange;
+        // pageshow covers that (and a persisted back/forward restore).
+        window.addEventListener("pageshow", refetchIfVisible);
+        return () => {
+            document.removeEventListener("visibilitychange", refetchIfVisible);
+            window.removeEventListener("pageshow", refetchIfVisible);
+        };
+    });
 
     $: subMap = new Map<string, SubtopicMastery>(
         (result?.subtopics ?? []).map((s) => [s.tag, s]),
@@ -823,11 +861,28 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 </button>
             {/if}
             {#if planGroups.length === 0}
-                <!-- "Study more" is a beyond-the-quota lever, so it only appears once
-                     today's due cards are cleared. -->
-                <button class="plan-more" on:click={studyMore}>
-                    Study more today (+20)
-                </button>
+                <!-- "Study more" is a beyond-the-quota lever, shown once today's
+                     due cards are cleared. It only does something when the daily
+                     limit is still holding back unseen new cards; once every new
+                     card has been introduced (newRemaining === 0) raising the
+                     limit surfaces nothing, so show the honest caught-up note
+                     rather than a button that quietly does nothing. newRemaining
+                     === null (no desktop bridge, e.g. browser/e2e) keeps the
+                     lever as a fallback so nothing regresses off-desktop. -->
+                {#if newRemaining === 0}
+                    <p class="plan-note plan-caught-up">
+                        You've introduced every new card. Reviews return here as they
+                        come due; practice any topic anytime below.
+                    </p>
+                {:else}
+                    <button
+                        class="plan-more"
+                        on:click={studyMore}
+                        title="Raise today's new-card limit by 20 and study them now"
+                    >
+                        Study more today (+20)
+                    </button>
+                {/if}
             {:else if masteryScheduler}
                 {#each planGroups as g}
                     <div class="tier">
@@ -2466,6 +2521,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 0.78rem;
         line-height: 1.45;
         color: var(--fg-subtle);
+    }
+    .plan-caught-up {
+        font-size: 0.85rem;
+        color: var(--fg);
+        border: 1px dashed var(--sr-secondary);
+        border-radius: var(--sr-radius-sm);
+        padding: 0.6rem 0.85rem;
+        background: color-mix(in srgb, var(--sr-secondary) 8%, transparent);
     }
     .plan-more {
         margin-top: 0.9rem;

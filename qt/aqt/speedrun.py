@@ -83,7 +83,11 @@ class StudyMapDialog(QDialog):
         self.show()
         self.activateWindow()
 
-    def _on_bridge_cmd(self, cmd: str) -> None:
+    def _on_bridge_cmd(self, cmd: str) -> Any:
+        # Read-only status query for the honest "study more today" lever: return
+        # synchronously so the webview's bridge callback receives the count.
+        if cmd == "speedrun-new-remaining":
+            return count_unseen_new(self.mw)
         # The study map requests a tier of practice. Defer so we don't tear down
         # this webview from inside its own bridge callback.
         if cmd.startswith("speedrun-study-deck:"):
@@ -722,6 +726,28 @@ def extend_new_and_study(mw: aqt.main.AnkiQt, n: int) -> bool:
     return True
 
 
+def count_unseen_new(mw: aqt.main.AnkiQt) -> int:
+    """How many never-introduced NEW cards remain in the exam deck, ignoring
+    today's daily new limit (and excluding suspended/buried cards, which raising
+    the limit could not surface today anyway).
+
+    Read-only: it only searches cards, so it logs no review and changes no score
+    or config (the honesty rule: a status read must not move a metric). This is
+    what makes the "Study more today" lever honest: ``extend_limits`` raises
+    today's new allowance, but it can only surface cards when some new ones are
+    still held back. At 0 the lever would silently do nothing, so the study map
+    shows the caught-up state instead of a button that appears to do nothing.
+    """
+    from anki.speedrun.seed import ROOT_DECK
+
+    try:
+        return len(
+            mw.col.find_cards(f'deck:"{ROOT_DECK}" is:new -is:suspended -is:buried')
+        )
+    except Exception:  # noqa: BLE001 (a status read must never break the page)
+        return 0
+
+
 def study_recommended(mw: aqt.main.AnkiQt) -> None:
     """Open the next thing that's actually due in one click.
 
@@ -939,6 +965,9 @@ def _home_bridge_cmd(mw: aqt.main.AnkiQt, cmd: str) -> Any:
     if cmd == "speedrun-formula-cards":
         # Read-only: the user's own cards for the formula sheet (no writes).
         return _formula_cards(mw)
+    if cmd == "speedrun-new-remaining":
+        # Read-only count for the honest "study more today" lever (embedded map).
+        return count_unseen_new(mw)
     # Everything else may move to another state or reload the webview, which must
     # not run from inside the webview's own bridge callback, so defer it.
     QTimer.singleShot(0, lambda: _dispatch_home_cmd(mw, cmd))

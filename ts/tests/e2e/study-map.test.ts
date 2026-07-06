@@ -93,6 +93,16 @@ test("study map renders the three-layer topic tree", async ({ page }) => {
     await expect(page.getByText(/Set your exam date/)).toBeVisible();
     await expect(page.getByText(/mastery pace/)).toBeVisible();
 
+    // Bug fix (a finished session's "N due" counts went stale until a full
+    // reload): the page now re-fetches its state whenever it becomes visible
+    // again. A visibilitychange while the page is visible (returning to the page
+    // after a review) must trigger a fresh mastery-state fetch (loadState
+    // re-runs), and the page must survive it and keep rendering.
+    const refetch = page.waitForRequest((r) => r.url().includes("getMasteryState"));
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await refetch;
+    await expect(page.getByRole("heading", { name: "Study map" })).toBeVisible();
+
     // Clean full-map capture BEFORE opening any detail panel, so the whole
     // concept map (every cluster + its connector tracks) is visible for review.
     await page.screenshot({ path: "out/study-map-clean.png", fullPage: true });

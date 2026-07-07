@@ -120,6 +120,17 @@ html {
     --sr-font-display: var(--sr-font-heading);
     --sr-font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", "Roboto Mono",
         Menlo, Consolas, monospace;
+
+    // Type scale (absolute px, so the branded screens keep a legible floor no
+    // matter what Anki's root --font-size is). --sr-text-base is body copy; the
+    // floor for any meaningful label is --sr-text-xs (14px). --sr-text-2xs (13px)
+    // is reserved for the space-constrained micro-labels inside map bubbles only.
+    --sr-text-2xs: 13px;
+    --sr-text-xs: 14px;
+    --sr-text-sm: 15px;
+    --sr-text-base: 16px;
+    --sr-text-md: 18px;
+    --sr-text-lg: 20px;
 }
 
 // Surface / text palette, scoped to the custom screens only. Re-mapping the core
@@ -135,6 +146,7 @@ html {
 .congrats,
 .metrics,
 .formula-sheet,
+.add,
 .ptest {
     --canvas: #e8f3fd; // pale sky-blue (the light hero, soap suds on water)
     --canvas-elevated: #ffffff; // clean tile: sheets float on the pale blue
@@ -142,7 +154,7 @@ html {
     --sr-muted: #e3eefb; // container tint base
     --sr-card-bg: #ffffff; // opaque cards (no glass)
     --fg: #12324e; // deep navy ink (critical text), AAA on pale blue
-    --fg-subtle: #4f6684; // muted blue-grey secondary text
+    --fg-subtle: #455b7a; // muted blue-grey secondary text (>= 6:1 on paper)
     --border: rgba(18, 50, 78, 0.14); // subtle structural hairline
     --border-subtle: rgba(18, 50, 78, 0.07);
     --sr-focus: #2563c9; // blue focus ring on light
@@ -150,8 +162,8 @@ html {
     // Light hero = PALE BLUE. The primary accent + its companions deepen to
     // AA-legible blues on the pale-blue surface (they override the shared teal
     // companions in :root, which stay for the dark "bath-water" mode). The
-    // section-rotation hues (mint/amber/bubblegum/sky) stay for variety, and the
-    // fixed signal colours (--sr-pending/progress/mastered) are untouched.
+    // section-rotation hues (mint/amber/bubblegum/sky) stay for variety; the
+    // signal colours keep their fixed MEANING but deepen for legibility below.
     --sr-accent: #2563c9; // blue (deepened for pale-blue paper; ≥ 4.5:1 as text)
     --sr-accent-2: #1e4fa6; // deeper blue (brand gradient / hover)
     --sr-accent-weak: rgba(37, 99, 201, 0.14); // faint blue wash
@@ -164,8 +176,17 @@ html {
     --sr-correct: #2c7049; // green result text on paper
     --sr-wrong: #a83f2b; // red result text on paper
 
+    // Signal colours deepen on the pale-blue paper (like the accents above) so
+    // small colour-coded labels, badges, and markers clear WCAG-AA as text. The
+    // hue identity is kept: cool grey, suds gold, fresh mint. The map's bubble
+    // FILLS come from a separate palette (speedrun-ui/colors.ts) and are untouched.
+    --sr-pending: #5f6a6d; // not-started grey (>= 5.5:1 as text on paper)
+    --sr-progress: #7d6316; // in-progress gold (>= 5:1 as text on paper)
+    --sr-mastered: #2a7351; // mastered mint (>= 5:1 as text on paper)
+
     color: var(--fg);
     font-family: var(--sr-font-body);
+    font-size: var(--sr-text-base);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
@@ -177,6 +198,7 @@ html {
     .congrats,
     .metrics,
     .formula-sheet,
+    .add,
     .ptest {
         --canvas: #0e2a30; // deep bath-water teal
         --canvas-elevated: #143b42; // elevated surface
@@ -197,6 +219,9 @@ html {
         --sr-quinary: #7fb0f0; // sky
         --sr-correct: #78c8a0; // green result text on water
         --sr-wrong: #e08a7c; // coral result text on water
+        // The vivid gold/mint signals already clear AA on the dark water; only
+        // the not-started grey needs lifting to stay legible as small text.
+        --sr-pending: #aab6b6; // not-started grey (>= 5.5:1 as text on water)
     }
 }
 
@@ -217,6 +242,7 @@ html {
     .congrats,
     .metrics,
     .formula-sheet,
+    .add,
     .ptest {
         &,
         *,

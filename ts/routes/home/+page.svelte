@@ -581,9 +581,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         letter-spacing: 0.02em;
     }
     .brand-sub {
-        font-size: 0.62rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
-        letter-spacing: 0.22em;
+        letter-spacing: 0.18em;
         text-transform: uppercase;
         color: var(--fg-subtle);
     }
@@ -609,7 +609,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: transparent;
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.82rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
         padding: 0.5rem 1.15rem;
         border-radius: var(--sr-radius-pill);
@@ -729,7 +729,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg);
         font-family: var(--sr-font-body);
         font-weight: 600;
-        font-size: 0.85rem;
+        font-size: var(--sr-text-sm);
         padding: 0.6rem 0.8rem;
         border-radius: var(--sr-radius-sm);
         cursor: pointer;
@@ -773,7 +773,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .setting-label {
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.85rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg);
         /* Keep each label on its own line so the row stays a single line. */
         white-space: nowrap;
@@ -782,7 +782,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
        the setting's title tooltip (kept accessible there, not inline). */
     .warn-flag {
         color: var(--sr-tertiary);
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
         line-height: 1;
         cursor: help;
     }
@@ -802,7 +802,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg-subtle);
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.78rem;
+        font-size: var(--sr-text-xs);
         padding: 0.3rem 0.9rem;
         border-radius: var(--sr-radius-pill);
         cursor: pointer;
@@ -904,7 +904,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         .tab {
             padding: 0.5rem 0.55rem;
-            font-size: 0.8rem;
+            font-size: var(--sr-text-xs);
             white-space: nowrap;
         }
     }

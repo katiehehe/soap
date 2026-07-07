@@ -503,7 +503,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         padding: 2rem 1.5rem 4rem;
         color: var(--fg);
         font-family: var(--sr-font-body);
-        font-size: 15px;
+        font-size: var(--sr-text-base);
         line-height: 1.55;
     }
 
@@ -527,7 +527,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg);
         font-family: var(--sr-font-body);
         font-weight: 600;
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
         padding: 0.4rem 0.9rem;
         border-radius: var(--sr-radius-pill);
         cursor: pointer;
@@ -603,9 +603,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .metric-eyebrow {
         margin: 0;
         font-family: var(--sr-font-body);
-        font-size: 0.68rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
         color: var(--accent);
     }
@@ -631,7 +631,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--live-accent);
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.66rem;
+        font-size: var(--sr-text-xs);
         letter-spacing: 0.06em;
         text-transform: uppercase;
         border-radius: var(--sr-radius-pill);
@@ -658,7 +658,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .live-note {
         margin: 0.4rem 0 0;
         color: var(--fg-subtle);
-        font-size: 0.85rem;
+        font-size: var(--sr-text-sm);
     }
     .gates {
         margin: 0.7rem 0 0;
@@ -668,7 +668,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         gap: 0.35rem;
     }
     .gates li {
-        font-size: 0.85rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
     .gates li::before {
@@ -693,12 +693,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .block p {
         margin: 0.3rem 0 0;
-        font-size: 0.9rem;
+        font-size: var(--sr-text-base);
     }
     .k {
         margin: 0;
         font-family: var(--sr-font-body);
-        font-size: 0.7rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.06em;
@@ -710,7 +710,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: var(--canvas-inset);
         border: 1px solid var(--border);
         border-radius: var(--sr-radius-sm);
-        font-size: 0.82rem;
+        font-size: var(--sr-text-sm);
         letter-spacing: 0.01em;
         color: var(--fg);
     }
@@ -725,7 +725,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     code {
         font-family: var(--sr-font-mono);
-        font-size: 0.85em;
+        font-size: 0.9em;
         background: var(--canvas-inset);
         padding: 0.05rem 0.3rem;
         border-radius: var(--sr-radius-sm);

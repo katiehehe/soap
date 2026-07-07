@@ -74,12 +74,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .sm {
         height: 42px;
         padding: 0 1.15rem;
-        font-size: 0.78rem;
+        font-size: var(--sr-text-xs);
     }
     .md {
         height: 56px;
         padding: 0 2.4rem;
-        font-size: 0.95rem;
+        font-size: var(--sr-text-base);
     }
     .lg {
         height: 64px;

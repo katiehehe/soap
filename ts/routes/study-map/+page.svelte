@@ -1821,7 +1821,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         padding: 2rem 1.5rem 4rem;
         color: var(--fg);
         font-family: var(--sr-font-body);
-        font-size: 15px;
+        font-size: var(--sr-text-base);
         line-height: 1.5;
         /* The two "what to do next" systems get deliberately far-apart hues so
            they can never read as two versions of one thing:
@@ -1916,7 +1916,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     header .exam {
         margin: 0.5rem 0 0;
         font-family: var(--sr-font-body);
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         letter-spacing: 0.18em;
         text-transform: uppercase;
@@ -1993,7 +1993,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .rb-kicker {
         display: block;
         font-family: var(--sr-font-body);
-        font-size: 0.7rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -2031,7 +2031,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .rb-facts {
         margin-top: 0.4rem;
-        font-size: 0.85rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
     .rb-facts b {
@@ -2056,7 +2056,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: inline-flex;
         align-items: baseline;
         gap: 0.35rem;
-        font-size: 0.85rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg);
     }
     .rb-gate b {
@@ -2064,14 +2064,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .rb-gate-label {
         color: var(--fg-subtle);
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.04em;
     }
     .rb-gate-need {
         color: var(--fg-subtle);
-        font-size: 0.78rem;
+        font-size: var(--sr-text-sm);
     }
     .rb-evidence {
         margin-top: 0.9rem;
@@ -2087,7 +2087,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--sr-accent);
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.78rem;
+        font-size: var(--sr-text-sm);
         padding: 0.4rem 0.85rem;
         border-radius: var(--sr-radius-pill);
         cursor: pointer;
@@ -2194,7 +2194,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         text-transform: uppercase;
     }
     .rec-axis {
-        font-size: 0.6rem;
+        font-size: var(--sr-text-xs);
         font-weight: 800;
         letter-spacing: 0.03em;
         padding: 0.1rem 0.45rem;
@@ -2215,7 +2215,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         font-size: 1.4rem;
     }
     .rec-kicker.perf {
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         color: var(--perf-ink);
     }
     .rec-kicker.perf .rec-axis {
@@ -2301,7 +2301,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem 0.85rem;
-        font-size: 0.83rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
     .overall-legend b {
@@ -2312,7 +2312,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .focus {
         margin: 0.8rem 0 0;
-        font-size: 0.88rem;
+        font-size: var(--sr-text-sm);
         display: flex;
         align-items: baseline;
         flex-wrap: wrap;
@@ -2320,7 +2320,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .focus-label {
         font-family: var(--sr-font-body);
-        font-size: 0.66rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.08em;
@@ -2332,7 +2332,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .overall-note {
         margin: 0.8rem 0 0;
-        font-size: 0.82rem;
+        font-size: var(--sr-text-sm);
         line-height: 1.45;
         color: var(--fg-subtle);
     }
@@ -2380,12 +2380,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .memory-detail {
         margin: 0.3rem 0 0;
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
     .memory-due {
         margin: 0.9rem 0 0;
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
     }
     .memory-units {
         margin-top: 0.9rem;
@@ -2395,7 +2395,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         gap: 0.4rem;
     }
     .memory-units-label {
-        font-size: 0.66rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.08em;
@@ -2408,7 +2408,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg);
         font-family: var(--sr-font-body);
         font-weight: 600;
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
         padding: 0.4rem 0.8rem;
         border-radius: var(--sr-radius-sm);
         cursor: pointer;
@@ -2458,7 +2458,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .tier-head b {
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.92rem;
+        font-size: var(--sr-text-sm);
     }
     .tier-dot {
         width: 10px;
@@ -2467,7 +2467,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         align-self: center;
     }
     .tier-blurb {
-        font-size: 0.78rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
     .plan-row {
@@ -2483,11 +2483,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .plan-label {
         flex: 1 1 auto;
         font-weight: 700;
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
     }
     .plan-count {
         flex: 0 0 auto;
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
         white-space: nowrap;
     }
@@ -2500,7 +2500,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg);
         font-family: var(--sr-font-body);
         font-weight: 600;
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
         cursor: pointer;
         transition:
             background 0.2s ease,
@@ -2518,12 +2518,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .plan-note {
         margin: 0.9rem 0 0;
-        font-size: 0.78rem;
+        font-size: var(--sr-text-sm);
         line-height: 1.45;
         color: var(--fg-subtle);
     }
     .plan-caught-up {
-        font-size: 0.85rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg);
         border: 1px dashed var(--sr-secondary);
         border-radius: var(--sr-radius-sm);
@@ -2538,7 +2538,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         background: transparent;
         font-family: var(--sr-font-body);
         font-weight: 600;
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
         cursor: pointer;
         color: var(--fg);
         transition:
@@ -2577,7 +2577,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-radius: var(--sr-radius-pill);
         padding: 0.25rem 0.7rem;
         font-family: var(--sr-font-body);
-        font-size: 0.7rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.06em;
@@ -2607,7 +2607,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         flex-direction: column;
         gap: 0.25rem;
         font-family: var(--sr-font-heading);
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.06em;
@@ -2615,7 +2615,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .pace-date input {
         font: inherit;
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
         text-transform: none;
         letter-spacing: normal;
         padding: 0.5rem 0.6rem;
@@ -2636,7 +2636,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg);
         font-family: var(--sr-font-body);
         font-weight: 600;
-        font-size: 0.78rem;
+        font-size: var(--sr-text-sm);
         cursor: pointer;
     }
     .pace-clear:hover {
@@ -2644,7 +2644,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .pace-detail {
         margin: 0.8rem 0 0;
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
         line-height: 1.55;
         color: var(--fg);
     }
@@ -2654,7 +2654,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
        keeps the punctuation tight against the value and wraps the sentence fine. */
     .pace-fix {
         margin: 0.6rem 0 0;
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
         line-height: 1.5;
         color: var(--fg-subtle);
     }
@@ -2693,7 +2693,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin: 0.1rem 0.15rem 0.7rem;
         padding-bottom: 0.6rem;
         border-bottom: 1px dashed var(--border);
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
     .track-key {
@@ -2715,7 +2715,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .track-hint {
         flex: 1 1 100%;
-        font-size: 0.75rem;
+        font-size: var(--sr-text-xs);
         font-style: italic;
         line-height: 1.45;
     }
@@ -2748,7 +2748,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         align-items: center;
         gap: 0.35rem 1rem;
         margin: 0 0.15rem 0.6rem;
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         line-height: 1.2;
         color: var(--fg-subtle);
     }
@@ -2759,7 +2759,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         white-space: nowrap;
     }
     .map-key-dot {
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
         line-height: 1;
     }
 
@@ -2876,16 +2876,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .node-title {
         font-family: var(--sr-font-heading);
         font-weight: 600;
-        font-size: 0.82rem;
+        font-size: var(--sr-text-sm);
         line-height: 1.14;
     }
     .node-sub {
-        font-size: 0.72rem;
+        font-size: var(--sr-text-2xs);
         color: var(--fg-subtle);
     }
     .node-pct {
         font-family: var(--sr-font-body);
-        font-size: 0.7rem;
+        font-size: var(--sr-text-2xs);
         font-weight: 700;
         line-height: 1.15;
         color: var(--sr-accent);
@@ -2915,7 +2915,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .center-cta {
         margin-top: 2px;
-        font-size: 0.6rem;
+        font-size: var(--sr-text-2xs);
         font-weight: 800;
         letter-spacing: 0.04em;
         text-transform: uppercase;
@@ -2967,7 +2967,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .leaf-label {
         font-family: var(--sr-font-heading);
-        font-size: 0.72rem;
+        font-size: var(--sr-text-2xs);
         line-height: 1.16;
         font-weight: 600;
         overflow-wrap: break-word;
@@ -3023,7 +3023,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         left: 50%;
         transform: translateX(-50%);
         font-family: var(--sr-font-body);
-        font-size: 0.56rem;
+        font-size: var(--sr-text-2xs);
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -3127,7 +3127,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .detail-unit {
         margin: 0.3rem 0 0;
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
     .pill {
@@ -3135,7 +3135,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-radius: var(--sr-radius-pill);
         padding: 0.22rem 0.7rem;
         font-family: var(--sr-font-body);
-        font-size: 0.7rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.05em;
@@ -3163,7 +3163,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .stats .need {
         font-weight: 400;
-        font-size: 0.78rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
     .stats .pending {
@@ -3173,7 +3173,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .hint {
         margin: 0.85rem 0 0;
-        font-size: 0.82rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
 
@@ -3195,20 +3195,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .perf-title {
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.82rem;
+        font-size: var(--sr-text-sm);
     }
     .perf-sep {
-        font-size: 0.68rem;
+        font-size: var(--sr-text-xs);
         color: var(--fg-subtle);
     }
     .perf-body {
         margin-top: 0.35rem;
-        font-size: 0.86rem;
+        font-size: var(--sr-text-sm);
     }
     .perf-body.pending {
         font-style: italic;
         color: var(--fg-subtle);
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
     }
 
     /* Primary study CTA: solid periwinkle, paper label (AA-legible). */
@@ -3223,7 +3223,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--sr-on-accent);
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
         cursor: pointer;
         box-shadow: var(--sr-shadow-sm);
         transition:

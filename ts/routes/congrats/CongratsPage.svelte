@@ -132,7 +132,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .congrats {
         margin: 2.5em auto 0;
         max-width: 32em;
-        font-size: var(--font-size);
+        font-size: var(--sr-text-base);
         font-family: var(--sr-font-body, sans-serif);
         color: var(--fg);
         text-align: center;
@@ -209,7 +209,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .squeaky {
         font-family: var(--sr-font-heading);
         font-weight: 700;
-        font-size: 0.82rem;
+        font-size: var(--sr-text-xs);
         letter-spacing: 0.14em;
         text-transform: uppercase;
         color: var(--sr-mastered);
@@ -238,9 +238,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .brand-sub {
         font-family: var(--sr-font-body, sans-serif);
-        font-size: 0.64rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
-        letter-spacing: 0.2em;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
         color: var(--fg-subtle);
     }
@@ -275,7 +275,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         appearance: none;
         cursor: pointer;
         font-family: var(--sr-font-body, sans-serif);
-        font-size: 0.95rem;
+        font-size: var(--sr-text-base);
         font-weight: 700;
         padding: 0.6rem 1.15rem;
         border-radius: var(--sr-radius-sm, 8px);

@@ -312,7 +312,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         padding: 2rem 1.5rem 4rem;
         color: var(--fg);
         font-family: var(--sr-font-body);
-        font-size: 15px;
+        font-size: var(--sr-text-base);
         line-height: 1.5;
     }
     /* Header: loud chrome (the numbers below stay calm). */
@@ -333,9 +333,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     header .exam {
         margin: 0.6rem 0 0;
         font-family: var(--sr-font-body);
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
-        letter-spacing: 0.18em;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
         color: var(--sr-accent);
     }
@@ -417,7 +417,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--sr-accent);
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
         padding: 0.5rem 0.95rem;
         border-radius: var(--sr-radius-pill);
         cursor: pointer;
@@ -475,7 +475,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .signal .question {
         margin: 0.5rem 0 0.85rem;
-        font-size: 0.82rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
         min-height: 2.2em;
     }
@@ -492,15 +492,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .signal .detail {
         margin: 0.25rem 0 0;
-        font-size: 0.8rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
     .signal .source {
         margin: 0.7rem 0 0;
         font-family: var(--sr-font-body);
-        font-size: 0.66rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
         color: var(--signal-color);
     }

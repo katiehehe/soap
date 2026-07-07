@@ -324,7 +324,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         min-width: 0;
         padding: 0.65rem 0.85rem;
         font-family: var(--sr-font-body);
-        font-size: 0.9rem;
+        font-size: var(--sr-text-base);
         color: var(--fg);
         background: var(--canvas-inset);
         border: 1px solid var(--border);
@@ -345,7 +345,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg-subtle);
         font-family: var(--sr-font-body);
         font-weight: 600;
-        font-size: 0.78rem;
+        font-size: var(--sr-text-xs);
         padding: 0.5rem 0.85rem;
         border-radius: var(--sr-radius-pill);
         cursor: pointer;
@@ -449,7 +449,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .formula-name {
         display: block;
-        font-size: 0.74rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
@@ -471,7 +471,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .formula-note {
         margin: 0.35rem 0 0;
-        font-size: 0.82rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
         line-height: 1.5;
     }
@@ -484,7 +484,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .user-cards-head {
         margin: 0 0 0.6rem;
-        font-size: 0.74rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;

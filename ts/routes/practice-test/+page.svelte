@@ -499,19 +499,19 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .scope-line {
         margin: 0 0 0.9rem;
-        font-size: 0.8rem;
+        font-size: var(--sr-text-xs);
         font-weight: 800;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: var(--sr-accent);
     }
     .lead {
-        font-size: 1rem;
+        font-size: var(--sr-text-base);
         line-height: 1.6;
         margin: 0 0 0.9rem;
     }
     .note {
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
         line-height: 1.55;
         color: var(--fg-subtle);
         background: var(--sr-accent-weak);
@@ -521,7 +521,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin: 0 0 1.1rem;
     }
     .timing-line {
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
         line-height: 1.55;
         color: var(--fg-subtle);
         margin: 0 0 1.1rem;
@@ -554,7 +554,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg);
     }
     .spec-label {
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
@@ -581,7 +581,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg);
     }
     .clock-label {
-        font-size: 0.65rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -612,7 +612,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .btn {
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.95rem;
+        font-size: var(--sr-text-base);
         padding: 0.65rem 1.3rem;
         border-radius: var(--sr-radius-sm, 10px);
         border: 1px solid transparent;
@@ -645,7 +645,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .status p {
         margin: 0;
-        font-size: 1rem;
+        font-size: var(--sr-text-base);
         color: var(--fg-subtle);
         text-align: center;
     }
@@ -668,7 +668,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .paper-hint {
         margin: 0.5rem 0 0;
-        font-size: 0.88rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
 
@@ -689,7 +689,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .qnum {
         font-weight: 700;
-        font-size: 0.78rem;
+        font-size: var(--sr-text-xs);
         letter-spacing: 0.05em;
         text-transform: uppercase;
         color: var(--fg-subtle);
@@ -763,7 +763,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .submit-count {
         font-weight: 700;
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
         color: var(--fg-subtle);
     }
     .submit-count.done {
@@ -802,7 +802,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .bd-label {
         display: block;
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         font-weight: 800;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -814,7 +814,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         justify-content: space-between;
         padding: 0.3rem 0;
         border-top: 1px solid var(--border);
-        font-size: 0.95rem;
+        font-size: var(--sr-text-base);
     }
     .bd-row:first-of-type {
         border-top: none;
@@ -840,7 +840,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         border-color: color-mix(in srgb, var(--sr-wrong) 45%, var(--border));
     }
     .verdict {
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         font-weight: 800;
         letter-spacing: 0.04em;
         text-transform: uppercase;
@@ -865,7 +865,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .pill {
         margin-left: auto;
-        font-size: 0.68rem;
+        font-size: var(--sr-text-xs);
         font-weight: 800;
         letter-spacing: 0.03em;
         text-transform: uppercase;
@@ -889,7 +889,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .answer-label {
         display: block;
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         font-weight: 800;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -897,7 +897,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin-bottom: 0.35rem;
     }
     .answer-body {
-        font-size: 1rem;
+        font-size: var(--sr-text-base);
         line-height: 1.6;
     }
 </style>

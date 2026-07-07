@@ -122,7 +122,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .bundle dt {
         color: var(--fg-subtle);
         font-family: var(--sr-font-body);
-        font-size: 0.82rem;
+        font-size: var(--sr-text-sm);
         font-weight: 600;
     }
     .bundle dd {
@@ -137,7 +137,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         display: block;
         margin-top: 0.15rem;
         font-family: var(--sr-font-body);
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         font-weight: 500;
         font-style: italic;
         color: var(--fg-subtle);

@@ -193,7 +193,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
     .flabel {
         display: block;
-        font-size: 0.72rem;
+        font-size: var(--sr-text-xs);
         font-weight: 800;
         letter-spacing: 0.06em;
         text-transform: uppercase;
@@ -215,7 +215,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         width: 100%;
         box-sizing: border-box;
         font-family: var(--sr-font-body);
-        font-size: 0.95rem;
+        font-size: var(--sr-text-base);
         color: var(--fg);
         background: var(--canvas);
         border: 1px solid var(--border);
@@ -235,7 +235,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--sr-accent);
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.78rem;
+        font-size: var(--sr-text-xs);
         padding: 0.3rem 0.75rem;
         border-radius: var(--sr-radius-pill, 999px);
         cursor: pointer;
@@ -252,7 +252,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         margin-top: 0.6rem;
     }
     .sug-label {
-        font-size: 0.68rem;
+        font-size: var(--sr-text-xs);
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
@@ -265,7 +265,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--fg);
         font-family: var(--sr-font-body);
         font-weight: 600;
-        font-size: 0.82rem;
+        font-size: var(--sr-text-sm);
         padding: 0.3rem 0.7rem;
         border-radius: var(--sr-radius-pill, 999px);
         cursor: pointer;
@@ -279,7 +279,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         color: var(--sr-on-accent);
     }
     .msg {
-        font-size: 0.9rem;
+        font-size: var(--sr-text-sm);
         border-radius: var(--sr-radius-sm);
         padding: 0.6rem 0.8rem;
         margin: 0 0 1rem;
@@ -302,7 +302,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .btn {
         font-family: var(--sr-font-body);
         font-weight: 700;
-        font-size: 0.95rem;
+        font-size: var(--sr-text-base);
         padding: 0.65rem 1.3rem;
         border-radius: var(--sr-radius-sm, 10px);
         border: 1px solid transparent;
